@@ -16,17 +16,20 @@ export const createNovelVideoJob = data => request({
   data
 })
 
-export const listNovelVideoJobs = ({ limit = 20, cursor = 0 } = {}) => {
-  const params = new URLSearchParams({ limit: String(limit), cursor: String(cursor) })
+export const listNovelVideoJobs = ({ limit = 20, cursor = null, signal } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (cursor) params.set('cursor', String(cursor))
   return request({
     url: `${JOBS_API}?${params.toString()}`,
-    method: 'get'
+    method: 'get',
+    ...(signal ? { signal } : {})
   })
 }
 
-export const getNovelVideoJob = jobId => request({
+export const getNovelVideoJob = (jobId, { signal } = {}) => request({
   url: jobUrl(jobId),
-  method: 'get'
+  method: 'get',
+  ...(signal ? { signal } : {})
 })
 
 export const retryNovelVideoShot = (jobId, shotId) => request({

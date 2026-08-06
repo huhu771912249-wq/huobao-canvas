@@ -83,16 +83,19 @@ const clearNovelDraft = () => { parsedDocument.value = null; novelText.value = '
 const handleNovelFile = async event => {
   const file = event.target?.files?.[0]
   if (!file) return
-  clearNovelDraft()
-  if (!/\.(txt|md|docx)$/i.test(file.name)) { documentError.value = '仅支持 TXT、Markdown 和 DOCX 小说附件'; return }
-  if (file.size > 10 * 1024 * 1024) { documentError.value = '附件不能超过 10MB'; return }
-  parsingDocument.value = true; documentError.value = ''; storyboard.value = null
+  if (!/\.(txt|md|docx)$/i.test(file.name)) { documentError.value = '仅支持 TXT、Markdown 和 DOCX 小说附件'; novelFileKey.value += 1; return }
+  if (file.size > 10 * 1024 * 1024) { documentError.value = '附件不能超过 10MB'; novelFileKey.value += 1; return }
+  parsingDocument.value = true; documentError.value = ''
   try {
     const parsed = await parseStudioDocument(file)
     if (Number(parsed?.characters || 0) > NOVEL_TEXT_LIMIT) throw new Error('小说正文不能超过 20 万字符')
+    const parsedText = String(parsed.text || '')
+    if (!parsedText.trim()) throw new Error('附件没有可识别正文')
     parsedDocument.value = parsed
-    novelText.value = String(parsed.text || '')
-  } catch (error) { clearNovelDraft(); documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
+    novelText.value = parsedText
+    storyboard.value = null
+    fileName.value = file.name
+  } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败'; novelFileKey.value += 1 }
   finally { parsingDocument.value = false; event.target.value = '' }
 }
 const novelTitle = computed(() => {
