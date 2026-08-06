@@ -26,12 +26,12 @@
         <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
           <h2 class="text-xl font-semibold">小说成片</h2><p class="mt-2 text-slate-400">直接粘贴小说正文或上传附件，生成可编辑故事板；确认并保存后才消耗模型额度。</p>
           <textarea v-model="novelText" rows="9" maxlength="200000" class="mt-5 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm outline-none focus:border-cyan-400" placeholder="粘贴小说正文（最多 20 万字符）" />
-          <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><label class="cursor-pointer rounded-lg bg-slate-800 px-3 py-2 text-sm">📎 上传小说附件<input class="hidden" type="file" accept=".txt,.md,.docx" @change="handleNovelFile" /></label><span class="text-xs" :class="novelText.length > NOVEL_TEXT_LIMIT ? 'text-red-300' : 'text-slate-400'">{{ novelText.length.toLocaleString() }} / {{ NOVEL_TEXT_LIMIT.toLocaleString() }} 字符</span></div>
+          <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><label class="cursor-pointer rounded-lg bg-slate-800 px-3 py-2 text-sm">📎 上传小说附件<input :key="novelFileKey" class="hidden" type="file" accept=".txt,.md,.docx" @change="handleNovelFile" /></label><span class="text-xs" :class="novelText.length > NOVEL_TEXT_LIMIT ? 'text-red-300' : 'text-slate-400'">{{ novelText.length.toLocaleString() }} / {{ NOVEL_TEXT_LIMIT.toLocaleString() }} 字符</span></div>
           <div v-if="parsingDocument" role="status" class="mt-4 text-cyan-300">正在识别附件和章节…</div><div v-if="documentError" role="alert" class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{{ documentError }}</div>
           <div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div>
           <div class="mt-5 grid gap-3 md:grid-cols-2"><button :disabled="planningStoryboard" class="rounded-xl border border-cyan-500/50 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('smart')"><b>{{ planningStoryboard ? '正在生成故事板…' : '生成故事板（智能改编）' }}</b><p class="text-sm text-slate-400">保留主线、转折与高潮，生成 1–3 分钟故事板。</p></button><button :disabled="planningStoryboard" class="rounded-xl border border-slate-700 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('full')"><b>生成故事板（完整原文）</b><p class="text-sm text-slate-400">按原文顺序拆镜，不强塞进单个 5 秒任务。</p></button></div>
         </div>
-        <NovelVideoWorkspace :storyboard="storyboard" :title="novelTitle" aspect-ratio="16:9" />
+        <NovelVideoWorkspace :storyboard="storyboard" :title="novelTitle" aspect-ratio="16:9" @new-job="clearNovelDraft" />
       </div>
       <div v-else class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">素材再创作</h2><p class="mt-2 text-slate-400">统一管理图片、视频、文档、人物、场景、品牌素材和生成历史；原 DSP 素材库继续保留独立入口。</p></div>
     </section>
@@ -63,6 +63,7 @@ const qualityOptions = [
 const parsedDocument = ref(null); const parsingDocument = ref(false); const documentError = ref('')
 const NOVEL_TEXT_LIMIT = 200000
 const novelText = ref('')
+const novelFileKey = ref(0)
 const storyboard = ref(null); const planningStoryboard = ref(false); const customWidth = ref(1080); const customHeight = ref(1080)
 const customSizeError = computed(() => { try { normalizeVideoSize(customWidth.value, customHeight.value); return '' } catch (error) { return error.message } })
 const customSizeLabel = computed(() => `${customWidth.value} × ${customHeight.value}`)
@@ -78,7 +79,7 @@ const handleFile = async event => {
   catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
   finally { parsingDocument.value = false }
 }
-const clearNovelDraft = () => { parsedDocument.value = null; novelText.value = ''; storyboard.value = null }
+const clearNovelDraft = () => { parsedDocument.value = null; novelText.value = ''; storyboard.value = null; fileName.value = ''; documentError.value = ''; novelFileKey.value += 1 }
 const handleNovelFile = async event => {
   const file = event.target?.files?.[0]
   if (!file) return
@@ -104,7 +105,7 @@ const preparePastedDocument = () => {
   if (text.length > NOVEL_TEXT_LIMIT) throw new Error('小说正文不能超过 20 万字符')
   parsedDocument.value = { filename: novelTitle.value || '粘贴的小说正文', text, characters: text.length, chapters: [{ title: '正文', text }], estimates: { compressed_seconds: Math.min(180, Math.max(60, Math.round(text.length / 12))), full_shots: Math.max(1, Math.round(text.length / 80)) } }
 }
-const prepareAndPlan = async mode => { documentError.value = ''; try { if (parsedDocument.value?.text !== novelText.value) preparePastedDocument(); const planned = await planStoryboard(mode); if (!planned) clearNovelDraft() } catch (error) { clearNovelDraft(); documentError.value = error?.response?.data?.error?.message || error?.message || '小说正文解析失败' } }
+const prepareAndPlan = async mode => { documentError.value = ''; try { if (parsedDocument.value?.text !== novelText.value) preparePastedDocument(); await planStoryboard(mode) } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '小说正文解析失败' } }
 const resolvedSize = computed(() => selectedSize.value === 'custom' ? `${customWidth.value}x${customHeight.value}` : selectedSize.value)
 const selectedAspectRatio = computed(() => {
   const [width, height] = resolvedSize.value.toLowerCase().split('x').map(Number)
