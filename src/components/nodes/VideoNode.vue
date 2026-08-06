@@ -67,7 +67,7 @@
           <div class="text-sm font-medium">{{ data.taskId ? taskStage : '任务创建中…' }}</div>
           <div v-if="data.status" class="mt-1 text-xs text-white/80">后端状态：{{ data.status }}</div>
           <div v-if="data.progress !== null && data.progress !== undefined" class="mt-3">
-            <div class="mb-1 flex justify-between text-xs"><span>真实进度</span><span>{{ Math.round(data.progress) }}%</span></div>
+            <div class="mb-1 flex justify-between text-xs"><span>{{ progressLabel }}</span><span>{{ Math.round(data.progress) }}%</span></div>
             <div class="h-1.5 overflow-hidden rounded-full bg-white/25"><div class="h-full rounded-full bg-white transition-all" :style="{ width: `${Math.max(0, Math.min(100, data.progress))}%` }"></div></div>
           </div>
           <div v-else class="mt-2 text-xs text-white/75">上游暂未提供百分比，正在持续查询阶段状态</div>
@@ -200,6 +200,7 @@ const operations = [
 // Polling state | 轮询状态
 const isPolling = ref(false)
 const taskStage = computed(() => extractVideoTaskProgress(props.data || {}).stage)
+const progressLabel = computed(() => extractVideoTaskProgress(props.data || {}).progressLabel)
 
 // Watch for taskId changes and start polling | 监听 taskId 变化并开始轮询
 watch(() => props.data?.taskId, (taskId) => {
@@ -230,6 +231,7 @@ const startPolling = async (taskId) => {
         attempt,
         status: progressInfo?.status || props.data?.status || 'submitted',
         currentStep: progressInfo?.stage || '',
+        progressScope: progressInfo?.progress_scope || '',
         upscale_status: progressInfo?.upscale_status || props.data?.upscale_status || ''
       })
     })

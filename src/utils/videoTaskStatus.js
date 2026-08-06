@@ -10,6 +10,7 @@ export const extractVideoTaskProgress = (result = {}, adaptedResult = {}) => {
   const upscaleStatus = normalizeStatus(result?.upscale_status || nested?.upscale_status || adaptedResult?.upscale_status)
   const currentStep = String(result?.current_step || nested?.current_step || adaptedResult?.current_step || '').trim()
   const rawProgress = result?.progress ?? nested?.progress ?? adaptedResult?.progress
+  const progressScope = String(result?.progress_scope || nested?.progress_scope || adaptedResult?.progress_scope || '').trim()
   const numeric = Number(rawProgress)
   const percent = Number.isFinite(numeric)
     ? Math.max(0, Math.min(100, Math.round(numeric <= 1 ? numeric * 100 : numeric)))
@@ -26,6 +27,8 @@ export const extractVideoTaskProgress = (result = {}, adaptedResult = {}) => {
     status,
     stage: currentStep || (upscaleStatus === 'running' ? 'SeedVR2 AI 超分中' : stageMap[status] || '正在查询真实状态'),
     percent,
+    progressLabel: progressScope === 'cloud_generation' ? '云端生成真实进度' : '任务真实进度',
+    progress_scope: progressScope,
     current_step: currentStep,
     upscale_status: upscaleStatus
   }
