@@ -1,8 +1,13 @@
 import request from '../utils/request'
 
 const JOBS_API = '/v1/studio/novel-video/jobs'
-const encodeId = id => encodeURIComponent(String(id))
-const jobUrl = jobId => `${JOBS_API}/${encodeId(jobId)}`
+const encodeRequiredId = (id, name) => {
+  if (id == null || (typeof id === 'string' && id.trim() === '')) {
+    throw new TypeError(`${name} is required`)
+  }
+  return encodeURIComponent(String(id))
+}
+const jobUrl = jobId => `${JOBS_API}/${encodeRequiredId(jobId, 'jobId')}`
 
 export const createNovelVideoJob = data => request({
   url: JOBS_API,
@@ -16,7 +21,7 @@ export const getNovelVideoJob = jobId => request({
 })
 
 export const retryNovelVideoShot = (jobId, shotId) => request({
-  url: `${jobUrl(jobId)}/shots/${encodeId(shotId)}/retry`,
+  url: `${jobUrl(jobId)}/shots/${encodeRequiredId(shotId, 'shotId')}/retry`,
   method: 'post',
   data: {}
 })

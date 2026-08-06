@@ -6,21 +6,39 @@ const loadApiWithRequestSpy = async (relativePath) => {
   const source = readFileSync(sourceUrl, 'utf8')
     .replace(/^import request from ['"][^'"]+['"]\s*/m, 'const request = globalThis.__novelVideoRequestSpy\n')
   const calls = []
+  const requestPromises = []
+  const sentinels = []
   globalThis.__novelVideoRequestSpy = config => {
     calls.push(config)
-    return Promise.resolve(config)
+    const sentinel = { requestNumber: calls.length }
+    const requestPromise = Promise.resolve(sentinel)
+    sentinels.push(sentinel)
+    requestPromises.push(requestPromise)
+    return requestPromise
   }
   const module = await import(`data:text/javascript,${encodeURIComponent(source)}#${Date.now()}-${Math.random()}`)
-  return { module, calls }
+  return { module, calls, requestPromises, sentinels }
 }
 
-const { module: novelVideo, calls } = await loadApiWithRequestSpy('../src/api/novelVideo.js')
+const {
+  module: novelVideo,
+  calls,
+  requestPromises,
+  sentinels
+} = await loadApiWithRequestSpy('../src/api/novelVideo.js')
 
-await novelVideo.createNovelVideoJob({ title: '冠希小说', quality_mode: 'quality' })
-await novelVideo.getNovelVideoJob('job /1')
-await novelVideo.retryNovelVideoShot('job /1', 'shot #2')
-await novelVideo.updateNovelSubtitles('job /1', [{ id: 'subtitle-1', text: '第一句' }])
-await novelVideo.finalizeNovelVideoJob('job /1', { format: 'mp4' })
+const apiPromises = [
+  novelVideo.createNovelVideoJob({ title: '冠希小说', quality_mode: 'quality' }),
+  novelVideo.getNovelVideoJob('job /1'),
+  novelVideo.retryNovelVideoShot('job /1', 'shot #2'),
+  novelVideo.updateNovelSubtitles('job /1', [{ id: 'subtitle-1', text: '第一句' }]),
+  novelVideo.finalizeNovelVideoJob('job /1', { format: 'mp4' })
+]
+
+for (const [index, apiPromise] of apiPromises.entries()) {
+  assert.strictEqual(apiPromise, requestPromises[index])
+  assert.strictEqual(await apiPromise, sentinels[index])
+}
 
 assert.deepEqual(calls, [
   {
@@ -48,6 +66,22 @@ assert.deepEqual(calls, [
     data: { format: 'mp4' }
   }
 ])
+
+const callsBeforeInvalidIds = calls.length
+const invalidIds = [undefined, null, '', '   ']
+const isRequiredIdTypeError = name => error => (
+  error instanceof TypeError && error.message === `${name} is required`
+)
+
+for (const invalidId of invalidIds) {
+  assert.throws(() => novelVideo.getNovelVideoJob(invalidId), isRequiredIdTypeError('jobId'))
+  assert.throws(() => novelVideo.retryNovelVideoShot(invalidId, 'shot-1'), isRequiredIdTypeError('jobId'))
+  assert.throws(() => novelVideo.retryNovelVideoShot('job-1', invalidId), isRequiredIdTypeError('shotId'))
+  assert.throws(() => novelVideo.updateNovelSubtitles(invalidId, []), isRequiredIdTypeError('jobId'))
+  assert.throws(() => novelVideo.finalizeNovelVideoJob(invalidId), isRequiredIdTypeError('jobId'))
+}
+
+assert.equal(calls.length, callsBeforeInvalidIds)
 
 const { module: mediaComposition, calls: compositionCalls } = await loadApiWithRequestSpy('../src/api/mediaComposition.js')
 const legacyInput = {
