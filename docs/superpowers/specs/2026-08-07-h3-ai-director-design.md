@@ -12,6 +12,15 @@
 - 真实闭环：方案预览、应用画布、任务真实阶段、视频预览、下载、失败重试均有入口。
 - 不伪装：本地 AI 返回损坏 JSON 时使用确定性专业规则降级，并明确显示“规则补全”，不静默退化成普通文生图。
 
+## 开源调研与采用项
+
+- [Tencent HunyuanVideo 1.5 Prompt Handbook](https://github.com/Tencent-Hunyuan/HunyuanVideo-1.5/blob/main/assets/HunyuanVideo_1_5_Prompt_Handbook_EN.md)：采用“主体 + 动作 + 场景 + 景别 + 运镜 + 光线 + 风格 + 氛围”的专业提示词骨架，以及时序动作分解和空间方向约束。
+- [HKUDS/ViMax](https://github.com/HKUDS/ViMax)：采用“自然语言需求 → 导演方案 → 分镜/镜头设计 → 生成检查点”的产品流程，并把角色、场景和声音作为独立可审阅字段。
+- [vericontext/vibeframe](https://github.com/vericontext/vibeframe)：采用需要一致性时先生成并复用角色/关键帧参考图，再进入图生视频的策略。
+- [awesome-seedance-2-prompts](https://github.com/YouMind-OpenLab/awesome-seedance-2-prompts)：采用按秒动作时间线、微表情、环境声和一致性约束，但没有照搬其模型专属语法。
+
+这些来源只用于提炼结构和产品模式；实际输出经过 H3 的 2/3/5 秒、16:9/9:16、1000 字符上限和单一连续镜头约束重新设计，不在运行时自动下载或执行不受信任的开源提示词。
+
 ## 工作流
 
 ### 默认：一句话生成 H3 视频
@@ -64,4 +73,3 @@
 - 自动工作流明确使用 `minimax-h3`、用户选择或默认比例/时长、`quality` 1080p。
 - 未指定人物、地点、布景、景别时可合理补全；明确指定时不覆盖。
 - 页面可审阅、应用、生成，失败有可读错误；旧有节点、小说成片和素材再创作继续可用。
-
