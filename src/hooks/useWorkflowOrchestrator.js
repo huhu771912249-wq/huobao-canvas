@@ -13,6 +13,7 @@ import { streamChatCompletions } from '@/api'
 import { H3_DIRECTOR_MODEL, H3_DIRECTOR_SYSTEM_PROMPT } from '@/config/h3DirectorPrompt'
 import { parseDirectorResponse } from '@/utils/h3DirectorPlan'
 import { buildH3DirectorWorkflow } from '@/utils/h3DirectorWorkflow'
+import { getMaterialApiBase } from '@/utils/apiBase'
 import { 
   nodes, 
   addNode, 
@@ -322,6 +323,9 @@ export const useWorkflowOrchestrator = () => {
           { role: 'system', content: H3_DIRECTOR_SYSTEM_PROMPT },
           { role: 'user', content: userInput }
         ]
+      }, undefined, {
+        baseUrl: getMaterialApiBase(),
+        endpoint: '/v1/chat/completions'
       })) {
         response += chunk
       }

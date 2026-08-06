@@ -15,6 +15,8 @@ assert.match(H3_DIRECTOR_SYSTEM_PROMPT, /1000/)
 const orchestrator = readFileSync(new URL('../src/hooks/useWorkflowOrchestrator.js', import.meta.url), 'utf8')
 assert.match(orchestrator, /H3_DIRECTOR_SYSTEM_PROMPT/)
 assert.match(orchestrator, /H3_DIRECTOR_MODEL/)
+assert.match(orchestrator, /getMaterialApiBase/)
+assert.match(orchestrator, /endpoint:\s*['"]\/v1\/chat\/completions['"]/)
 assert.match(orchestrator, /parseDirectorResponse/)
 assert.doesNotMatch(orchestrator, /model:\s*['"]gpt-4o['"]/) 
 
