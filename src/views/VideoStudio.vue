@@ -20,9 +20,9 @@
           </div>
           <div class="rounded-2xl border border-slate-700 bg-slate-900/50 p-4"><h2 class="font-semibold">生成结果与历史</h2><p class="mt-2 text-sm text-slate-400">结果将在这里预览、下载、重试、保存到素材库或送入无限画布。</p></div>
         </div>
-        <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 class="font-semibold">智能设置</h2><div class="mt-4 space-y-2"><button v-for="size in sizes" :key="size.key" class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === size.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = size.key">{{ size.label }}</button></div><div class="mt-4 text-xs text-slate-400">模型按任务自动匹配；人物一致性默认开启；API 与底层参数放在高级设置。</div></aside>
+        <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 class="font-semibold">智能设置</h2><div class="mt-4 space-y-2"><button v-for="size in sizes" :key="size.key" class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === size.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = size.key">{{ size.label }}</button><button class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === 'custom' ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = 'custom'">自定义尺寸</button><div v-if="selectedSize === 'custom'" class="grid grid-cols-2 gap-2"><input v-model.number="customWidth" class="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm" placeholder="宽" /><input v-model.number="customHeight" class="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm" placeholder="高" /><div class="col-span-2 text-xs" :class="customSizeError ? 'text-red-300' : 'text-cyan-300'">{{ customSizeError || customSizeLabel }}</div></div></div><div class="mt-4 text-xs text-slate-400">模型按任务自动匹配；人物一致性默认开启；API 与底层参数放在高级设置。</div></aside>
       </div>
-      <div v-else-if="activeTab === 'novel'" class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">小说成片</h2><p class="mt-2 text-slate-400">支持智能改编 1–3 分钟和完整原文长片。上传后先显示人物、场景、预计镜头数和任务量，再确认生成。</p><div v-if="parsingDocument" class="mt-4 text-cyan-300">正在识别附件和章节…</div><div v-if="documentError" class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{{ documentError }}</div><div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div><div class="mt-5 grid gap-3 md:grid-cols-2"><div class="rounded-xl border border-cyan-500/50 p-4"><b>智能改编</b><p class="text-sm text-slate-400">保留主线、转折与高潮。</p></div><div class="rounded-xl border border-slate-700 p-4"><b>完整原文</b><p class="text-sm text-slate-400">按旁白和对白自动估时。</p></div></div></div>
+      <div v-else-if="activeTab === 'novel'" class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">小说成片</h2><p class="mt-2 text-slate-400">支持智能改编 1–3 分钟和完整原文长片。先生成可编辑故事板，确认后再消耗模型额度。</p><div v-if="parsingDocument" class="mt-4 text-cyan-300">正在识别附件和章节…</div><div v-if="documentError" class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{{ documentError }}</div><div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div><div class="mt-5 grid gap-3 md:grid-cols-2"><button :disabled="!parsedDocument || planningStoryboard" class="rounded-xl border border-cyan-500/50 p-4 text-left disabled:opacity-40" @click="planStoryboard('smart')"><b>智能改编</b><p class="text-sm text-slate-400">保留主线、转折与高潮，生成 1–3 分钟故事板。</p></button><button :disabled="!parsedDocument || planningStoryboard" class="rounded-xl border border-slate-700 p-4 text-left disabled:opacity-40" @click="planStoryboard('full')"><b>完整原文</b><p class="text-sm text-slate-400">按原文顺序拆镜，不强塞进单个 5 秒任务。</p></button></div><div v-if="storyboard" class="mt-6"><div class="mb-3 flex items-center justify-between"><h3 class="font-semibold">故事板 · {{ storyboard.shot_count }} 镜头 / 约 {{ storyboard.estimated_seconds }} 秒</h3><span class="text-xs text-cyan-300">生成视频前可逐镜修改</span></div><div class="grid max-h-[520px] gap-3 overflow-auto md:grid-cols-2 xl:grid-cols-3"><article v-for="shot in storyboard.shots" :key="shot.id" class="rounded-xl border border-slate-700 bg-slate-950/60 p-3"><b>{{ shot.title }}</b><p class="mt-2 line-clamp-3 text-xs text-slate-400">{{ shot.source_text }}</p><div class="mt-2 text-xs text-cyan-300">{{ shot.duration_seconds }} 秒 · 图像提示词＋动态提示词已分离</div></article></div></div></div>
       <div v-else class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">素材再创作</h2><p class="mt-2 text-slate-400">统一管理图片、视频、文档、人物、场景、品牌素材和生成历史；原 DSP 素材库继续保留独立入口。</p></div>
     </section>
   </main>
@@ -31,15 +31,18 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { COMMON_VIDEO_SIZES } from '../config/videoSizes'
+import { COMMON_VIDEO_SIZES, normalizeVideoSize } from '../config/videoSizes'
 import { detectStudioIntent } from '../utils/studioIntent'
-import { parseStudioDocument } from '../api/studioDocument'
+import { createStudioStoryboard, parseStudioDocument } from '../api/studioDocument'
 
 const route = useRoute(); const router = useRouter()
 const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
 const modes = [{ key: 'text-to-image', title: '文生图', description: '提示词生成图片变体' }, { key: 'image-to-video', title: '文生图＋视频', description: '先确认首帧，再生成动态镜头' }, { key: 'asset', title: '上传素材', description: '自动识别图片、视频和文档' }]
 const activeTab = ref(String(route.query.tab || 'quick')); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1280x720'); const sizes = COMMON_VIDEO_SIZES
 const parsedDocument = ref(null); const parsingDocument = ref(false); const documentError = ref('')
+const storyboard = ref(null); const planningStoryboard = ref(false); const customWidth = ref(1080); const customHeight = ref(1080)
+const customSizeError = computed(() => { try { normalizeVideoSize(customWidth.value, customHeight.value); return '' } catch (error) { return error.message } })
+const customSizeLabel = computed(() => `${customWidth.value} × ${customHeight.value}`)
 const intent = computed(() => detectStudioIntent({ prompt: prompt.value, fileName: fileName.value, wantsVideo: selectedMode.value === 'image-to-video' }))
 const intentLabel = computed(() => ({ 'text-to-image': '文生图', 'image-to-video': '文生图＋视频', 'novel-video': '小说成片', asset: '素材再创作' }[intent.value]))
 const setTab = key => { activeTab.value = key; router.replace({ query: key === 'quick' ? {} : { tab: key } }) }
@@ -53,6 +56,7 @@ const handleFile = async event => {
   finally { parsingDocument.value = false }
 }
 const startCreate = () => { if (intent.value === 'novel-video') setTab('novel'); else window.$message?.info(`${intentLabel.value}工作流已准备，目标尺寸 ${selectedSize.value}`) }
+const planStoryboard = async mode => { if (!parsedDocument.value) return; planningStoryboard.value = true; documentError.value = ''; try { storyboard.value = await createStudioStoryboard(parsedDocument.value.text, mode) } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '故事板生成失败' } finally { planningStoryboard.value = false } }
 </script>
 
 <style scoped>.studio-chip{border:1px solid #334155;border-radius:999px;padding:.45rem .8rem;color:#cbd5e1}</style>

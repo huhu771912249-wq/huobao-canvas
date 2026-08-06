@@ -13,3 +13,10 @@ export const parseStudioDocument = async file => request({
   data: { filename: file.name, content_base64: await readAsBase64(file) },
   timeout: 120000
 })
+
+export const createStudioStoryboard = async (text, mode) => request({
+  url: '/v1/studio/storyboards',
+  method: 'post',
+  data: { text, mode },
+  timeout: 120000
+})
