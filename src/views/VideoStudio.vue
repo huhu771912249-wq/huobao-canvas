@@ -78,9 +78,11 @@ const handleFile = async event => {
   catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
   finally { parsingDocument.value = false }
 }
+const clearNovelDraft = () => { parsedDocument.value = null; novelText.value = ''; storyboard.value = null }
 const handleNovelFile = async event => {
   const file = event.target?.files?.[0]
   if (!file) return
+  clearNovelDraft()
   if (!/\.(txt|md|docx)$/i.test(file.name)) { documentError.value = '仅支持 TXT、Markdown 和 DOCX 小说附件'; return }
   if (file.size > 10 * 1024 * 1024) { documentError.value = '附件不能超过 10MB'; return }
   parsingDocument.value = true; documentError.value = ''; storyboard.value = null
@@ -89,7 +91,7 @@ const handleNovelFile = async event => {
     if (Number(parsed?.characters || 0) > NOVEL_TEXT_LIMIT) throw new Error('小说正文不能超过 20 万字符')
     parsedDocument.value = parsed
     novelText.value = String(parsed.text || '')
-  } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
+  } catch (error) { clearNovelDraft(); documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
   finally { parsingDocument.value = false; event.target.value = '' }
 }
 const novelTitle = computed(() => {
@@ -102,7 +104,7 @@ const preparePastedDocument = () => {
   if (text.length > NOVEL_TEXT_LIMIT) throw new Error('小说正文不能超过 20 万字符')
   parsedDocument.value = { filename: novelTitle.value || '粘贴的小说正文', text, characters: text.length, chapters: [{ title: '正文', text }], estimates: { compressed_seconds: Math.min(180, Math.max(60, Math.round(text.length / 12))), full_shots: Math.max(1, Math.round(text.length / 80)) } }
 }
-const prepareAndPlan = async mode => { documentError.value = ''; try { preparePastedDocument(); await planStoryboard(mode) } catch (error) { documentError.value = error?.message || '小说正文解析失败' } }
+const prepareAndPlan = async mode => { documentError.value = ''; try { if (parsedDocument.value?.text !== novelText.value) preparePastedDocument(); const planned = await planStoryboard(mode); if (!planned) clearNovelDraft() } catch (error) { clearNovelDraft(); documentError.value = error?.response?.data?.error?.message || error?.message || '小说正文解析失败' } }
 const resolvedSize = computed(() => selectedSize.value === 'custom' ? `${customWidth.value}x${customHeight.value}` : selectedSize.value)
 const selectedAspectRatio = computed(() => {
   const [width, height] = resolvedSize.value.toLowerCase().split('x').map(Number)
@@ -122,7 +124,7 @@ const startCreate = async () => {
   updateProject(id, { canvasData: buildStudioCanvas({ mode: selectedMode.value, prompt: cleanPrompt, size: resolvedSize.value, videoModel: selectedVideoModel.value, qualityMode: qualityMode.value }) })
   router.push(`/canvas/${id}`)
 }
-const planStoryboard = async mode => { if (!parsedDocument.value) return; planningStoryboard.value = true; documentError.value = ''; try { storyboard.value = await createStudioStoryboard(parsedDocument.value.text, mode) } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '故事板生成失败' } finally { planningStoryboard.value = false } }
+const planStoryboard = async mode => { if (!parsedDocument.value) return false; planningStoryboard.value = true; documentError.value = ''; try { storyboard.value = await createStudioStoryboard(parsedDocument.value.text, mode); return true } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '故事板生成失败'; return false } finally { planningStoryboard.value = false } }
 </script>
 
 <style scoped>.studio-chip{border:1px solid #334155;border-radius:999px;padding:.45rem .8rem;color:#cbd5e1}</style>
