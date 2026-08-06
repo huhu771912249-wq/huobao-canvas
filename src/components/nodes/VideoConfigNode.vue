@@ -159,22 +159,25 @@
         <!-- Connected inputs indicator | 连接输入指示 -->
         <div
           class="flex items-center gap-2 text-xs text-[var(--text-secondary)] py-1 border-t border-[var(--border-color)]">
-          <span class="px-2 py-0.5 rounded-full"
+          <button type="button" class="px-2 py-0.5 rounded-full transition-colors hover:ring-1 hover:ring-current" @click="handleInputAction('prompt')"
             :class="connectedPrompt ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
             提示词 {{ connectedPrompt ? '✓' : '○' }}
-          </span>
-          <span class="px-2 py-0.5 rounded-full"
+          </button>
+          <button type="button" class="px-2 py-0.5 rounded-full transition-colors hover:ring-1 hover:ring-current" @click="handleInputAction('first_frame_image')"
             :class="imagesByRole.firstFrame ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
             首帧 {{ imagesByRole.firstFrame ? '✓' : '○' }}
-          </span>
-          <span class="px-2 py-0.5 rounded-full"
+          </button>
+          <button type="button" class="px-2 py-0.5 rounded-full transition-colors hover:ring-1 hover:ring-current" @click="handleInputAction('last_frame_image')"
             :class="imagesByRole.lastFrame ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
             尾帧 {{ imagesByRole.lastFrame ? '✓' : '○' }}
-          </span>
-          <span class="px-2 py-0.5 rounded-full"
+          </button>
+          <button type="button" class="px-2 py-0.5 rounded-full transition-colors hover:ring-1 hover:ring-current" @click="handleInputAction('input_reference')"
             :class="imagesByRole.referenceImages.length > 0 ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
             参考图 {{ imagesByRole.referenceImages.length > 0 ? `✓ ${imagesByRole.referenceImages.length}` : '○' }}
-          </span>
+          </button>
+          <input ref="firstFrameInputRef" type="file" accept="image/*" class="hidden" @change="handleImageInputSelect($event, 'first_frame_image')" />
+          <input ref="lastFrameInputRef" type="file" accept="image/*" class="hidden" @change="handleImageInputSelect($event, 'last_frame_image')" />
+          <input ref="referenceInputRef" type="file" accept="image/*" multiple class="hidden" @change="handleImageInputSelect($event, 'input_reference')" />
         </div>
 
         <!-- Progress bar | 进度条 -->
@@ -248,7 +251,7 @@ import { useVideoGeneration } from '../../hooks'
 import { publishImageAsset } from '../../api/image'
 import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
 import { createMediaComposition } from '../../api/mediaComposition'
-import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
+import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
@@ -257,6 +260,7 @@ import {
   normalizeVideoBatchSizes,
   supportsVideoBatch
 } from '../../utils/videoBatch'
+import { getVideoInputCapabilities } from '../../utils/videoInputCapabilities'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -285,6 +289,9 @@ const localBatchSizes = ref(normalizeVideoBatchSizes(props.data?.batchSizes || [
 const localGenerateGif = ref(props.data?.generateGif !== false)
 const drivingVideoInputRef = ref(null)
 const drivingVideoFile = ref(null)
+const firstFrameInputRef = ref(null)
+const lastFrameInputRef = ref(null)
+const referenceInputRef = ref(null)
 const audioGenerating = ref(false)
 const audioUrl = ref(props.data?.audioUrl || '')
 const audioError = ref('')
@@ -337,6 +344,7 @@ const imagesByRole = computed(() => {
 
 const isScail2Model = computed(() => localModel.value === 'scail2-action-transfer')
 const isLocalCloudModel = computed(() => ['minimax-h3', 'ltx-2.3'].includes(localModel.value))
+const inputCapabilities = computed(() => getVideoInputCapabilities(localModel.value))
 const isBatchCapable = computed(() => supportsVideoBatch(localModel.value))
 const scail2ReferenceInput = computed(() => {
   const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
@@ -353,6 +361,55 @@ const handleDrivingVideoSelect = (event) => {
     return
   }
   drivingVideoFile.value = file
+}
+
+const inputRoleLabel = { first_frame_image: '首帧', last_frame_image: '尾帧', input_reference: '参考图' }
+const inputRoleRef = { first_frame_image: firstFrameInputRef, last_frame_image: lastFrameInputRef, input_reference: referenceInputRef }
+
+const handleInputAction = (role) => {
+  if (role === 'prompt') {
+    if (connectedPrompt.value) { window.$message?.info('提示词已连接，可直接编辑左侧文字节点'); return }
+    const current = nodes.value.find(node => node.id === props.id)
+    const textId = addNode('text', { x: (current?.position?.x || 400) - 360, y: current?.position?.y || 100 }, { label: '视频提示词', content: '' })
+    addEdge({ source: textId, target: props.id, sourceHandle: 'right', targetHandle: 'left', type: 'promptOrder', data: { promptOrder: 1 } })
+    window.$message?.success('已添加提示词节点')
+    return
+  }
+  if ((role === 'last_frame_image' && !inputCapabilities.value.lastFrame) || (role === 'input_reference' && !inputCapabilities.value.references)) {
+    window.$message?.warning('当前模型只支持提示词和单张首帧；请切换 FRW 视频等支持多图输入的模型。')
+    return
+  }
+  inputRoleRef[role]?.value?.click()
+}
+
+const handleImageInputSelect = async (event, role) => {
+  const files = Array.from(event.target?.files || [])
+  event.target.value = ''
+  if (!files.length) return
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) { window.$message?.error(`${file.name} 不是图片`); continue }
+    if (file.size > 20 * 1024 * 1024) { window.$message?.error(`${file.name} 超过 20MB`); continue }
+    try {
+      const dataUrl = await readFileAsDataUrl(file)
+      const published = await publishImageAsset({ image: dataUrl, name: file.name })
+      const imageUrl = published.public_url || published.url || dataUrl
+      if (role !== 'input_reference') {
+        const oldEdges = edges.value.filter(edge => edge.target === props.id && (edge.data?.imageRole || 'first_frame_image') === role)
+        for (const oldEdge of oldEdges) {
+          const oldNode = nodes.value.find(node => node.id === oldEdge.source)
+          removeEdge(oldEdge.id)
+          if (oldNode?.data?.autoVideoInputTarget === props.id) removeNode(oldNode.id)
+        }
+      }
+      const current = nodes.value.find(node => node.id === props.id)
+      const offset = role === 'first_frame_image' ? -120 : role === 'last_frame_image' ? 120 : 260
+      const imageId = addNode('image', { x: (current?.position?.x || 400) - 360, y: (current?.position?.y || 100) + offset }, { url: imageUrl, publicUrl: published.public_url || '', label: inputRoleLabel[role], autoVideoInputTarget: props.id })
+      addEdge({ source: imageId, target: props.id, sourceHandle: 'right', targetHandle: 'left', type: 'imageRole', data: { imageRole: role } })
+      window.$message?.success(`${inputRoleLabel[role]}已添加`)
+    } catch (error) {
+      window.$message?.error(error?.message || `${inputRoleLabel[role]}上传失败`)
+    }
+  }
 }
 
 const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
