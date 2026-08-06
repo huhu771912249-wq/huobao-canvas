@@ -22,7 +22,17 @@
         </div>
         <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 class="font-semibold">智能设置</h2><div class="mt-4"><div class="mb-2 text-xs text-slate-400">清晰度</div><button v-for="option in qualityOptions" :key="option.mode" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="qualityMode === option.mode ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="qualityMode = option.mode"><b>{{ option.label }}</b><div class="mt-1 text-xs text-slate-400">{{ option.description }}</div></button></div><div v-if="selectedMode === 'image-to-video'" class="mt-4"><div class="mb-2 text-xs text-slate-400">云端视频模型</div><button v-for="model in cloudVideoModels" :key="model.key" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedVideoModel === model.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedVideoModel = model.key"><b>{{ model.label }}</b><div class="mt-1 text-xs text-slate-400">{{ model.description }}</div></button></div><div class="mt-4 space-y-2"><div class="text-xs text-slate-400">画面比例与首帧尺寸</div><button v-for="size in sizes" :key="size.key" class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === size.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = size.key">{{ size.label }}</button><button class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === 'custom' ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = 'custom'">自定义尺寸</button><div v-if="selectedSize === 'custom'" class="grid grid-cols-2 gap-2"><input v-model.number="customWidth" class="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm" placeholder="宽" /><input v-model.number="customHeight" class="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm" placeholder="高" /><div class="col-span-2 text-xs" :class="customSizeError ? 'text-red-300' : 'text-cyan-300'">{{ customSizeError || customSizeLabel }}</div></div></div><div class="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-xs text-emerald-200"><b>{{ qualityProfile.label }}</b><div class="mt-1 text-slate-400">{{ qualityMode === 'quality' ? `AI 超分目标 ${qualityProfile.width}×${qualityProfile.height}；只有后端确认完成才标记 1080p。` : '保留模型原生尺寸，不执行 AI 超分。' }}</div></div></aside>
       </div>
-      <div v-else-if="activeTab === 'novel'" class="space-y-5"><div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">小说成片</h2><p class="mt-2 text-slate-400">支持智能改编 1–3 分钟和完整原文长片。先生成故事板，确认并保存后才消耗模型额度。</p><div v-if="parsingDocument" role="status" class="mt-4 text-cyan-300">正在识别附件和章节…</div><div v-if="documentError" role="alert" class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{{ documentError }}</div><div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div><div class="mt-5 grid gap-3 md:grid-cols-2"><button :disabled="!parsedDocument || planningStoryboard" class="rounded-xl border border-cyan-500/50 p-4 text-left disabled:opacity-40" @click="planStoryboard('smart')"><b>智能改编</b><p class="text-sm text-slate-400">保留主线、转折与高潮，生成 1–3 分钟故事板。</p></button><button :disabled="!parsedDocument || planningStoryboard" class="rounded-xl border border-slate-700 p-4 text-left disabled:opacity-40" @click="planStoryboard('full')"><b>完整原文</b><p class="text-sm text-slate-400">按原文顺序拆镜，不强塞进单个 5 秒任务。</p></button></div></div><NovelVideoWorkspace :storyboard="storyboard" aspect-ratio="16:9" /></div>
+      <div v-else-if="activeTab === 'novel'" class="space-y-5">
+        <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
+          <h2 class="text-xl font-semibold">小说成片</h2><p class="mt-2 text-slate-400">直接粘贴小说正文或上传附件，生成可编辑故事板；确认并保存后才消耗模型额度。</p>
+          <textarea v-model="novelText" rows="9" maxlength="200000" class="mt-5 w-full resize-y rounded-xl border border-slate-700 bg-slate-950 p-4 text-sm outline-none focus:border-cyan-400" placeholder="粘贴小说正文（最多 20 万字符）" />
+          <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><label class="cursor-pointer rounded-lg bg-slate-800 px-3 py-2 text-sm">📎 上传小说附件<input class="hidden" type="file" accept=".txt,.md,.docx" @change="handleNovelFile" /></label><span class="text-xs" :class="novelText.length > NOVEL_TEXT_LIMIT ? 'text-red-300' : 'text-slate-400'">{{ novelText.length.toLocaleString() }} / {{ NOVEL_TEXT_LIMIT.toLocaleString() }} 字符</span></div>
+          <div v-if="parsingDocument" role="status" class="mt-4 text-cyan-300">正在识别附件和章节…</div><div v-if="documentError" role="alert" class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{{ documentError }}</div>
+          <div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div>
+          <div class="mt-5 grid gap-3 md:grid-cols-2"><button :disabled="planningStoryboard" class="rounded-xl border border-cyan-500/50 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('smart')"><b>{{ planningStoryboard ? '正在生成故事板…' : '生成故事板（智能改编）' }}</b><p class="text-sm text-slate-400">保留主线、转折与高潮，生成 1–3 分钟故事板。</p></button><button :disabled="planningStoryboard" class="rounded-xl border border-slate-700 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('full')"><b>生成故事板（完整原文）</b><p class="text-sm text-slate-400">按原文顺序拆镜，不强塞进单个 5 秒任务。</p></button></div>
+        </div>
+        <NovelVideoWorkspace :storyboard="storyboard" :title="novelTitle" aspect-ratio="16:9" />
+      </div>
       <div v-else class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">素材再创作</h2><p class="mt-2 text-slate-400">统一管理图片、视频、文档、人物、场景、品牌素材和生成历史；原 DSP 素材库继续保留独立入口。</p></div>
     </section>
   </main>
@@ -51,6 +61,8 @@ const qualityOptions = [
   { mode: 'fast', label: '快速导出', description: '保留原生分辨率，速度更快' }
 ]
 const parsedDocument = ref(null); const parsingDocument = ref(false); const documentError = ref('')
+const NOVEL_TEXT_LIMIT = 200000
+const novelText = ref('')
 const storyboard = ref(null); const planningStoryboard = ref(false); const customWidth = ref(1080); const customHeight = ref(1080)
 const customSizeError = computed(() => { try { normalizeVideoSize(customWidth.value, customHeight.value); return '' } catch (error) { return error.message } })
 const customSizeLabel = computed(() => `${customWidth.value} × ${customHeight.value}`)
@@ -66,6 +78,31 @@ const handleFile = async event => {
   catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
   finally { parsingDocument.value = false }
 }
+const handleNovelFile = async event => {
+  const file = event.target?.files?.[0]
+  if (!file) return
+  if (!/\.(txt|md|docx)$/i.test(file.name)) { documentError.value = '仅支持 TXT、Markdown 和 DOCX 小说附件'; return }
+  if (file.size > 10 * 1024 * 1024) { documentError.value = '附件不能超过 10MB'; return }
+  parsingDocument.value = true; documentError.value = ''; storyboard.value = null
+  try {
+    const parsed = await parseStudioDocument(file)
+    if (Number(parsed?.characters || 0) > NOVEL_TEXT_LIMIT) throw new Error('小说正文不能超过 20 万字符')
+    parsedDocument.value = parsed
+    novelText.value = String(parsed.text || '')
+  } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
+  finally { parsingDocument.value = false; event.target.value = '' }
+}
+const novelTitle = computed(() => {
+  const firstLine = novelText.value.split(/\r?\n/).map(line => line.trim()).find(Boolean)
+  return String(firstLine || parsedDocument.value?.filename?.replace(/\.[^.]+$/, '') || '').slice(0, 80)
+})
+const preparePastedDocument = () => {
+  const text = novelText.value.trim()
+  if (text.length < 20) throw new Error('小说正文至少需要 20 个字符')
+  if (text.length > NOVEL_TEXT_LIMIT) throw new Error('小说正文不能超过 20 万字符')
+  parsedDocument.value = { filename: novelTitle.value || '粘贴的小说正文', text, characters: text.length, chapters: [{ title: '正文', text }], estimates: { compressed_seconds: Math.min(180, Math.max(60, Math.round(text.length / 12))), full_shots: Math.max(1, Math.round(text.length / 80)) } }
+}
+const prepareAndPlan = async mode => { documentError.value = ''; try { preparePastedDocument(); await planStoryboard(mode) } catch (error) { documentError.value = error?.message || '小说正文解析失败' } }
 const resolvedSize = computed(() => selectedSize.value === 'custom' ? `${customWidth.value}x${customHeight.value}` : selectedSize.value)
 const selectedAspectRatio = computed(() => {
   const [width, height] = resolvedSize.value.toLowerCase().split('x').map(Number)

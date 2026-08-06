@@ -29,6 +29,7 @@ const {
 
 const apiPromises = [
   novelVideo.createNovelVideoJob({ title: '冠希小说', quality_mode: 'quality' }),
+  novelVideo.listNovelVideoJobs({ limit: 20, cursor: 0 }),
   novelVideo.getNovelVideoJob('job /1'),
   novelVideo.retryNovelVideoShot('job /1', 'shot #2'),
   novelVideo.updateNovelSubtitles('job /1', [
@@ -49,6 +50,10 @@ assert.deepEqual(calls, [
     url: '/v1/studio/novel-video/jobs',
     method: 'post',
     data: { title: '冠希小说', quality_mode: 'quality' }
+  },
+  {
+    url: '/v1/studio/novel-video/jobs?limit=20&cursor=0',
+    method: 'get'
   },
   {
     url: '/v1/studio/novel-video/jobs/job%20%2F1',
