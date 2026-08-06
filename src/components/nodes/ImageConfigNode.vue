@@ -41,38 +41,26 @@
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
-          <n-dropdown :options="modelOptions" @select="handleModelSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
-              {{ displayModelName }}
-              <n-icon :size="12"><ChevronDownOutline /></n-icon>
-            </button>
-          </n-dropdown>
+          <select data-testid="image-model-select" :value="localModel" class="nodrag nowheel max-w-[210px] rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-sm text-[var(--text-primary)]" @change="handleModelSelect($event.target.value)">
+            <option v-for="option in modelOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+          </select>
         </div>
 
         <!-- Quality selector | 画质选择 -->
         <div v-if="hasQualityOptions" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">画质</span>
-          <n-dropdown :options="qualityOptions" @select="handleQualitySelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
-              {{ displayQuality }}
-              <n-icon :size="12"><ChevronForwardOutline /></n-icon>
-            </button>
-          </n-dropdown>
+          <select data-testid="image-quality-select" :value="localQuality" class="nodrag nowheel rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-sm text-[var(--text-primary)]" @change="handleQualitySelect($event.target.value)">
+            <option v-for="option in qualityOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+          </select>
         </div>
 
         <!-- Size selector | 尺寸选择 -->
         <div v-if="hasSizeOptions" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">尺寸</span>
           <div class="flex items-center gap-2">
-            <n-dropdown :options="sizeOptions" @select="handleSizeSelect">
-              <button
-                class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
-                {{ displaySize }}
-                <n-icon :size="12">
-                  <ChevronForwardOutline />
-                </n-icon>
-              </button>
-            </n-dropdown>
+            <select data-testid="image-size-select" :value="localSize" class="nodrag nowheel rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-sm text-[var(--text-primary)]" @change="handleSizeSelect($event.target.value)">
+              <option v-for="option in sizeOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+            </select>
           </div>
         </div>
 
@@ -259,7 +247,7 @@
  */
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { NIcon, NDropdown, NSpin } from 'naive-ui'
+import { NIcon, NSpin } from 'naive-ui'
 import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline, ColorWandOutline } from '@vicons/ionicons5'
 import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'

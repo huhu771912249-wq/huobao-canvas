@@ -40,12 +40,9 @@
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
-          <n-dropdown :options="modelOptions" @select="handleModelSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
-              {{ displayModelName }}
-              <n-icon :size="12"><ChevronDownOutline /></n-icon>
-            </button>
-          </n-dropdown>
+          <select data-testid="video-model-select" :value="localModel" class="nodrag nowheel max-w-[230px] rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-sm text-[var(--text-primary)]" @change="handleModelSelect($event.target.value)">
+            <option v-for="option in modelOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+          </select>
         </div>
 
         <div class="space-y-2 rounded-lg border border-[var(--border-color)] p-2">
@@ -130,27 +127,17 @@
         <!-- Aspect ratio selector | 宽高比选择 -->
         <div v-if="!isBatchCapable" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">比例</span>
-          <n-dropdown :options="ratioOptions" @select="handleRatioSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
-              {{ localRatio }}
-              <n-icon :size="12">
-                <ChevronForwardOutline />
-              </n-icon>
-            </button>
-          </n-dropdown>
+          <select data-testid="video-ratio-select" :value="localRatio" class="nodrag nowheel rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-sm text-[var(--text-primary)]" @change="handleRatioSelect($event.target.value)">
+            <option v-for="option in ratioOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+          </select>
         </div>
 
         <!-- Duration selector | 时长选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">时长</span>
-          <n-dropdown :options="durationOptions" @select="handleDurationSelect">
-            <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
-              {{ localDuration }}s
-              <n-icon :size="12">
-                <ChevronForwardOutline />
-              </n-icon>
-            </button>
-          </n-dropdown>
+          <select data-testid="video-duration-select" :value="localDuration" class="nodrag nowheel rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-sm text-[var(--text-primary)]" @change="handleDurationSelect(Number($event.target.value))">
+            <option v-for="option in durationOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+          </select>
         </div>
 
         <div v-if="isScail2Model" class="space-y-2 rounded-lg border border-[var(--border-color)] p-2">
