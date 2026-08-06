@@ -22,7 +22,7 @@
         </div>
         <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 class="font-semibold">智能设置</h2><div class="mt-4 space-y-2"><button v-for="size in sizes" :key="size.key" class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === size.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = size.key">{{ size.label }}</button></div><div class="mt-4 text-xs text-slate-400">模型按任务自动匹配；人物一致性默认开启；API 与底层参数放在高级设置。</div></aside>
       </div>
-      <div v-else-if="activeTab === 'novel'" class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">小说成片</h2><p class="mt-2 text-slate-400">支持智能改编 1–3 分钟和完整原文长片。上传后先显示人物、场景、预计镜头数和任务量，再确认生成。</p><div class="mt-5 grid gap-3 md:grid-cols-2"><div class="rounded-xl border border-cyan-500/50 p-4"><b>智能改编</b><p class="text-sm text-slate-400">保留主线、转折与高潮。</p></div><div class="rounded-xl border border-slate-700 p-4"><b>完整原文</b><p class="text-sm text-slate-400">按旁白和对白自动估时。</p></div></div></div>
+      <div v-else-if="activeTab === 'novel'" class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">小说成片</h2><p class="mt-2 text-slate-400">支持智能改编 1–3 分钟和完整原文长片。上传后先显示人物、场景、预计镜头数和任务量，再确认生成。</p><div v-if="parsingDocument" class="mt-4 text-cyan-300">正在识别附件和章节…</div><div v-if="documentError" class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{{ documentError }}</div><div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div><div class="mt-5 grid gap-3 md:grid-cols-2"><div class="rounded-xl border border-cyan-500/50 p-4"><b>智能改编</b><p class="text-sm text-slate-400">保留主线、转折与高潮。</p></div><div class="rounded-xl border border-slate-700 p-4"><b>完整原文</b><p class="text-sm text-slate-400">按旁白和对白自动估时。</p></div></div></div>
       <div v-else class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">素材再创作</h2><p class="mt-2 text-slate-400">统一管理图片、视频、文档、人物、场景、品牌素材和生成历史；原 DSP 素材库继续保留独立入口。</p></div>
     </section>
   </main>
@@ -33,15 +33,25 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { COMMON_VIDEO_SIZES } from '../config/videoSizes'
 import { detectStudioIntent } from '../utils/studioIntent'
+import { parseStudioDocument } from '../api/studioDocument'
 
 const route = useRoute(); const router = useRouter()
 const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
 const modes = [{ key: 'text-to-image', title: '文生图', description: '提示词生成图片变体' }, { key: 'image-to-video', title: '文生图＋视频', description: '先确认首帧，再生成动态镜头' }, { key: 'asset', title: '上传素材', description: '自动识别图片、视频和文档' }]
 const activeTab = ref(String(route.query.tab || 'quick')); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1280x720'); const sizes = COMMON_VIDEO_SIZES
+const parsedDocument = ref(null); const parsingDocument = ref(false); const documentError = ref('')
 const intent = computed(() => detectStudioIntent({ prompt: prompt.value, fileName: fileName.value, wantsVideo: selectedMode.value === 'image-to-video' }))
 const intentLabel = computed(() => ({ 'text-to-image': '文生图', 'image-to-video': '文生图＋视频', 'novel-video': '小说成片', asset: '素材再创作' }[intent.value]))
 const setTab = key => { activeTab.value = key; router.replace({ query: key === 'quick' ? {} : { tab: key } }) }
-const handleFile = event => { fileName.value = event.target?.files?.[0]?.name || ''; if (intent.value === 'novel-video') setTab('novel') }
+const handleFile = async event => {
+  const file = event.target?.files?.[0]
+  fileName.value = file?.name || ''
+  if (!file || intent.value !== 'novel-video') return
+  setTab('novel'); parsingDocument.value = true; documentError.value = ''; parsedDocument.value = null
+  try { parsedDocument.value = await parseStudioDocument(file) }
+  catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '附件识别失败' }
+  finally { parsingDocument.value = false }
+}
 const startCreate = () => { if (intent.value === 'novel-video') setTab('novel'); else window.$message?.info(`${intentLabel.value}工作流已准备，目标尺寸 ${selectedSize.value}`) }
 </script>
 
