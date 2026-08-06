@@ -2,10 +2,11 @@ import request from '../utils/request'
 
 const JOBS_API = '/v1/studio/novel-video/jobs'
 const encodeRequiredId = (id, name) => {
-  if (id == null || (typeof id === 'string' && id.trim() === '')) {
+  const value = String(id ?? '')
+  if (!value.trim()) {
     throw new TypeError(`${name} is required`)
   }
-  return encodeURIComponent(String(id))
+  return encodeURIComponent(value)
 }
 const jobUrl = jobId => `${JOBS_API}/${encodeRequiredId(jobId, 'jobId')}`
 

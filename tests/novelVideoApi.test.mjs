@@ -68,7 +68,7 @@ assert.deepEqual(calls, [
 ])
 
 const callsBeforeInvalidIds = calls.length
-const invalidIds = [undefined, null, '', '   ']
+const invalidIds = [undefined, null, '', '   ', [], new String('   ')]
 const isRequiredIdTypeError = name => error => (
   error instanceof TypeError && error.message === `${name} is required`
 )
