@@ -24,6 +24,21 @@ export const getModelNativeVideoSize = (model = 'minimax-h3', ratio = '16:9') =>
     : landscape
 }
 
+export const getAspectRatioForSize = (size) => {
+  const [width, height] = String(size).toLowerCase().split('x').map(Number)
+  return Number.isFinite(width) && Number.isFinite(height) && height > width ? '9:16' : '16:9'
+}
+
+export const buildQualityProfilesBySize = (sizes = [], mode = 'quality') => Object.fromEntries(
+  (Array.isArray(sizes) ? sizes : []).map(size => {
+    const ratio = getAspectRatioForSize(size)
+    return [String(size), {
+      quality_profile: getVideoQualityProfile(mode, ratio),
+      image_alignment: getImageAlignmentSpec('minimax-h3', ratio)
+    }]
+  })
+)
+
 export const getImageAlignmentSpec = (model = 'minimax-h3', ratio = '16:9') => ({
   mode: 'crop_or_pad',
   ...getModelNativeVideoSize(model, ratio),
@@ -78,8 +93,8 @@ export const buildStudioCanvas = ({ mode, prompt = '', size = '1280x720', videoM
   if (mode === 'text-to-image') return { nodes: [imagePrompt, imageConfig, imageResult], edges: imageEdges, viewport: { x: 60, y: 80, zoom: 0.78 } }
 
   const motionPrompt = { id: 'studio_motion_prompt', type: 'text', position: { x: 800, y: 430 }, data: { content: prompt, label: '动态与运镜提示词' } }
-  const videoConfig = { id: 'studio_video_config', type: 'videoConfig', position: { x: 1160, y: 220 }, data: { label: '云端视频', mode: 'image_to_video', model: videoModel, ratio, dur: 5, exportResolution: '1080p', qualityMode: qualityProfile.mode, qualityProfile, imageAlignment: getImageAlignmentSpec(videoModel, ratio) } }
-  const videoResult = { id: 'studio_video_result', type: 'video', position: { x: 1540, y: 220 }, data: { url: '', label: '1080p 视频结果' } }
+  const videoConfig = { id: 'studio_video_config', type: 'videoConfig', position: { x: 1160, y: 220 }, data: { label: '云端视频', mode: 'image_to_video', model: videoModel, ratio, dur: 5, targetResolution: '1080p', qualityMode: qualityProfile.mode, qualityProfile, imageAlignment: getImageAlignmentSpec(videoModel, ratio) } }
+  const videoResult = { id: 'studio_video_result', type: 'video', position: { x: 1540, y: 220 }, data: { url: '', label: '视频结果', targetResolution: '1080p', actualResolution: null, qualityProfile } }
   return {
     nodes: [imagePrompt, imageConfig, imageResult, motionPrompt, videoConfig, videoResult],
     edges: [

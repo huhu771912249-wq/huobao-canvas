@@ -91,13 +91,14 @@
               :class="qualityMode === 'quality' ? activeOptionClass : inactiveOptionClass"
               @click="qualityMode = 'quality'"
             >
-              <span class="block text-sm font-medium">高质量 1080p</span>
-              <span class="mt-0.5 block text-[10px] opacity-70">按尺寸分别生成；视频素材接入 AI 超分</span>
+              <span class="block text-sm font-medium">高质量分尺寸</span>
+              <span class="mt-0.5 block text-[10px] opacity-70">按 3:1 / 6:5 / 1:1 分别生成</span>
             </button>
           </div>
           <div class="mt-2 text-[10px] text-[var(--text-secondary)]">
-            {{ qualityMode === 'fast' ? '快速导出：保留原始生成尺寸' : '最终输出以任务返回的实际尺寸为准，不把普通放大标成 1080p' }}
+            {{ qualityMode === 'fast' ? '快速导出：保留原始生成尺寸' : '高质量 1080p（视频 AI 超分）在此图片素材接口不可用；当前只执行后端已支持的分比例高清生成。' }}
           </div>
+          <div class="mt-2 space-y-1 text-[10px] text-[var(--text-secondary)]"><div v-for="(target, size) in qualityTargetsBySize" :key="size">{{ size }} → {{ target.quality_profile.width }}×{{ target.quality_profile.height }} 仅作未来视频输出目标，当前请求不伪造超分参数</div></div>
         </div>
 
         <div>
@@ -331,7 +332,7 @@ import {
 } from '../../utils/materialVariation'
 import { addNodes, duplicateNode, nodes, removeNode, updateNode } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
-import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
+import { buildQualityProfilesBySize } from '../../config/studioProjectFlow'
 
 const props = defineProps({
   id: String,
@@ -364,7 +365,7 @@ const activeOptionClass = 'border-emerald-400 bg-emerald-400/10 text-emerald-400
 const inactiveOptionClass = 'border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
 
 const sourceJobId = computed(() => String(props.data?.sourceJobId || '').trim())
-const qualityProfile = computed(() => getVideoQualityProfile(qualityMode.value, '16:9'))
+const qualityTargetsBySize = computed(() => buildQualityProfilesBySize(selectedSizes.value, qualityMode.value))
 const hasUsableSource = computed(() => Boolean(selectedFile.value || sourceJobId.value))
 const formatFileSize = (bytes) => {
   const size = Number(bytes || 0)
@@ -397,7 +398,7 @@ const progressPercent = computed(() => getMaterialVariationProgress(task.value?.
 const currentStep = computed(() => task.value?.current_step || task.value?.currentStep || props.data?.currentStep || '')
 const upscaleStatusLabel = computed(() => {
   const value = String(task.value?.upscale_status || props.data?.upscale_status || '').toLowerCase()
-  return ({ queued: '等待中', running: '处理中', completed: '已完成', failed: '失败' }[value] || (qualityMode.value === 'fast' ? '未启用' : '等待后端回报'))
+  return ({ queued: '等待中', running: '处理中', completed: '已完成', failed: '失败' }[value] || (qualityMode.value === 'fast' ? '未启用' : '当前接口未接入'))
 })
 const actualOutputLabel = computed(() => {
   const width = Number(task.value?.actual_width || props.data?.actual_width)
@@ -646,8 +647,7 @@ const submitVariation = async (action) => {
       strength: strength.value,
       action
     })
-    const requestPayload = { ...payload, quality_profile: qualityProfile.value }
-    const result = await createMaterialVariation(requestPayload)
+    const result = await createMaterialVariation(payload)
     materializedJobId.value = ''
     materializedCreativeIds.value = []
     selectedComparisonId.value = ''
@@ -701,8 +701,7 @@ const handleSecondWave = async () => {
       strength: strength.value
     })
     const parentJobId = jobId.value
-    const requestPayload = { ...payload, quality_profile: qualityProfile.value }
-    const result = await startMaterialVariationSecondWave(parentJobId, requestPayload)
+    const result = await startMaterialVariationSecondWave(parentJobId, payload)
     materializedJobId.value = ''
     materializedCreativeIds.value = []
     updateNode(props.id, {

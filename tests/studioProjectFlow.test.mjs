@@ -5,7 +5,9 @@ const videoCanvas = buildStudioCanvas({ mode: 'image-to-video', prompt: '雨夜�
 assert.deepEqual(videoCanvas.nodes.map(node => node.type), ['text', 'imageConfig', 'image', 'text', 'videoConfig', 'video'])
 assert.equal(videoCanvas.nodes.find(node => node.type === 'videoConfig').data.model, 'minimax-h3')
 assert.equal(videoCanvas.nodes.find(node => node.type === 'videoConfig').data.ratio, '16:9')
-assert.equal(videoCanvas.nodes.find(node => node.type === 'videoConfig').data.exportResolution, '1080p')
+assert.equal(videoCanvas.nodes.find(node => node.type === 'videoConfig').data.targetResolution, '1080p')
+assert.equal(videoCanvas.nodes.find(node => node.type === 'video').data.label, '视频结果')
+assert.equal(videoCanvas.nodes.find(node => node.type === 'video').data.actualResolution, null)
 assert.equal(videoCanvas.nodes.find(node => node.type === 'imageConfig').data.size, '1280x720')
 
 const imageCanvas = buildStudioCanvas({ mode: 'text-to-image', prompt: '商品海报', size: '720x1280' })

@@ -154,6 +154,7 @@ import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges }
 import { useVideoGeneration } from '../../hooks/useApi'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { startAssetDownload } from '../../utils/assetDownload'
+import { extractVideoCompletionMetadata, isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
 
 const props = defineProps({
   id: String,
@@ -220,12 +221,18 @@ const startPolling = async (taskId) => {
         attempt
       })
     })
+    const completion = extractVideoCompletionMetadata(result)
+    const verified1080p = isVerifiedTargetOutput(completion, props.data?.qualityProfile || {})
     // 轮询成功，更新视频节点
     updateNode(props.id, {
       url: result.url,
       loading: false,
       progress: 100,
-      label: '视频生成',
+      status: completion.status || 'completed',
+      upscale_status: completion.upscale_status,
+      actual_width: completion.actual_width,
+      actual_height: completion.actual_height,
+      label: verified1080p ? '高质量 1080p 视频' : '视频结果',
       taskId: null  // 清除 taskId
     })
     window.$message?.success('视频生成成功')

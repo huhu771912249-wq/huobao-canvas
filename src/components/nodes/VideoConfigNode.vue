@@ -283,6 +283,7 @@ import {
 import { getVideoInputCapabilities } from '../../utils/videoInputCapabilities'
 import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 import { getImageAlignmentSpec, getModelNativeVideoSize } from '../../config/studioProjectFlow'
+import { isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -832,6 +833,8 @@ const handleGenerate = async () => {
       zipUrl: isBatchCapable.value ? '' : undefined,
       progress: 0,
       attempt: 0,
+      qualityProfile: qualityProfile.value,
+      targetResolution: qualityProfile.value.label,
       label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...'
     })
   } else {
@@ -844,6 +847,8 @@ const handleGenerate = async () => {
       assets: isBatchCapable.value ? [] : undefined,
       zipUrl: isBatchCapable.value ? '' : undefined,
       outputFormats: isBatchCapable.value && localGenerateGif.value ? ['mp4', 'gif'] : ['mp4'],
+      qualityProfile: qualityProfile.value,
+      targetResolution: qualityProfile.value.label,
       label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...'
     })
 
@@ -929,6 +934,7 @@ const handleGenerate = async () => {
       actual_width: result?.actual_width || null,
       actual_height: result?.actual_height || null
     }
+    const verified1080p = isVerifiedTargetOutput(qualityMetadata, qualityProfile.value)
 
     // 如果有直接 URL，更新视频节点
     if (url) {
@@ -940,7 +946,7 @@ const handleGenerate = async () => {
         zipUrl: result?.zip_url || '',
         outputFormats: result?.output_formats || params.output_formats,
         loading: false,
-        label: isBatchCapable.value ? '批量视频结果' : '视频生成',
+        label: isBatchCapable.value ? '批量视频结果' : (verified1080p ? '高质量 1080p 视频' : '视频结果'),
         model: localModel.value,
         ...qualityMetadata,
         updatedAt: Date.now()

@@ -1,4 +1,21 @@
 import { getMaterialApiBase } from '../utils/apiBase.js'
+import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from './studioProjectFlow.js'
+
+const withVideoQualityContract = (params, adapted) => {
+  const qualityProfile = normalizeVideoQualityRequestProfile(params?.quality_profile)
+  const imageAlignment = normalizeVideoImageAlignmentRequest(params?.image_alignment)
+  if (qualityProfile) adapted.quality_profile = qualityProfile
+  if (imageAlignment) adapted.image_alignment = imageAlignment
+  return adapted
+}
+
+const adaptLocalVideoRequest = (params = {}) => {
+  const adapted = { model: params.model, prompt: params.prompt || '' }
+  for (const key of ['first_frame_image', 'last_frame_image', 'images', 'driving_video', 'driving_video_name', 'size', 'seconds', 'sizes', 'output_formats']) {
+    if (params[key] !== undefined) adapted[key] = params[key]
+  }
+  return withVideoQualityContract(params, adapted)
+}
 
 /**
  * API Provider Adapters | API 渠道适配器
@@ -46,7 +63,7 @@ export const PROVIDERS = {
         }
         return adapted
       },
-      video: (params) => params
+      video: adaptLocalVideoRequest
     },
     responseAdapter: {
       chat: (response) => {
@@ -160,7 +177,7 @@ export const PROVIDERS = {
             generate_audio: params.generateAudio !== false
           }
 
-          return adapted
+          return withVideoQualityContract(params, adapted)
         }
 
         // Kling 模型 - 使用 kling 特定格式
@@ -189,7 +206,7 @@ export const PROVIDERS = {
             adapted.image = params.first_frame_image
           }
 
-          return adapted
+          return withVideoQualityContract(params, adapted)
         }
 
         // 默认格式（veo 等）
@@ -202,7 +219,7 @@ export const PROVIDERS = {
         if (params.size) adapted.size = params.size
         if (params.seconds) adapted.seconds = params.seconds
 
-        return adapted
+        return withVideoQualityContract(params, adapted)
       }
     },
     // 冠希渠道响应格式
@@ -272,7 +289,7 @@ export const PROVIDERS = {
         if (params.last_frame_image) adapted.last_frame_image = params.last_frame_image
         if (params.size) adapted.size = params.size
         if (params.seconds) adapted.seconds = params.seconds
-        return adapted
+        return withVideoQualityContract(params, adapted)
       }
     },
     // 响应数据适配

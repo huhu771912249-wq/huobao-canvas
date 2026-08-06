@@ -5,7 +5,8 @@ import {
   getModelNativeVideoSize,
   getImageAlignmentSpec,
   normalizeVideoImageAlignmentRequest,
-  normalizeVideoQualityRequestProfile
+  normalizeVideoQualityRequestProfile,
+  buildQualityProfilesBySize
 } from '../src/config/studioProjectFlow.js'
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
@@ -17,14 +18,17 @@ const videoApiHook = read('../src/hooks/useApi.js')
 for (const [name, source] of [['studio', studio], ['videoNode', videoNode], ['materialNode', materialNode]]) {
   assert.match(source, /快速导出/, `${name} must expose fast mode`)
   assert.match(source, /高质量 1080p/, `${name} must expose quality mode`)
-  assert.match(source, /getVideoQualityProfile/, `${name} must use the shared quality profile`)
 }
+assert.match(studio, /getVideoQualityProfile/)
+assert.match(videoNode, /getVideoQualityProfile/)
+assert.match(materialNode, /buildQualityProfilesBySize/)
 for (const label of ['原生分辨率', 'AI 超分', '最终输出']) assert.match(videoNode, new RegExp(label))
 assert.match(videoNode, /quality_profile:\s*qualityProfile\.value/)
 assert.match(videoNode, /upscale_status/)
 assert.match(videoNode, /actual_width/)
 assert.match(videoNode, /actual_height/)
 assert.match(videoNode, /crop_or_pad/)
+assert.match(videoNode, /isVerifiedTargetOutput/)
 assert.match(videoApiHook, /normalizeVideoQualityRequestProfile\(params\.quality_profile\)/)
 assert.match(videoApiHook, /requestData\.quality_profile\s*=\s*qualityProfile/)
 assert.match(videoApiHook, /normalizeVideoImageAlignmentRequest\(params\.image_alignment\)/)
@@ -60,8 +64,13 @@ assert.equal(imageConfig.data.qualityMode, 'quality')
 assert.equal(videoConfig.data.imageAlignment.mode, 'crop_or_pad')
 assert.equal(buildStudioCanvas({ mode: 'image-to-video', size: '1080x1920' }).nodes.find(node => node.type === 'videoConfig').data.ratio, '9:16')
 
-assert.match(materialNode, /quality_profile:\s*qualityProfile\.value/)
+assert.match(materialNode, /buildQualityProfilesBySize/)
+assert.doesNotMatch(materialNode, /createMaterialVariation\(\{[^}]*quality_profile/s)
 assert.match(materialNode, /upscale_status/)
 assert.match(materialNode, /actual_width/)
 assert.match(materialNode, /actual_height/)
+const mixedTargets = buildQualityProfilesBySize(['1280x720', '720x1280'], 'quality')
+assert.equal(mixedTargets['1280x720'].quality_profile.width, 1920)
+assert.equal(mixedTargets['720x1280'].quality_profile.width, 1080)
+assert.equal(mixedTargets['720x1280'].image_alignment.height, 608)
 console.log('global1080Quality.test.mjs passed')
