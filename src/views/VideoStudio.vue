@@ -31,7 +31,7 @@
           <div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div>
           <div class="mt-5 grid gap-3 md:grid-cols-2"><button :disabled="planningStoryboard" class="rounded-xl border border-cyan-500/50 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('smart')"><b>{{ planningStoryboard ? '正在生成故事板…' : '生成故事板（智能改编）' }}</b><p class="text-sm text-slate-400">保留主线、转折与高潮，生成 1–3 分钟故事板。</p></button><button :disabled="planningStoryboard" class="rounded-xl border border-slate-700 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('full')"><b>生成故事板（完整原文）</b><p class="text-sm text-slate-400">按原文顺序拆镜，不强塞进单个 5 秒任务。</p></button></div>
         </div>
-        <NovelVideoWorkspace :storyboard="storyboard" :title="novelTitle" aspect-ratio="16:9" @new-job="clearNovelDraft" />
+        <NovelVideoWorkspace :storyboard="storyboard" :title="novelTitle" :initial-job-id="String(route.query.job || '')" aspect-ratio="16:9" @new-job="clearNovelDraft" />
       </div>
       <div v-else class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">素材再创作</h2><p class="mt-2 text-slate-400">统一管理图片、视频、文档、人物、场景、品牌素材和生成历史；原 DSP 素材库继续保留独立入口。</p></div>
     </section>

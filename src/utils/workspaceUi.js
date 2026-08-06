@@ -143,3 +143,22 @@ export function buildTaskSummary(task = {}) {
     actions: actionMap[status] || ['details']
   }
 }
+
+export function mapNovelJobToTask(job = {}) {
+  const summary = job.shot_summary || {}
+  const total = Math.max(0, Number(summary.total) || 0)
+  const completed = Math.max(0, Number(summary.completed) || 0)
+  const status = String(job.status || 'queued')
+  const normalizedStatus = ['completed', 'failed', 'cancelled'].includes(status) ? status : 'running'
+  return {
+    id: `novel:${String(job.job_id || '')}`,
+    source: 'novel', source_id: String(job.job_id || ''),
+    name: String(job.title || '未命名小说任务'), status: normalizedStatus,
+    progress: total ? Math.round((completed / total) * 100) : (status === 'completed' ? 100 : 0),
+    success_count: completed, failure_count: Math.max(0, Number(summary.failed) || 0)
+  }
+}
+
+export function mergeRecentTasks(existingTasks = [], novelTasks = []) {
+  return [...new Map([...novelTasks, ...existingTasks].filter(task => task?.id).map(task => [task.id, task])).values()]
+}

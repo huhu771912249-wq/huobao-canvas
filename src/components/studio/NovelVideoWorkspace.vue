@@ -85,7 +85,7 @@ import SubtitleEditor from './SubtitleEditor.vue'
 import { cancelNovelVideoJob, createNovelVideoJob, finalizeNovelVideoJob, getNovelVideoJob, listNovelVideoJobs, retryNovelVideoShot, updateNovelSubtitles } from '../../api/novelVideo'
 import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 
-const props = defineProps({ storyboard: { type: Object, default: null }, aspectRatio: { type: String, default: '16:9' }, title: { type: String, default: '' } })
+const props = defineProps({ storyboard: { type: Object, default: null }, aspectRatio: { type: String, default: '16:9' }, title: { type: String, default: '' }, initialJobId: { type: String, default: '' } })
 const emit = defineEmits(['new-job'])
 const editableShots = ref([]); const dirty = ref(true); const qualityMode = ref('quality'); const job = ref(null); const loading = ref(false); const busy = ref(false); const error = ref(''); const polling = ref(false); const subtitles = ref([]); const subtitleDirty = ref(false); const subtitleError = ref(''); const savingSubtitles = ref(false); const retryingShotIds = ref(new Set()); const cancelPending = ref(false)
 const recentJobs = ref([]); const recentLoading = ref(false); const recentError = ref(''); const restoringJobId = ref('')
@@ -138,7 +138,7 @@ const saveSubtitles = async () => { if (savingSubtitles.value) return; const val
 const finalize = async () => { busy.value = true; error.value = ''; try { syncJob(await finalizeNovelVideoJob(job.value.job_id, { quality_profile: profile.value })); resumePolling() } catch (cause) { error.value = errorMessage(cause) } finally { busy.value = false } }
 const artifactUrl = name => safeDownloadUrl(job.value?.artifacts?.[name] || job.value?.[name])
 onBeforeUnmount(() => { stopPolling(); cancelRestoreRequests() })
-onMounted(() => refreshRecentJobs({ restoreRemembered: true }))
+onMounted(async () => { await refreshRecentJobs({ restoreRemembered: !props.initialJobId }); if (props.initialJobId) await restoreJob(props.initialJobId) })
 </script>
 
 <style scoped>

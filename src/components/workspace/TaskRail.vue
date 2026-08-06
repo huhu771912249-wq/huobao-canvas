@@ -41,8 +41,8 @@
 
       <div v-else class="task-rail__empty">
         <n-icon :size="36"><SparklesOutline /></n-icon>
-        <strong>当前没有运行任务</strong>
-        <p>生成、逆向和裂变任务会集中显示在这里。</p>
+        <strong>{{ error ? '任务读取失败' : '当前没有运行任务' }}</strong>
+        <p>{{ error || '生成、逆向和裂变任务会集中显示在这里。' }}</p>
       </div>
     </aside>
   </Transition>
@@ -61,6 +61,10 @@ defineProps({
   tasks: {
     type: Array,
     default: () => []
+  },
+  error: {
+    type: String,
+    default: ''
   }
 })
 

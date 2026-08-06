@@ -32,7 +32,11 @@
       <TaskRail
         :open="taskRailOpen"
         :tasks="recentTasks"
+        :error="taskLoadError"
         @close="taskRailOpen = false"
+        @details="openTask"
+        @view-results="openTask"
+        @download="openTask"
       />
     </template>
   </WorkspaceShell>
@@ -73,6 +77,8 @@ import RecentProjects from '../components/home/RecentProjects.vue'
 import TaskRail from '../components/workspace/TaskRail.vue'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { STUDIO_ENTRIES } from '../config/studioEntries'
+import { listNovelVideoJobs } from '../api/novelVideo'
+import { mapNovelJobToTask, mergeRecentTasks } from '../utils/workspaceUi'
 
 const router = useRouter()
 const dialog = useDialog()
@@ -86,7 +92,10 @@ const openStudioEntry = (entry) => {
 
 const showApiSettings = ref(false)
 const taskRailOpen = ref(false)
-const recentTasks = ref([])
+const materialTasks = ref([])
+const novelTasks = ref([])
+const taskLoadError = ref('')
+const recentTasks = computed(() => mergeRecentTasks(materialTasks.value, novelTasks.value))
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
@@ -97,6 +106,22 @@ const serviceStatus = computed(() => ({
 }))
 
 const refreshApiConfig = () => {}
+const loadRecentNovelTasks = async () => {
+  taskLoadError.value = ''
+  try {
+    const result = await listNovelVideoJobs({ limit: 20 })
+    novelTasks.value = (Array.isArray(result?.jobs) ? result.jobs : []).filter(job => job?.job_id).map(mapNovelJobToTask)
+  } catch {
+    novelTasks.value = []
+    taskLoadError.value = '暂时无法读取后端任务，请稍后重试。'
+  }
+}
+const openTask = task => {
+  if (task?.source === 'novel' && task.source_id) {
+    taskRailOpen.value = false
+    router.push({ path: '/video-studio', query: { tab: 'novel', job: task.source_id } })
+  }
+}
 
 const suggestionSets = [
   ['文生视频：赛博城市镜头推进', '图生视频：上传商品图后轻微运镜', '素材广告：高点击率开场', '人物口播：镜头缓慢拉近'],
@@ -301,5 +326,5 @@ const confirmRename = () => {
   renameValue.value = ''
 }
 
-onMounted(initProjectsStore)
+onMounted(() => { initProjectsStore(); loadRecentNovelTasks() })
 </script>
