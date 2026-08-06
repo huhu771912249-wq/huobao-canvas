@@ -626,6 +626,10 @@ const getConnectedInputs = () => {
 const handleModelSelect = (key) => {
   localModel.value = key
   const config = getModelConfig(key)
+  const supportedProviders = Array.isArray(config?.provider) ? config.provider : []
+  if (supportedProviders.length > 0 && !supportedProviders.includes(modelStore.currentProvider)) {
+    modelStore.setProvider(supportedProviders[0])
+  }
 
   // 同步 Quality 到模型默认值
   if (config?.defaultParams?.quality) {

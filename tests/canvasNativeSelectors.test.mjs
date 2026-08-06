@@ -18,5 +18,6 @@ assert.match(imageSource, /@change="handleSizeSelect\(\$event\.target\.value\)"/
 assert.match(videoSource, /@change="handleModelSelect\(\$event\.target\.value\)"/)
 assert.match(videoSource, /@change="handleRatioSelect\(\$event\.target\.value\)"/)
 assert.match(videoSource, /@change="handleDurationSelect\(Number\(\$event\.target\.value\)\)"/)
+assert.match(imageSource, /modelStore\.setProvider\(supportedProviders\[0\]\)/, 'cross-provider image models must switch their API provider')
 
 console.log('canvasNativeSelectors.test.mjs passed')
