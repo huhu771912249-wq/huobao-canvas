@@ -29,9 +29,10 @@
           <div class="mt-3 flex flex-wrap items-center justify-between gap-3"><label class="cursor-pointer rounded-lg bg-slate-800 px-3 py-2 text-sm">📎 上传小说附件<input :key="novelFileKey" class="hidden" type="file" accept=".txt,.md,.docx" @change="handleNovelFile" /></label><span class="text-xs" :class="novelText.length > NOVEL_TEXT_LIMIT ? 'text-red-300' : 'text-slate-400'">{{ novelText.length.toLocaleString() }} / {{ NOVEL_TEXT_LIMIT.toLocaleString() }} 字符</span></div>
           <div v-if="parsingDocument" role="status" class="mt-4 text-cyan-300">正在识别附件和章节…</div><div v-if="documentError" role="alert" class="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">{{ documentError }}</div>
           <div v-if="parsedDocument" class="mt-4 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-4 text-sm"><b>{{ parsedDocument.filename }}</b><div class="mt-2 grid gap-2 sm:grid-cols-4"><span>{{ parsedDocument.characters }} 字符</span><span>{{ parsedDocument.chapters.length }} 章/节</span><span>智能改编约 {{ parsedDocument.estimates.compressed_seconds }} 秒</span><span>完整模式约 {{ parsedDocument.estimates.full_shots }} 镜头</span></div></div>
-          <div class="mt-5 grid gap-3 md:grid-cols-2"><button :disabled="planningStoryboard" class="rounded-xl border border-cyan-500/50 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('smart')"><b>{{ planningStoryboard ? '正在生成故事板…' : '生成故事板（智能改编）' }}</b><p class="text-sm text-slate-400">保留主线、转折与高潮，生成 1–3 分钟故事板。</p></button><button :disabled="planningStoryboard" class="rounded-xl border border-slate-700 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('full')"><b>生成故事板（完整原文）</b><p class="text-sm text-slate-400">按原文顺序拆镜，不强塞进单个 5 秒任务。</p></button></div>
+          <div class="mt-5 grid gap-3 md:grid-cols-2"><button :disabled="planningStoryboard" class="rounded-xl border border-cyan-500/50 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('smart')"><b>{{ planningMode === 'smart' ? '正在生成智能故事板…' : '生成故事板（智能改编）' }}</b><p class="text-sm text-slate-400">保留主线、转折与高潮，生成 1–3 分钟故事板。</p></button><button :disabled="planningStoryboard" class="rounded-xl border border-slate-700 p-4 text-left disabled:opacity-40" @click="prepareAndPlan('full')"><b>{{ planningMode === 'full' ? '正在生成完整故事板…' : '生成故事板（完整原文）' }}</b><p class="text-sm text-slate-400">按原文顺序拆镜，不强塞进单个 5 秒任务。</p></button></div>
+          <div v-if="planningStoryboard" role="status" class="mt-4 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3 text-sm text-cyan-200">正在分析正文并拆分镜头，请勿重复点击…</div>
         </div>
-        <NovelVideoWorkspace :storyboard="storyboard" :title="novelTitle" :initial-job-id="String(route.query.job || '')" aspect-ratio="16:9" @new-job="clearNovelDraft" />
+        <div id="storyboard-workspace"><NovelVideoWorkspace :key="storyboardKey" :storyboard="storyboard" :title="novelTitle" :initial-job-id="String(route.query.job || '')" aspect-ratio="16:9" @new-job="clearNovelDraft" /></div>
       </div>
       <div v-else class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6"><h2 class="text-xl font-semibold">素材再创作</h2><p class="mt-2 text-slate-400">统一管理图片、视频、文档、人物、场景、品牌素材和生成历史；原 DSP 素材库继续保留独立入口。</p></div>
     </section>
@@ -64,7 +65,7 @@ const parsedDocument = ref(null); const parsingDocument = ref(false); const docu
 const NOVEL_TEXT_LIMIT = 200000
 const novelText = ref('')
 const novelFileKey = ref(0)
-const storyboard = ref(null); const planningStoryboard = ref(false); const customWidth = ref(1080); const customHeight = ref(1080)
+const storyboard = ref(null); const storyboardKey = ref(0); const planningStoryboard = ref(false); const planningMode = ref(''); const customWidth = ref(1080); const customHeight = ref(1080)
 const customSizeError = computed(() => { try { normalizeVideoSize(customWidth.value, customHeight.value); return '' } catch (error) { return error.message } })
 const customSizeLabel = computed(() => `${customWidth.value} × ${customHeight.value}`)
 const intent = computed(() => detectStudioIntent({ prompt: prompt.value, fileName: fileName.value, wantsVideo: selectedMode.value === 'image-to-video' }))
@@ -128,7 +129,27 @@ const startCreate = async () => {
   updateProject(id, { canvasData: buildStudioCanvas({ mode: selectedMode.value, prompt: cleanPrompt, size: resolvedSize.value, videoModel: selectedVideoModel.value, qualityMode: qualityMode.value }) })
   router.push(`/canvas/${id}`)
 }
-const planStoryboard = async mode => { if (!parsedDocument.value) return false; planningStoryboard.value = true; documentError.value = ''; try { storyboard.value = await createStudioStoryboard(parsedDocument.value.text, mode); return true } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '故事板生成失败'; return false } finally { planningStoryboard.value = false } }
+const planStoryboard = async mode => {
+  if (!parsedDocument.value || planningStoryboard.value) return false
+  planningStoryboard.value = true
+  planningMode.value = mode
+  documentError.value = ''
+  try {
+    const result = await createStudioStoryboard(parsedDocument.value.text, mode)
+    if (!Array.isArray(result?.shots) || !result.shots.length) throw new Error('故事板没有生成有效镜头，请重试')
+    storyboard.value = result
+    storyboardKey.value += 1
+    window.$message?.success('故事板已生成，可以编辑镜头并继续生成视频')
+    requestAnimationFrame(() => document.getElementById('storyboard-workspace')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    return true
+  } catch (error) {
+    documentError.value = error?.response?.data?.error?.message || error?.message || '故事板生成失败'
+    return false
+  } finally {
+    planningStoryboard.value = false
+    planningMode.value = ''
+  }
+}
 </script>
 
 <style scoped>.studio-chip{border:1px solid #334155;border-radius:999px;padding:.45rem .8rem;color:#cbd5e1}</style>
