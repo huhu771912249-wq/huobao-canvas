@@ -68,6 +68,9 @@
         <div v-if="currentModelConfig?.tips" class="text-xs text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] rounded px-2 py-1">
           💡 {{ currentModelConfig.tips }}
         </div>
+        <div v-if="!isConfigured" class="rounded-lg bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
+          当前模型所属 API 尚未配置，请先在右上角“API 设置”中补充密钥。
+        </div>
 
         <div
           v-if="isBackgroundReplaceMode"

@@ -521,7 +521,7 @@ const firstFrameNeedsPublicUrl = computed(() => {
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
 // Model options from Pinia store (filtered by provider) | 从 Pinia store 获取模型选项（根据渠道过滤）
-const modelOptions = computed(() => modelStore.videoModelOptions)
+const modelOptions = computed(() => modelStore.allVideoModelOptions)
 const isModelAvailable = computed(() => modelStore.allVideoModels.some(m => m.key === localModel.value))
 const activateModelProvider = (modelKey) => {
   const config = getModelConfig(modelKey)
