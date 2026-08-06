@@ -15,10 +15,14 @@ for (const path of [
 
 for (const label of ['生成全部镜头', '生成最终成片', '高质量 1080p', '快速导出', '字幕校对']) assert.match(workspace, new RegExp(label))
 assert.match(shotCard, /仅重试此镜头/)
+assert.match(shotCard, /任务已提交，修改需新建任务/)
+assert.match(shotCard, /:disabled="!editable"/)
+assert.match(shotCard, /重试中/)
 for (const field of ['source_text', 'image_prompt', 'motion_prompt', 'subtitle', 'duration_seconds']) assert.match(shotCard, new RegExp(field))
 assert.match(subtitleEditor, /speaker/)
 assert.match(subtitleEditor, /start/)
 assert.match(subtitleEditor, /end/)
+assert.match(subtitleEditor, /:disabled="saving"/)
 assert.match(workspace, /getNovelVideoJob/)
 assert.match(workspace, /retryNovelVideoShot/)
 assert.match(workspace, /updateNovelSubtitles/)
@@ -57,6 +61,11 @@ assert.equal(helpers.shouldPollNovelJob({ status: 'cancelled' }), false)
 assert.equal(helpers.shouldClearPollingLoading(2, 2, true), true)
 assert.equal(helpers.shouldClearPollingLoading(2, 3, false), true)
 assert.equal(helpers.shouldClearPollingLoading(2, 3, true), false)
+assert.equal(helpers.shouldAcceptSubtitleSave(4, 4), true)
+assert.equal(helpers.shouldAcceptSubtitleSave(4, 5), false)
+const retrying = new Set(['shot-1'])
+assert.equal(helpers.canStartShotRetry(retrying, 'shot-1'), false)
+assert.equal(helpers.canStartShotRetry(retrying, 'shot-2'), true)
 assert.deepEqual(helpers.buildSubtitlesFromShots([
   { id: 's1', subtitle: '第一句', duration_seconds: 2 },
   { id: 's2', source_text: '第二句', duration_seconds: 3 }
