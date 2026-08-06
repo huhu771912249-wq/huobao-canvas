@@ -1,0 +1,62 @@
+import assert from 'node:assert/strict'
+import { existsSync, readFileSync } from 'node:fs'
+
+const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
+const workspace = read('../src/components/studio/NovelVideoWorkspace.vue')
+const shotCard = read('../src/components/studio/NovelShotCard.vue')
+const subtitleEditor = read('../src/components/studio/SubtitleEditor.vue')
+const studio = read('../src/views/VideoStudio.vue')
+
+for (const path of [
+  '../src/components/studio/NovelVideoWorkspace.vue',
+  '../src/components/studio/NovelShotCard.vue',
+  '../src/components/studio/SubtitleEditor.vue'
+]) assert.equal(existsSync(new URL(path, import.meta.url)), true)
+
+for (const label of ['生成全部镜头', '生成最终成片', '高质量 1080p', '快速导出', '字幕校对']) assert.match(workspace, new RegExp(label))
+assert.match(shotCard, /仅重试此镜头/)
+for (const field of ['source_text', 'image_prompt', 'motion_prompt', 'subtitle', 'duration_seconds']) assert.match(shotCard, new RegExp(field))
+assert.match(subtitleEditor, /speaker/)
+assert.match(subtitleEditor, /start/)
+assert.match(subtitleEditor, /end/)
+assert.match(workspace, /getNovelVideoJob/)
+assert.match(workspace, /retryNovelVideoShot/)
+assert.match(workspace, /updateNovelSubtitles/)
+assert.match(workspace, /finalizeNovelVideoJob/)
+assert.match(workspace, /clearTimeout/)
+assert.doesNotMatch(workspace, /progress\s*\+=|setInterval/)
+assert.match(studio, /NovelVideoWorkspace/)
+assert.match(studio, /activeTab === 'quick'/)
+assert.match(studio, /key: 'assets', label: '素材再创作'/)
+assert.match(studio, /原 DSP 素材库继续保留独立入口/)
+assert.match(studio, /buildStudioCanvas/)
+
+const helperScript = workspace.match(/<script>\s*([\s\S]*?)<\/script>/)?.[1]
+assert.ok(helperScript, 'workspace must expose testable behavior helpers')
+const helpers = await import(`data:text/javascript,${encodeURIComponent(helperScript)}`)
+
+assert.deepEqual(helpers.validateSubtitleTimeline([
+  { start: 0, end: 1.5, text: '第一句' },
+  { start: 1.5, end: 3, text: '第二句' }
+], 3), { valid: true, message: '' })
+assert.equal(helpers.validateSubtitleTimeline([{ start: 1, end: 0.5, text: '错' }], 3).valid, false)
+assert.equal(helpers.validateSubtitleTimeline([{ start: 0, end: 4, text: '越界' }], 3).valid, false)
+assert.equal(helpers.validateSubtitleTimeline([{ start: 0, end: 2, text: '一' }, { start: 1.9, end: 3, text: '二' }], 3).valid, false)
+
+assert.equal(helpers.safeDownloadUrl('/v1/assets/video.mp4'), '/v1/assets/video.mp4')
+assert.equal(helpers.safeDownloadUrl('https://cdn.example.com/video.mp4'), 'https://cdn.example.com/video.mp4')
+assert.equal(helpers.safeDownloadUrl('javascript:alert(1)'), '')
+assert.equal(helpers.safeDownloadUrl('//evil.example/video.mp4'), '')
+assert.equal(helpers.shouldPollNovelJob({ status: 'generating' }), true)
+assert.equal(helpers.shouldPollNovelJob({ status: 'completed' }), false)
+assert.equal(helpers.shouldPollNovelJob({ status: 'failed' }), false)
+assert.equal(helpers.shouldPollNovelJob({ status: 'cancelled' }), false)
+assert.deepEqual(helpers.buildSubtitlesFromShots([
+  { id: 's1', subtitle: '第一句', duration_seconds: 2 },
+  { id: 's2', source_text: '第二句', duration_seconds: 3 }
+]), [
+  { id: 'subtitle-s1', start: 0, end: 2, text: '第一句', speaker: '' },
+  { id: 'subtitle-s2', start: 2, end: 5, text: '第二句', speaker: '' }
+])
+
+console.log('novelVideoWorkspace.test.mjs passed')

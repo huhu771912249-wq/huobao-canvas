@@ -30,7 +30,7 @@ export const retryNovelVideoShot = (jobId, shotId) => request({
 export const updateNovelSubtitles = (jobId, subtitles) => request({
   url: `${jobUrl(jobId)}/subtitles`,
   method: 'put',
-  data: { subtitles }
+  data: { segments: subtitles }
 })
 
 export const finalizeNovelVideoJob = (jobId, data = {}) => request({

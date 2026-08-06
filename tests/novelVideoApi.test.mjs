@@ -58,7 +58,7 @@ assert.deepEqual(calls, [
   {
     url: '/v1/studio/novel-video/jobs/job%20%2F1/subtitles',
     method: 'put',
-    data: { subtitles: [{ id: 'subtitle-1', text: '第一句' }] }
+    data: { segments: [{ id: 'subtitle-1', text: '第一句' }] }
   },
   {
     url: '/v1/studio/novel-video/jobs/job%20%2F1/finalize',
