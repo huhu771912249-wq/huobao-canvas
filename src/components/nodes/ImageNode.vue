@@ -55,6 +55,21 @@
             </n-tooltip>
             <n-tooltip v-if="data.url" trigger="hover">
               <template #trigger>
+                <button
+                  @click="startBackgroundReplace"
+                  class="p-1 hover:bg-cyan-500/10 rounded transition-colors text-cyan-300"
+                  title="更换背景"
+                  aria-label="更换背景"
+                >
+                  <n-icon :size="14">
+                    <ColorWandOutline />
+                  </n-icon>
+                </button>
+              </template>
+              更换背景
+            </n-tooltip>
+            <n-tooltip v-if="data.url" trigger="hover">
+              <template #trigger>
                 <button @click="handlePreview" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors">
                   <n-icon :size="14">
                     <EyeOutline />
@@ -325,9 +340,14 @@
 import { ref, nextTick, computed } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NTooltip, NSwitch, NImagePreview, NModal, NButton } from 'naive-ui'
-import { TrashOutline, ExpandOutline, ImageOutline, CloseCircleOutline, CopyOutline, VideocamOutline, DownloadOutline, EyeOutline, BrushOutline, RefreshOutline, ColorWandOutline, SwapHorizontalOutline } from '@vicons/ionicons5'
+import { TrashOutline, ExpandOutline, ImageOutline, CloseCircleOutline, CopyOutline, VideocamOutline, DownloadOutline, EyeOutline, BrushOutline, RefreshOutline, ColorWandOutline, SwapHorizontalOutline, TextOutline } from '@vicons/ionicons5'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import { startAssetDownload } from '../../utils/assetDownload'
+
+defineOptions({
+  inheritAttrs: false
+})
 
 const props = defineProps({
   id: String,
@@ -390,8 +410,35 @@ const handleTogglePublic = (value) => {
 // Image node menu operations | 图片节点菜单操作
 const operations = [
   { type: 'imageConfig', label: '图生图', icon: ImageOutline, action: 'image_imageConfig' },
+  { type: 'imageConfig', label: '更换背景', icon: ColorWandOutline, action: 'image_backgroundReplace' },
+  { type: 'textOverlay', label: '加文字', icon: TextOutline, action: 'image_textOverlay' },
   { type: 'videoConfig', label: '生视频', icon: VideocamOutline, action: 'image_videoConfig' }
 ]
+
+const startBackgroundReplace = () => {
+  const currentNode = nodes.value.find(n => n.id === props.id)
+  const nodeX = currentNode?.position?.x || 0
+  const nodeY = currentNode?.position?.y || 0
+  const sourceImage = currentNode?.data?.base64 || currentNode?.data?.url
+
+  if (!sourceImage) {
+    window.$message?.warning('当前图片节点没有可用图片')
+    return
+  }
+
+  const configNodeId = addNode('imageConfig', { x: nodeX + 420, y: nodeY }, {
+    model: 'frw-qianwen',
+    size: '1024x1024',
+    label: '更换背景',
+    editMode: 'background_replace',
+    subjectImage: sourceImage,
+    backgroundReferenceImage: '',
+    backgroundInstruction: '保留原人物，只把环境替换成背景参考图中的场景。'
+  })
+
+  setTimeout(() => updateNodeInternals(configNodeId), 50)
+  window.$message?.success('已带入主体图，请上传背景参考图')
+}
 
 // Handle menu select | 处理菜单选择
 const handleSelect = (item) => {
@@ -428,6 +475,33 @@ const handleSelect = (item) => {
 
     setTimeout(() => updateNodeInternals([textNodeId, configNodeId]), 50)
     window.$message?.success('已创建图生图工作流')
+  } else if (action === 'image_backgroundReplace') {
+    startBackgroundReplace()
+  } else if (action === 'image_textOverlay') {
+    // Text overlay workflow | 文字叠加工作流
+    const currentNode = nodes.value.find(n => n.id === props.id)
+    const nodeX = currentNode?.position?.x || 0
+    const nodeY = currentNode?.position?.y || 0
+
+    if (!currentNode?.data?.url) {
+      window.$message?.warning('当前图片节点没有图片')
+      return
+    }
+
+    const textNodeId = addNode('text', { x: nodeX + 300, y: nodeY - 100 }, {
+      content: '这里输入中文广告文案',
+      label: '中文文案'
+    })
+
+    const overlayNodeId = addNode('textOverlay', { x: nodeX + 620, y: nodeY }, {
+      label: '文字叠加'
+    })
+
+    addEdge({ source: props.id, target: overlayNodeId, sourceHandle: 'right', targetHandle: 'left' })
+    addEdge({ source: textNodeId, target: overlayNodeId, sourceHandle: 'right', targetHandle: 'left' })
+
+    setTimeout(() => updateNodeInternals([textNodeId, overlayNodeId]), 50)
+    window.$message?.success('已创建文字叠加工作流')
   } else if (action === 'image_videoConfig') {
     // Video generation workflow | 视频生成工作流
     const currentNode = nodes.value.find(n => n.id === props.id)
@@ -896,15 +970,16 @@ const handlePreview = () => {
 }
 
 // Handle download | 处理下载
-const handleDownload = () => {
-  if (props.data.url) {
-    const link = document.createElement('a')
-    link.href = props.data.url
-    link.download = props.data.fileName || `image_${Date.now()}.png`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.$message?.success('图片下载中...')
+const handleDownload = async () => {
+  try {
+    const result = await startAssetDownload({
+      url: props.data.url,
+      fileName: props.data.fileName || `image_${Date.now()}.png`,
+      label: props.data.label
+    })
+    window.$message?.success(`已开始下载：${result.filename}`)
+  } catch (error) {
+    window.$message?.error(error?.message || '图片下载失败')
   }
 }
 

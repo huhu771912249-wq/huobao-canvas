@@ -1,8 +1,8 @@
 <template>
   <!-- Canvas page | 画布页面 -->
-  <div class="h-screen w-screen flex flex-col bg-[var(--bg-primary)]">
+  <div class="canvas-studio h-screen w-screen flex flex-col bg-[var(--bg-primary)]">
     <!-- Header | 顶部导航 -->
-    <AppHeader class="bg-[var(--bg-secondary)]">
+    <AppHeader class="canvas-studio__header bg-[var(--bg-secondary)]">
       <template #left>
         <button 
           @click="goBack"
@@ -38,7 +38,7 @@
     </AppHeader>
 
     <!-- Main canvas area | 主画布区域 -->
-    <div class="flex-1 relative overflow-hidden">
+    <div class="canvas-studio__stage flex-1 relative overflow-hidden">
       <!-- Vue Flow canvas | Vue Flow 画布 -->
       <VueFlow
         :key="flowKey"
@@ -61,7 +61,7 @@
       >
         <Background v-if="showGrid" :gap="20" :size="1" />
         <MiniMap 
-          v-if="!isMobile"
+          v-if="!isMobile && nodes.length > 0"
           position="bottom-right"
           :pannable="true"
           :zoomable="true"
@@ -69,7 +69,7 @@
       </VueFlow>
 
       <!-- Left toolbar | 左侧工具栏 -->
-      <aside class="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg z-10">
+      <aside class="canvas-tool-rail absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg z-10">
         <button 
           @click="showNodeMenu = !showNodeMenu"
           class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors"
@@ -100,7 +100,7 @@
       <!-- Node menu popup | 节点菜单弹窗 -->
       <div 
         v-if="showNodeMenu"
-        class="absolute left-20 top-1/2 -translate-y-1/2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg p-2 z-20"
+        class="canvas-node-menu absolute left-20 top-1/2 -translate-y-1/2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg p-2 z-20"
       >
         <button 
           v-for="nodeType in nodeTypeOptions" 
@@ -113,8 +113,30 @@
         </button>
       </div>
 
+      <section v-if="nodes.length === 0" class="canvas-starter-panel">
+        <div class="canvas-starter-panel__heading">
+          <span>从业务目标开始</span>
+          <h2>今天要做什么素材？</h2>
+          <p>不用先搭节点。选择一个场景，系统会自动创建对应工作流。</p>
+        </div>
+        <div class="canvas-starter-panel__grid">
+          <button
+            v-for="item in starterActions"
+            :key="item.id"
+            type="button"
+            class="canvas-starter-card"
+            @click="handleStarterAction(item.id)"
+          >
+            <span class="canvas-starter-card__eyebrow">{{ item.eyebrow }}</span>
+            <strong>{{ item.title }}</strong>
+            <small>{{ item.description }}</small>
+            <span class="canvas-starter-card__action">{{ item.actionLabel }} →</span>
+          </button>
+        </div>
+      </section>
+
       <!-- Bottom controls | 底部控制 -->
-      <div class="absolute bottom-4 left-4 flex items-center gap-2 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-color)] p-1">
+      <div class="canvas-zoom-dock absolute bottom-4 left-4 flex items-center gap-2 bg-[var(--bg-secondary)] rounded-lg border border-[var(--border-color)] p-1">
         <!-- <button 
           @click="showGrid = !showGrid" 
           :class="showGrid ? 'bg-[var(--accent-color)] text-white' : 'hover:bg-[var(--bg-tertiary)]'"
@@ -142,7 +164,25 @@
       </div>
 
       <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20">
+      <div
+        class="canvas-prompt-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20"
+        :class="{ 'canvas-prompt-dock--collapsed': !promptDockExpanded }"
+      >
+        <button
+          v-if="!promptDockExpanded"
+          type="button"
+          class="canvas-prompt-dock__launcher"
+          aria-label="打开 AI 创作助手"
+          @click="setPromptDockExpanded(true)"
+        >
+          <n-icon :size="18"><ChatbubbleOutline /></n-icon>
+          <span>
+            <strong>AI 创作助手</strong>
+            <small>描述需求，自动搭建工作流</small>
+          </span>
+        </button>
+
+        <template v-else>
         <!-- Processing indicator | 处理中指示器 -->
         <div 
           v-if="isProcessing" 
@@ -157,7 +197,18 @@
           </div>
         </div>
 
-        <div class="bg-[var(--bg-primary)] rounded-xl border border-[var(--border-color)] p-3">
+        <div class="canvas-prompt-dock__composer bg-[var(--bg-primary)] rounded-xl border border-[var(--border-color)] p-3">
+          <div class="canvas-prompt-dock__header">
+            <span>AI 创作助手</span>
+            <button
+              type="button"
+              aria-label="收起 AI 创作助手"
+              title="收起"
+              @click="setPromptDockExpanded(false)"
+            >
+              <n-icon :size="16"><ChevronDownOutline /></n-icon>
+            </button>
+          </div>
           <textarea
             v-model="chatInput"
             :placeholder="inputPlaceholder"
@@ -206,10 +257,16 @@
           >
             {{ tag }}
           </button>
-          <button class="p-1 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors">
+          <button
+            @click="refreshSuggestions"
+            class="p-1 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
+            title="换一批推荐"
+            aria-label="换一批推荐"
+          >
             <n-icon :size="14"><RefreshOutline /></n-icon>
           </button>
         </div>
+        </template>
       </div>
     </div>
 
@@ -247,7 +304,7 @@
  * Canvas view component | 画布视图组件
  * Main infinite canvas with Vue Flow integration
  */
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, markRaw } from 'vue'
+import { ref, computed, defineAsyncComponent, onMounted, onUnmounted, watch, nextTick, markRaw } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
@@ -278,7 +335,12 @@ import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSam
 import { loadAllModels } from '../stores/models'
 import { useChat, useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
-import { projects, initProjectsStore, updateProject, renameProject, currentProject } from '../stores/projects'
+import { projects, initProjectsStore, updateProject, renameProject, currentProject, deleteProject, duplicateProject } from '../stores/projects'
+import { nextSuggestionSetIndex } from '../utils/suggestions'
+import {
+  buildCanvasStarterActions,
+  resolvePromptDockExpanded
+} from '../utils/workspaceUi'
 
 // API Settings component | API 设置组件
 import ApiSettings from '../components/ApiSettings.vue'
@@ -288,7 +350,7 @@ import AppHeader from '../components/AppHeader.vue'
 
 // API Config state | API 配置状态
 const modelStore = useModelStore()
-const isApiConfigured = computed(() => !!modelStore.currentApiKey)
+const isApiConfigured = computed(() => modelStore.isCurrentProviderConfigured)
 
 // Initialize models on page load | 页面加载时初始化模型
 onMounted(() => {
@@ -348,6 +410,22 @@ import ImageRoleEdge from '../components/edges/ImageRoleEdge.vue'
 import PromptOrderEdge from '../components/edges/PromptOrderEdge.vue'
 import ImageOrderEdge from '../components/edges/ImageOrderEdge.vue'
 
+const VideoBatchNode = defineAsyncComponent(
+  () => import('../components/nodes/VideoBatchNode.vue')
+)
+const MaterialVariationNode = defineAsyncComponent(
+  () => import('../components/nodes/MaterialVariationNode.vue')
+)
+const DspCreativeLibraryNode = defineAsyncComponent(
+  () => import('../components/nodes/DspCreativeLibraryNode.vue')
+)
+const DspCreativeTaskCenterNode = defineAsyncComponent(
+  () => import('../components/nodes/DspCreativeTaskCenterNode.vue')
+)
+const TextOverlayNode = defineAsyncComponent(
+  () => import('../components/nodes/TextOverlayNode.vue')
+)
+
 const router = useRouter()
 const route = useRoute()
 
@@ -361,7 +439,12 @@ const nodeTypes = {
   video: markRaw(VideoNode),
   image: markRaw(ImageNode),
   videoConfig: markRaw(VideoConfigNode),
-  llmConfig: markRaw(LLMConfigNode)
+  videoBatch: markRaw(VideoBatchNode),
+  materialVariation: markRaw(MaterialVariationNode),
+  dspCreativeLibrary: markRaw(DspCreativeLibraryNode),
+  dspCreativeTaskCenter: markRaw(DspCreativeTaskCenterNode),
+  llmConfig: markRaw(LLMConfigNode),
+  textOverlay: markRaw(TextOverlayNode)
 }
 
 // Register custom edge types | 注册自定义边类型
@@ -379,6 +462,24 @@ const isMobile = ref(false)
 const showGrid = ref(true)
 const showApiSettings = ref(false)
 const isProcessing = ref(false)
+const promptDockExpanded = ref(false)
+const promptDockTouched = ref(false)
+const starterActions = buildCanvasStarterActions()
+
+watch(
+  () => nodes.value.length,
+  (nodeCount) => {
+    if (!promptDockTouched.value) {
+      promptDockExpanded.value = resolvePromptDockExpanded({ nodeCount })
+    }
+  },
+  { immediate: true }
+)
+
+const setPromptDockExpanded = (expanded) => {
+  promptDockTouched.value = true
+  promptDockExpanded.value = Boolean(expanded)
+}
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
 const flowKey = ref(Date.now())
@@ -416,6 +517,8 @@ const tools = [
   { id: 'text', name: '文本', icon: TextOutline, action: () => addNewNode('text') },
   { id: 'image', name: '图片', icon: ImageOutline, action: () => addNewNode('image') },
   { id: 'imageConfig', name: '文生图', icon: ColorPaletteOutline, action: () => addNewNode('imageConfig') },
+  { id: 'materialVariation', name: '素材裂变', icon: AppsOutline, action: () => addNewNode('materialVariation') },
+  { id: 'textOverlay', name: '文字叠加', icon: TextOutline, action: () => addNewNode('textOverlay') },
   { id: 'videoConfig', name: '视频生成', icon: VideocamOutline, action: () => addNewNode('videoConfig') },
   { id: 'undo', name: '撤销', icon: ArrowUndoOutline, action: () => undo(), disabled: () => !canUndo() },
   { id: 'redo', name: '重做', icon: ArrowRedoOutline, action: () => redo(), disabled: () => !canRedo() }
@@ -426,6 +529,10 @@ const nodeTypeOptions = [
   { type: 'text', name: '文本节点', icon: TextOutline, color: '#3b82f6' },
   { type: 'llmConfig', name: 'LLM文本生成', icon: ChatbubbleOutline, color: '#a855f7' },
   { type: 'imageConfig', name: '文生图配置', icon: ColorPaletteOutline, color: '#22c55e' },
+  { type: 'dspCreativeLibrary', name: '54DSP 优秀素材', icon: BookmarkOutline, color: '#22d3ee' },
+  { type: 'dspCreativeTaskCenter', name: '素材任务中心', icon: AppsOutline, color: '#fbbf24' },
+  { type: 'materialVariation', name: '素材裂变', icon: AppsOutline, color: '#10b981' },
+  { type: 'textOverlay', name: '文字叠加', icon: TextOutline, color: '#06b6d4' },
   { type: 'videoConfig', name: '视频生成配置', icon: VideocamOutline, color: '#f59e0b' },
   { type: 'image', name: '图片节点', icon: ImageOutline, color: '#8b5cf6' },
   { type: 'video', name: '视频节点', icon: VideocamOutline, color: '#ef4444' }
@@ -435,21 +542,48 @@ const nodeTypeOptions = [
 const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡通角色"'
 
 // Quick suggestions | 快捷建议
-const suggestions = [
-  '像个魔法森林',
-  '三只不同的小猫',
-  '生成多角度分镜',
-  '夏日田野环绕漫步'
+const suggestionSets = [
+  [
+    '像个魔法森林',
+    '三只不同的小猫',
+    '生成多角度分镜',
+    '夏日田野环绕漫步'
+  ],
+  [
+    '体育赛事高点击 GIF',
+    '商品图生成四个广告尺寸',
+    '上传素材后逆向提示词',
+    '胜出素材二次裂变'
+  ],
+  [
+    '东亚人物口播素材',
+    '强利益点信息流广告',
+    '同一创意生成五套版本',
+    '参考图轻微运镜视频'
+  ]
 ]
+const suggestionSetIndex = ref(0)
+const suggestions = computed(() => suggestionSets[suggestionSetIndex.value])
+const refreshSuggestions = () => {
+  suggestionSetIndex.value = nextSuggestionSetIndex(
+    suggestionSetIndex.value,
+    suggestionSets.length
+  )
+  window.$message?.success('已换一批推荐')
+}
 
 // Add new node | 添加新节点
-const addNewNode = async (type) => {
+const addNewNode = async (type, data = {}) => {
   // Calculate viewport center position | 计算视口中心位置
   const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
   const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
   
   // Add node at viewport center | 在视口中心添加节点
-  const nodeId = addNode(type, { x: viewportCenterX - 100, y: viewportCenterY - 100 })
+  const nodeId = addNode(
+    type,
+    { x: viewportCenterX - 100, y: viewportCenterY - 100 },
+    data
+  )
   
   // Set highest z-index | 设置最高层级
   const maxZIndex = Math.max(0, ...nodes.value.map(n => n.zIndex || 0))
@@ -461,6 +595,36 @@ const addNewNode = async (type) => {
   }, 50)
   
   showNodeMenu.value = false
+}
+
+const handleStarterAction = async (actionId) => {
+  promptDockTouched.value = false
+  if (actionId === 'dsp') {
+    const viewportCenterX = -viewport.value.x / viewport.value.zoom + (window.innerWidth / 2) / viewport.value.zoom
+    const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
+    addNodes([
+      {
+        type: 'dspCreativeLibrary',
+        position: { x: viewportCenterX - 700, y: viewportCenterY - 280 }
+      },
+      {
+        type: 'dspCreativeTaskCenter',
+        position: { x: viewportCenterX + 120, y: viewportCenterY - 280 }
+      }
+    ])
+  } else if (actionId === 'variation') {
+    await addNewNode('materialVariation')
+  } else if (actionId === 'background') {
+    await addNewNode('imageConfig', {
+      label: '按参考图更换背景',
+      editMode: 'background_replace',
+      subjectImage: '',
+      backgroundReferenceImage: ''
+    })
+  }
+
+  await nextTick()
+  fitView({ padding: 0.18 })
 }
 
 // Handle add workflow from panel | 处理从面板添加工作流
@@ -648,8 +812,17 @@ const handleProjectAction = (key) => {
       showRenameModal.value = true
       break
     case 'duplicate':
-      // TODO: Implement duplicate
-      window.$message?.info('复制功能开发中')
+      {
+        const projectId = route.params.id
+        saveProject()
+        const newId = duplicateProject(projectId)
+        if (!newId) {
+          window.$message?.error('项目复制失败')
+          return
+        }
+        window.$message?.success('项目已复制')
+        router.push(`/canvas/${newId}`)
+      }
       break
     case 'delete':
       showDeleteModal.value = true
@@ -670,7 +843,7 @@ const confirmRename = () => {
 // Confirm delete | 确认删除
 const confirmDelete = () => {
   const projectId = route.params.id
-  // deleteProject(projectId) // TODO: import deleteProject
+  deleteProject(projectId)
   showDeleteModal.value = false
   window.$message?.success('项目已删除')
   router.push('/')
@@ -870,5 +1043,303 @@ onUnmounted(() => {
 .canvas-flow {
   width: 100%;
   height: 100%;
+}
+
+.canvas-studio {
+  position: relative;
+  background:
+    radial-gradient(circle at 45% 15%, rgba(56, 189, 248, 0.07), transparent 30%),
+    linear-gradient(180deg, #0a0e16 0%, #080b12 100%);
+}
+
+.canvas-studio__header {
+  position: relative;
+  z-index: 40;
+  border-bottom: 1px solid rgba(159, 181, 215, 0.12);
+  background: rgba(12, 17, 27, 0.86) !important;
+  backdrop-filter: blur(22px);
+}
+
+.canvas-studio__stage {
+  margin: 10px 12px 12px;
+  overflow: hidden;
+  border: 1px solid rgba(159, 181, 215, 0.12);
+  border-radius: 24px;
+  background: #0b1019;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.025), 0 24px 70px rgba(0, 0, 0, 0.26);
+}
+
+.canvas-flow {
+  background:
+    radial-gradient(circle at 50% 40%, rgba(55, 92, 136, 0.08), transparent 36%),
+    #0b1019;
+}
+
+.canvas-flow .vue-flow__background {
+  opacity: 0.38;
+}
+
+.canvas-flow .vue-flow__minimap {
+  overflow: hidden;
+  border: 1px solid rgba(159, 181, 215, 0.14);
+  border-radius: 14px;
+  background: rgba(12, 17, 27, 0.86);
+  backdrop-filter: blur(18px);
+}
+
+.canvas-tool-rail,
+.canvas-node-menu,
+.canvas-zoom-dock,
+.canvas-prompt-dock__composer {
+  border-color: rgba(159, 181, 215, 0.15) !important;
+  background: rgba(17, 24, 37, 0.86) !important;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(22px);
+}
+
+.canvas-tool-rail {
+  padding: 7px !important;
+  border-radius: 18px !important;
+}
+
+.canvas-tool-rail button {
+  border-radius: 13px;
+}
+
+.canvas-node-menu {
+  min-width: 190px;
+  padding: 8px !important;
+  border-radius: 18px !important;
+}
+
+.canvas-starter-panel {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  z-index: 8;
+  width: min(860px, calc(100% - 220px));
+  transform: translate(-50%, -50%);
+}
+
+.canvas-starter-panel__heading {
+  margin-bottom: 22px;
+  text-align: center;
+}
+
+.canvas-starter-panel__heading > span {
+  display: inline-flex;
+  margin-bottom: 10px;
+  color: #65e6bd;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.canvas-starter-panel__heading h2 {
+  margin: 0;
+  color: #f6f8fc;
+  font-family: "Avenir Next", "PingFang SC", sans-serif;
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 750;
+  letter-spacing: -0.04em;
+}
+
+.canvas-starter-panel__heading p {
+  margin: 10px 0 0;
+  color: rgba(194, 205, 224, 0.7);
+  font-size: 14px;
+}
+
+.canvas-starter-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.canvas-starter-card {
+  min-height: 190px;
+  padding: 20px;
+  border: 1px solid rgba(159, 181, 215, 0.14);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, rgba(26, 38, 57, 0.94), rgba(14, 21, 33, 0.94));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  color: #f6f8fc;
+  text-align: left;
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.canvas-starter-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(101, 230, 189, 0.5);
+  box-shadow: 0 24px 75px rgba(0, 0, 0, 0.32);
+}
+
+.canvas-starter-card__eyebrow {
+  display: block;
+  margin-bottom: 28px;
+  color: #65e6bd;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.canvas-starter-card strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 18px;
+}
+
+.canvas-starter-card small {
+  display: block;
+  min-height: 42px;
+  color: rgba(194, 205, 224, 0.68);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.canvas-starter-card__action {
+  display: block;
+  margin-top: 18px;
+  color: #f6f8fc;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.canvas-zoom-dock {
+  bottom: 18px !important;
+  left: 18px !important;
+  border-radius: 14px !important;
+}
+
+.canvas-prompt-dock {
+  bottom: 18px !important;
+  max-width: 760px !important;
+  transition: max-width 180ms ease;
+}
+
+.canvas-prompt-dock--collapsed {
+  max-width: 250px !important;
+}
+
+.canvas-prompt-dock__launcher {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1px solid rgba(101, 230, 189, 0.24);
+  border-radius: 16px;
+  background: rgba(17, 24, 37, 0.92);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.32);
+  color: #65e6bd;
+  text-align: left;
+  backdrop-filter: blur(22px);
+}
+
+.canvas-prompt-dock__launcher span {
+  display: flex;
+  flex-direction: column;
+}
+
+.canvas-prompt-dock__launcher strong {
+  color: #f6f8fc;
+  font-size: 13px;
+}
+
+.canvas-prompt-dock__launcher small {
+  color: rgba(194, 205, 224, 0.62);
+  font-size: 10px;
+}
+
+.canvas-prompt-dock__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: -2px 0 8px;
+  color: rgba(194, 205, 224, 0.72);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.canvas-prompt-dock__header button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.canvas-prompt-dock__header button:hover {
+  background: rgba(159, 181, 215, 0.1);
+}
+
+.canvas-prompt-dock__composer {
+  padding: 14px !important;
+  border-radius: 20px !important;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.canvas-prompt-dock__composer:focus-within {
+  border-color: rgba(101, 230, 189, 0.42) !important;
+  box-shadow: 0 0 0 1px rgba(101, 230, 189, 0.1), 0 22px 70px rgba(0, 0, 0, 0.32);
+}
+
+@media (max-width: 760px) {
+  .canvas-studio__stage {
+    margin: 4px;
+    border-radius: 16px;
+  }
+
+  .canvas-tool-rail {
+    top: auto !important;
+    right: 12px;
+    bottom: 220px;
+    left: 12px !important;
+    flex-direction: row !important;
+    transform: none !important;
+    overflow-x: auto;
+  }
+
+  .canvas-node-menu {
+    top: auto !important;
+    right: 12px;
+    bottom: 286px;
+    left: 12px !important;
+    transform: none !important;
+  }
+
+  .canvas-starter-panel {
+    top: 44%;
+    width: calc(100% - 32px);
+  }
+
+  .canvas-starter-panel__heading h2 {
+    font-size: 28px;
+  }
+
+  .canvas-starter-panel__grid {
+    grid-template-columns: 1fr;
+    max-height: 52vh;
+    overflow-y: auto;
+  }
+
+  .canvas-starter-card {
+    min-height: 132px;
+  }
+
+  .canvas-starter-card__eyebrow {
+    margin-bottom: 14px;
+  }
+
+  .canvas-zoom-dock {
+    display: none !important;
+  }
+
+  .canvas-prompt-dock {
+    bottom: 8px !important;
+    padding: 0 8px !important;
+  }
 }
 </style>

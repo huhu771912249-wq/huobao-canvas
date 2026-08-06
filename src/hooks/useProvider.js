@@ -4,7 +4,7 @@
  */
 
 import { ref, computed } from 'vue'
-import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig } from '@/config/providers'
+import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig, normalizeProviderKey } from '@/config/providers'
 
 // 存储键名
 const STORAGE_KEY = 'api-provider'
@@ -46,7 +46,7 @@ const removeStored = (key) => {
  * 获取存储的渠道
  */
 const getStoredProvider = () => {
-  return getStored(STORAGE_KEY)
+  return normalizeProviderKey(getStored(STORAGE_KEY) || getDefaultProvider())
 }
 
 /**
@@ -54,7 +54,7 @@ const getStoredProvider = () => {
  */
 export const useProvider = () => {
   // 当前选中的渠道
-  const currentProvider = ref(getStoredProvider() || getDefaultProvider())
+  const currentProvider = ref(getStoredProvider())
 
   // 渠道列表
   const providerList = getProviderList()
@@ -69,9 +69,10 @@ export const useProvider = () => {
    * 设置当前渠道
    */
   const setProvider = (provider) => {
-    if (PROVIDERS[provider]) {
-      currentProvider.value = provider
-      setStored(STORAGE_KEY, provider)
+    const normalizedProvider = normalizeProviderKey(provider)
+    if (PROVIDERS[normalizedProvider]) {
+      currentProvider.value = normalizedProvider
+      setStored(STORAGE_KEY, normalizedProvider)
     }
   }
 

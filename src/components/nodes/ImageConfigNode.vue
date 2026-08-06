@@ -81,8 +81,95 @@
           💡 {{ currentModelConfig.tips }}
         </div>
 
+        <div
+          v-if="isBackgroundReplaceMode"
+          class="space-y-3 rounded-xl border border-cyan-500/30 bg-cyan-500/5 p-3"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-semibold text-[var(--text-primary)]">按参考图更换背景</div>
+              <div class="mt-1 text-xs leading-5 text-[var(--text-tertiary)]">
+                锁定人物，只参考环境、家具、色调和光线。
+              </div>
+            </div>
+            <span class="rounded-full bg-cyan-500/15 px-2 py-1 text-[11px] text-cyan-300">局部重绘</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              class="relative min-h-[116px] overflow-hidden rounded-lg border border-dashed border-[var(--border-color)] bg-[var(--bg-tertiary)] text-left transition-colors hover:border-cyan-400"
+              @click="subjectFileInputRef?.click()"
+            >
+              <img
+                v-if="localSubjectImage"
+                :src="localSubjectImage"
+                class="absolute inset-0 h-full w-full object-cover"
+                alt="主体图"
+              />
+              <div class="absolute inset-x-0 bottom-0 bg-black/65 px-2 py-1.5 text-xs text-white">
+                主体图 · {{ localSubjectImage ? '点击替换' : '点击上传' }}
+              </div>
+              <div v-if="!localSubjectImage" class="flex h-full min-h-[116px] items-center justify-center text-xs text-[var(--text-tertiary)]">
+                人物原图
+              </div>
+            </button>
+            <button
+              type="button"
+              class="relative min-h-[116px] overflow-hidden rounded-lg border border-dashed border-[var(--border-color)] bg-[var(--bg-tertiary)] text-left transition-colors hover:border-cyan-400"
+              @click="backgroundFileInputRef?.click()"
+            >
+              <img
+                v-if="localBackgroundReferenceImage"
+                :src="localBackgroundReferenceImage"
+                class="absolute inset-0 h-full w-full object-cover"
+                alt="背景参考图"
+              />
+              <div class="absolute inset-x-0 bottom-0 bg-black/65 px-2 py-1.5 text-xs text-white">
+                背景参考图 · {{ localBackgroundReferenceImage ? '点击替换' : '点击上传' }}
+              </div>
+              <div v-if="!localBackgroundReferenceImage" class="flex h-full min-h-[116px] items-center justify-center px-2 text-center text-xs text-[var(--text-tertiary)]">
+                宿舍、办公室等环境图
+              </div>
+            </button>
+          </div>
+
+          <input
+            ref="subjectFileInputRef"
+            data-testid="background-replace-subject-file"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            class="hidden"
+            @change="handleBackgroundFileUpload('subject', $event)"
+          />
+          <input
+            ref="backgroundFileInputRef"
+            data-testid="background-replace-reference-file"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            class="hidden"
+            @change="handleBackgroundFileUpload('background', $event)"
+          />
+
+          <textarea
+            v-model="backgroundInstruction"
+            rows="3"
+            class="w-full resize-none rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-3 py-2 text-xs leading-5 text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-tertiary)] focus:border-cyan-400"
+            placeholder="例如：换成中国大学四人宿舍，保留人物、桌面物品和拍摄角度"
+            @blur="persistBackgroundInputs"
+          />
+
+          <div
+            v-if="!backgroundReadiness.ready"
+            class="rounded-lg bg-amber-500/10 px-2.5 py-2 text-xs text-amber-300"
+          >
+            {{ backgroundReadiness.message }}
+          </div>
+        </div>
+
         <!-- Connected inputs indicator | 连接输入指示 -->
         <div
+          v-if="!isBackgroundReplaceMode"
           class="flex items-center gap-2 text-xs text-[var(--text-secondary)] py-1 border-t border-[var(--border-color)]">
           <span class="px-2 py-0.5 rounded-full"
             :class="connectedPrompts.length > 0 ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
@@ -95,7 +182,19 @@
         </div>
 
         <!-- Generate button | 生成按钮 -->
-        <div v-if="hasConnectedImageWithContent" class="flex gap-2">
+        <button
+          v-if="isBackgroundReplaceMode"
+          @click="handleGenerate('new')"
+          :disabled="loading || !isConfigured || !backgroundReadiness.ready"
+          class="w-full flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <n-spin v-if="loading" :size="14" />
+          <template v-else>
+            <n-icon :size="15"><ColorWandOutline /></n-icon>
+            按参考图换背景
+          </template>
+        </button>
+        <div v-else-if="hasConnectedImageWithContent" class="flex gap-2">
           <!-- Create new (primary) | 新建节点（主按钮） -->
           <button @click="handleGenerate('new')" :disabled="loading || !isConfigured"
             class="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -161,13 +260,18 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
-import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline } from '@vicons/ionicons5'
+import { ChevronDownOutline, ChevronForwardOutline, CopyOutline, TrashOutline, RefreshOutline, AddOutline, ImageOutline, CreateOutline, ColorWandOutline } from '@vicons/ionicons5'
 import { useImageGeneration } from '../../hooks'
 import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
 import { parseMentions } from '../../hooks/useNodeRef'
+import {
+  DEFAULT_BACKGROUND_INSTRUCTION,
+  buildBackgroundReplacePayload,
+  getBackgroundReplaceReadiness
+} from '../../utils/backgroundReplace'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -181,7 +285,7 @@ const props = defineProps({
 const { updateNodeInternals } = useVueFlow()
 
 // API config state | API 配置状态
-const isConfigured = computed(() => !!modelStore.currentApiKey)
+const isConfigured = computed(() => modelStore.isCurrentProviderConfigured)
 
 // Image generation hook | 图片生成 hook
 const { loading, error, images: generatedImages, generate } = useImageGeneration()
@@ -191,6 +295,65 @@ const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
+const isBackgroundReplaceMode = computed(() => props.data?.editMode === 'background_replace')
+const localSubjectImage = ref(props.data?.subjectImage || '')
+const localBackgroundReferenceImage = ref(props.data?.backgroundReferenceImage || '')
+const backgroundInstruction = ref(
+  props.data?.backgroundInstruction || DEFAULT_BACKGROUND_INSTRUCTION
+)
+const subjectFileInputRef = ref(null)
+const backgroundFileInputRef = ref(null)
+
+const backgroundReadiness = computed(() => getBackgroundReplaceReadiness({
+  subjectImage: localSubjectImage.value,
+  backgroundReferenceImage: localBackgroundReferenceImage.value
+}))
+
+const fileToDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(String(reader.result || ''))
+  reader.onerror = () => reject(new Error('图片读取失败'))
+  reader.readAsDataURL(file)
+})
+
+const persistBackgroundInputs = () => {
+  updateNode(props.id, {
+    subjectImage: localSubjectImage.value,
+    backgroundReferenceImage: localBackgroundReferenceImage.value,
+    backgroundInstruction: backgroundInstruction.value
+  })
+}
+
+const handleBackgroundFileUpload = async (role, event) => {
+  const input = event?.target
+  const file = input?.files?.[0]
+  if (!file) return
+  if (!/^image\/(png|jpeg|webp)$/i.test(file.type || '')) {
+    window.$message?.warning('仅支持 JPG、PNG、WebP 图片')
+    input.value = ''
+    return
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    window.$message?.warning('单张图片不能超过 20MB')
+    input.value = ''
+    return
+  }
+
+  try {
+    const dataUrl = await fileToDataUrl(file)
+    if (role === 'subject') {
+      localSubjectImage.value = dataUrl
+    } else {
+      localBackgroundReferenceImage.value = dataUrl
+    }
+    persistBackgroundInputs()
+    window.$message?.success(role === 'subject' ? '主体图已更新' : '背景参考图已添加')
+  } catch (err) {
+    window.$message?.error(err.message || '图片读取失败')
+  } finally {
+    input.value = ''
+  }
+}
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -570,7 +733,12 @@ const hasConnectedImageWithContent = computed(() => {
 const handleGenerate = async (mode = 'auto') => {
   const { prompt, prompts, refImages, refImagesWithOrder } = getConnectedInputs()
 
-  if (!prompt && refImages.length === 0) {
+  if (isBackgroundReplaceMode.value && !backgroundReadiness.value.ready) {
+    window.$message?.warning(backgroundReadiness.value.message)
+    return
+  }
+
+  if (!isBackgroundReplaceMode.value && !prompt && refImages.length === 0) {
     window.$message?.warning('请连接文本节点（提示词）或图片节点（参考图）')
     return
   }
@@ -647,18 +815,23 @@ const handleGenerate = async (mode = 'auto') => {
 
   try {
     // Build request params | 构建请求参数
-    const params = {
-      model: localModel.value,
-      prompt: prompt,
-      size: localSize.value,
-      quality: localQuality.value,
-      n: 1
-    }
-
-    // Add reference image if provided | 如果有参考图则添加
-    if (refImages.length > 0) {
-      params.image = refImages
-    }
+    const params = isBackgroundReplaceMode.value
+      ? buildBackgroundReplacePayload({
+          model: localModel.value,
+          size: localSize.value,
+          quality: localQuality.value,
+          subjectImage: localSubjectImage.value,
+          backgroundReferenceImage: localBackgroundReferenceImage.value,
+          instruction: backgroundInstruction.value
+        })
+      : {
+          model: localModel.value,
+          prompt: prompt,
+          size: localSize.value,
+          quality: localQuality.value,
+          n: 1,
+          ...(refImages.length > 0 ? { image: refImages } : {})
+        }
 
     const result = await generate(params)
 
@@ -667,8 +840,9 @@ const handleGenerate = async (mode = 'auto') => {
       updateNode(imageNodeId, {
         url: result[0].url,
         loading: false,
-        label: '文生图',
+        label: isBackgroundReplaceMode.value ? '背景替换结果' : '文生图',
         model: localModel.value,
+        editMode: isBackgroundReplaceMode.value ? 'background_replace' : undefined,
         updatedAt: Date.now()
       })
       

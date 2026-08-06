@@ -158,9 +158,6 @@ const props = defineProps({
 // Vue Flow instance | Vue Flow 实例
 const { updateNodeInternals } = useVueFlow()
 
-// API config state | API 配置状态
-const isApiConfigured = computed(() => !!modelStore.currentApiKey)
-
 // Local state | 本地状态
 const showHandleMenu = ref(false)
 const systemPrompt = ref(props.data?.systemPrompt || '')
@@ -678,6 +675,9 @@ const splitMessage = ref('')
 
 // Model Store (Pinia) | 模型配置 Store
 const modelStore = useModelStore()
+
+// API config state | API 配置状态
+const isApiConfigured = computed(() => modelStore.isCurrentProviderConfigured)
 
 // 使用全部模型（不按渠道过滤）
 const modelOptions = computed(() => modelStore.allChatModelOptions)

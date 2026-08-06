@@ -48,8 +48,56 @@
           </n-dropdown>
         </div>
 
+        <div v-if="localModel === 'ltx-2.3'" class="space-y-2 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-[var(--text-primary)]">LTX 2.3 原生语音</span>
+            <span class="text-[10px] text-cyan-400">48kHz · 双声道</span>
+          </div>
+          <p class="text-[11px] leading-relaxed text-[var(--text-secondary)]">使用已连接的提示词生成讲话、音乐或环境声。</p>
+          <button type="button" :disabled="audioGenerating || !connectedPrompt" class="w-full rounded-lg bg-cyan-500 px-3 py-2 text-xs font-semibold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40" @click="handleGenerateAudio">
+            {{ audioGenerating ? '语音生成中…' : '生成原生语音' }}
+          </button>
+          <div v-if="audioError" class="text-[11px] text-red-400">{{ audioError }}</div>
+          <audio v-if="audioUrl" :src="audioUrl" controls class="h-9 w-full" />
+          <a v-if="audioUrl" :href="audioUrl" download class="block text-center text-[11px] text-cyan-400 hover:underline">下载 FLAC</a>
+        </div>
+
+        <div v-if="isBatchCapable" class="space-y-3 rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-[var(--text-primary)]">批量广告尺寸</span>
+            <span class="text-[10px] text-emerald-400">3 个母版 → 4 个成品</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              v-for="size in VIDEO_BATCH_SIZES"
+              :key="size"
+              type="button"
+              class="rounded-lg border px-2 py-1.5 font-mono text-xs transition-colors"
+              :class="localBatchSizes.includes(size)
+                ? 'border-emerald-400 bg-emerald-400/15 text-emerald-400'
+                : 'border-[var(--border-color)] text-[var(--text-secondary)]'"
+              @click="toggleBatchSize(size)"
+            >
+              {{ localBatchSizes.includes(size) ? '✓ ' : '' }}{{ size }}
+            </button>
+          </div>
+          <button
+            type="button"
+            class="flex w-full items-center justify-between rounded-lg border border-[var(--border-color)] px-3 py-2 text-xs"
+            @click="toggleGif"
+          >
+            <span class="text-[var(--text-secondary)]">输出 GIF（同时保留 MP4）</span>
+            <span
+              class="rounded-full px-2 py-0.5 font-medium"
+              :class="localGenerateGif ? 'bg-amber-400/15 text-amber-400' : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'"
+            >
+              {{ localGenerateGif ? '已开启' : '已关闭' }}
+            </span>
+          </button>
+        </div>
+
         <!-- Aspect ratio selector | 宽高比选择 -->
-        <div class="flex items-center justify-between">
+        <div v-if="!isBatchCapable" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">比例</span>
           <n-dropdown :options="ratioOptions" @select="handleRatioSelect">
             <button class="flex items-center gap-1 text-sm text-[var(--text-primary)] hover:text-[var(--accent-color)]">
@@ -72,6 +120,29 @@
               </n-icon>
             </button>
           </n-dropdown>
+        </div>
+
+        <div v-if="isScail2Model" class="space-y-2 rounded-lg border border-[var(--border-color)] p-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs text-[var(--text-secondary)]">驱动视频</span>
+            <button
+              type="button"
+              class="rounded-md bg-[var(--bg-tertiary)] px-2 py-1 text-xs text-[var(--text-primary)] hover:text-[var(--accent-color)]"
+              @click="drivingVideoInputRef?.click()"
+            >
+              选择本地视频
+            </button>
+          </div>
+          <input
+            ref="drivingVideoInputRef"
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm"
+            class="hidden"
+            @change="handleDrivingVideoSelect"
+          />
+          <div class="truncate text-[11px]" :class="drivingVideoFile ? 'text-green-500' : 'text-amber-500'">
+            {{ drivingVideoFile ? `已选择：${drivingVideoFile.name}` : '必须选择动作来源视频（最大 100MB）' }}
+          </div>
         </div>
 
         <!-- Connected inputs indicator | 连接输入指示 -->
@@ -105,20 +176,35 @@
       </div> -->
 
         <!-- Generate button | 生成按钮 -->
-        <button @click="handleGenerate" :disabled="isGenerating || !isConfigured"
+        <button @click="handleGenerate" :disabled="isGenerating || !isConfigured || !isModelAvailable || (isScail2Model && !drivingVideoFile)"
           class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
           <n-spin v-if="isGenerating" :size="14" />
           <template v-else>
             <n-icon :size="16">
               <VideocamOutline />
             </n-icon>
-            生成视频
+            {{ isBatchCapable ? '全部生成' : '生成视频' }}
           </template>
         </button>
 
         <!-- Error message | 错误信息 -->
         <div v-if="error" class="text-xs text-red-500 mt-2">
           {{ error.message || '生成失败' }}
+        </div>
+        <div v-else-if="!isModelAvailable" class="text-xs text-amber-500 mt-2 leading-relaxed">
+          当前渠道 {{ modelStore.providerLabel }} 不支持 {{ displayModelName }}。切换到火宝 (Chatfire)，或改选当前渠道的视频模型。
+        </div>
+        <div v-else-if="isScail2Model && !scail2ReferenceInput" class="text-xs text-amber-500 mt-2 leading-relaxed">
+          SCAIL-2 需要连接一张参考角色图，并在上方选择驱动视频。
+        </div>
+        <div v-else-if="isScail2Model && !connectedPrompt" class="text-xs text-amber-500 mt-2 leading-relaxed">
+          请连接中文提示词，描述角色、动作和画面要求。
+        </div>
+        <div v-else-if="firstFrameNeedsPublicUrl" class="text-xs text-amber-500 mt-2 leading-relaxed">
+          当前首帧是本地或内嵌图片，生成时会先自动发布成公网素材，再提交 FRW 视频。
+        </div>
+        <div v-else-if="!connectedPrompt" class="text-xs text-amber-500 mt-2 leading-relaxed">
+          当前只连接了首帧图。建议再连接一个英文视频提示词，描述镜头运动和主体动作。
         </div>
 
         <!-- Generated video preview | 生成视频预览 -->
@@ -148,10 +234,17 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline } from '@vicons/ionicons5'
 import { useVideoGeneration } from '../../hooks'
+import { publishImageAsset } from '../../api/image'
+import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
+import {
+  VIDEO_BATCH_SIZES,
+  normalizeVideoBatchSizes,
+  supportsVideoBatch
+} from '../../utils/videoBatch'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -165,7 +258,7 @@ const props = defineProps({
 const { updateNodeInternals } = useVueFlow()
 
 // API config state | API 配置状态
-const isConfigured = computed(() => !!modelStore.currentApiKey)
+const isConfigured = computed(() => modelStore.isCurrentProviderConfigured)
 
 // Video generation hook | 视频生成 hook
 const { loading, error, status, video: generatedVideo, progress, createVideoTaskOnly } = useVideoGeneration()
@@ -176,6 +269,13 @@ const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
 const localDuration = ref(props.data?.dur || 5)
+const localBatchSizes = ref(normalizeVideoBatchSizes(props.data?.batchSizes || []))
+const localGenerateGif = ref(props.data?.generateGif !== false)
+const drivingVideoInputRef = ref(null)
+const drivingVideoFile = ref(null)
+const audioGenerating = ref(false)
+const audioUrl = ref(props.data?.audioUrl || '')
+const audioError = ref('')
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -189,12 +289,14 @@ const connectedImages = computed(() => {
 
   for (const edge of connectedEdges) {
     const sourceNode = nodes.value.find(n => n.id === edge.source)
-    if (sourceNode?.type === 'image' && sourceNode.data?.url) {
+    if (sourceNode?.type === 'image' && (sourceNode.data?.url || sourceNode.data?.base64 || sourceNode.data?.publicUrl)) {
       images.push({
         nodeId: sourceNode.id,
         edgeId: edge.id,
         url: sourceNode.data.url,
         base64: sourceNode.data.base64,
+        publicUrl: sourceNode.data.publicUrl || sourceNode.data.public_url || '',
+        localUrl: sourceNode.data.localUrl || sourceNode.data.local_url || '',
         role: edge.data?.imageRole || 'first_frame_image' // Default to first frame | 默认首帧
       })
     }
@@ -216,20 +318,108 @@ const imagesByRole = computed(() => {
   }
 })
 
+const isScail2Model = computed(() => localModel.value === 'scail2-action-transfer')
+const isLocalCloudModel = computed(() => ['minimax-h3', 'ltx-2.3'].includes(localModel.value))
+const isBatchCapable = computed(() => supportsVideoBatch(localModel.value))
+const scail2ReferenceInput = computed(() => {
+  const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
+  return image ? pickVideoImageInput(image) : ''
+})
+
+const handleDrivingVideoSelect = (event) => {
+  const file = event.target?.files?.[0]
+  if (!file) return
+  if (file.size > 100 * 1024 * 1024) {
+    window.$message?.error('驱动视频不能超过 100MB')
+    event.target.value = ''
+    drivingVideoFile.value = null
+    return
+  }
+  drivingVideoFile.value = file
+}
+
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(String(reader.result || ''))
+  reader.onerror = () => reject(new Error('驱动视频读取失败'))
+  reader.readAsDataURL(file)
+})
+
+const isPublicHttpUrl = (url) => {
+  const value = String(url || '').trim()
+  if (!value.startsWith('http://') && !value.startsWith('https://')) return false
+  try {
+    const { hostname } = new URL(value)
+    const host = String(hostname || '').toLowerCase()
+    return Boolean(host) && !['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(host)
+  } catch {
+    return false
+  }
+}
+
+const isDataImageUrl = (url) => String(url || '').trim().startsWith('data:image/')
+
+const pickVideoImageInput = (image = {}) => {
+  if (isPublicHttpUrl(image.publicUrl)) return image.publicUrl
+  if (isPublicHttpUrl(image.public_url)) return image.public_url
+  if (isPublicHttpUrl(image.url)) return image.url
+  if (isPublicHttpUrl(image.localUrl)) return image.localUrl
+  if (isPublicHttpUrl(image.local_url)) return image.local_url
+  return image.base64 || image.url || image.publicUrl || image.public_url || image.localUrl || image.local_url || ''
+}
+
+const publishVideoImageInput = async (value, roleLabel) => {
+  const source = String(value || '').trim()
+  if (!source) return ''
+  if (isPublicHttpUrl(source)) return source
+
+  if (isDataImageUrl(source)) {
+    const result = await publishImageAsset({
+      image: source,
+      name: `视频${roleLabel}`
+    })
+    const assetUrl = result.public_url || result.url || ''
+    if (!isPublicHttpUrl(assetUrl)) {
+      throw new Error(`${roleLabel}已转成本地素材，但还没有公网 URL；请先确认本地素材公网隧道可用后再生成视频。`)
+    }
+    return assetUrl
+  }
+
+  throw new Error(`${roleLabel}不是公网图片 URL，且没有可上传的 base64 图片；请重新上传图片或连接 FRW 作图输出。`)
+}
+
+const normalizeVideoImages = async ({ first_frame_image, last_frame_image, images }) => {
+  const normalized = {
+    first_frame_image: await publishVideoImageInput(first_frame_image, '首帧'),
+    last_frame_image: await publishVideoImageInput(last_frame_image, '尾帧'),
+    images: []
+  }
+
+  for (const [index, image] of images.entries()) {
+    const url = await publishVideoImageInput(image, `参考图${index + 1}`)
+    if (url) normalized.images.push(url)
+  }
+
+  return normalized
+}
+
+const firstFrameNeedsPublicUrl = computed(() => {
+  if (isScail2Model.value || isLocalCloudModel.value) return false
+  const firstFrame = imagesByRole.value.firstFrame
+  if (!firstFrame) return false
+  return !isPublicHttpUrl(pickVideoImageInput(firstFrame))
+})
+
 // Get current model config | 获取当前模型配置
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
 // Model options from Pinia store (filtered by provider) | 从 Pinia store 获取模型选项（根据渠道过滤）
-const modelOptions = computed(() => modelStore.allVideoModelOptions)
+const modelOptions = computed(() => modelStore.videoModelOptions)
+const isModelAvailable = computed(() => modelStore.availableVideoModels.some(m => m.key === localModel.value))
 
 // Display model name | 显示模型名称
 const displayModelName = computed(() => {
-  const model = modelOptions.value.find(m => m.key === localModel.value)
-  // 如果当前模型不在选项中，尝试从 allVideoModels 找到
-  if (!model) {
-    const allModel = modelStore.allVideoModels.find(m => m.key === localModel.value)
-    return allModel?.label || localModel.value || '选择模型'
-  }
+  const model = modelStore.allVideoModels.find(m => m.key === localModel.value)
   return model?.label || localModel.value || '选择模型'
 })
 
@@ -257,7 +447,42 @@ const handleModelSelect = (key) => {
     localDuration.value = config.defaultParams.duration
     updates.dur = config.defaultParams.duration
   }
+  if (supportsVideoBatch(key)) {
+    updates.batchSizes = [...localBatchSizes.value]
+    updates.generateGif = localGenerateGif.value
+  }
   updateNode(props.id, updates)
+}
+
+const toggleBatchSize = (size) => {
+  if (localBatchSizes.value.includes(size)) {
+    if (localBatchSizes.value.length === 1) {
+      window.$message?.warning('至少保留一个输出尺寸')
+      return
+    }
+    localBatchSizes.value = localBatchSizes.value.filter(item => item !== size)
+  } else {
+    localBatchSizes.value = VIDEO_BATCH_SIZES.filter(
+      item => item === size || localBatchSizes.value.includes(item)
+    )
+  }
+  updateNode(props.id, { batchSizes: [...localBatchSizes.value] })
+}
+
+const toggleGif = () => {
+  localGenerateGif.value = !localGenerateGif.value
+  updateNode(props.id, { generateGif: localGenerateGif.value })
+}
+
+const resolveAvailableVideoModel = () => {
+  const availableModels = modelStore.availableVideoModels
+  if (availableModels.some(m => m.key === localModel.value)) {
+    return localModel.value
+  }
+  if (availableModels.some(m => m.key === modelStore.selectedVideoModel)) {
+    return modelStore.selectedVideoModel
+  }
+  return availableModels[0]?.key || DEFAULT_VIDEO_MODEL
 }
 
 // Handle duplicate | 处理复制
@@ -302,8 +527,8 @@ const getConnectedInputs = () => {
       // LLM node output as prompt | LLM 节点输出作为提示词
       const content = sourceNode.data?.outputContent || ''
       if (content) prompt = content
-    } else if (sourceNode.type === 'image' && sourceNode.data?.url) {
-      const imageData = sourceNode.data.base64 || sourceNode.data.url
+    } else if (sourceNode.type === 'image' && (sourceNode.data?.url || sourceNode.data?.base64 || sourceNode.data?.publicUrl)) {
+      const imageData = pickVideoImageInput(sourceNode.data)
       const role = edge.data?.imageRole || 'first_frame_image'
 
       if (role === 'first_frame_image') {
@@ -319,13 +544,59 @@ const getConnectedInputs = () => {
   return { prompt, first_frame_image, last_frame_image, images }
 }
 
+const getErrorMessage = (err) => {
+  return err?.response?.data?.error?.message
+    || err?.response?.data?.message
+    || err?.data?.error?.message
+    || err?.data?.message
+    || err?.message
+    || '生成失败'
+}
+
 // Computed connected prompt | 计算连接的提示词
 const connectedPrompt = computed(() => {
   return getConnectedInputs().prompt
 })
 
+const handleGenerateAudio = async () => {
+  if (!connectedPrompt.value) {
+    window.$message?.warning('请先连接文本提示词')
+    return
+  }
+  audioGenerating.value = true
+  audioError.value = ''
+  try {
+    const created = await createLtxAudioTask(connectedPrompt.value, localDuration.value)
+    const completed = await waitForLtxAudio(created.task_id || created.taskId)
+    audioUrl.value = completed.audio_url || completed.url
+    updateNode(props.id, { audioUrl: audioUrl.value, audioTaskId: completed.task_id })
+    window.$message?.success('LTX 2.3 原生语音生成完成')
+  } catch (err) {
+    audioError.value = getErrorMessage(err)
+    window.$message?.error(audioError.value)
+  } finally {
+    audioGenerating.value = false
+  }
+}
+
 // Created video node ID | 创建的视频节点 ID
 const createdVideoNodeId = ref(null)
+
+const findConnectedEmptyOutputNode = (nodeType) => {
+  const outputEdges = edges.value.filter(edge => edge.source === props.id)
+  for (const edge of outputEdges) {
+    const targetNode = nodes.value.find(node => node.id === edge.target)
+    if (
+      targetNode?.type === nodeType &&
+      !targetNode.data?.url &&
+      !targetNode.data?.taskId &&
+      !targetNode.data?.loading
+    ) {
+      return targetNode.id
+    }
+  }
+  return null
+}
 
 // Handle generate action | 处理生成操作
 const handleGenerate = async () => {
@@ -347,26 +618,72 @@ const handleGenerate = async () => {
     return
   }
 
+  if (!isModelAvailable.value) {
+    window.$message?.warning('当前渠道不支持这个视频模型，请切换渠道或更换模型')
+    isGenerating.value = false
+    return
+  }
+
+  if (isScail2Model.value) {
+    if (!prompt) {
+      window.$message?.warning('SCAIL-2 动作迁移需要连接中文提示词')
+      isGenerating.value = false
+      return
+    }
+    if (!scail2ReferenceInput.value) {
+      window.$message?.warning('SCAIL-2 动作迁移需要连接一张参考角色图')
+      isGenerating.value = false
+      return
+    }
+    if (!drivingVideoFile.value) {
+      window.$message?.warning('请先选择驱动视频')
+      isGenerating.value = false
+      return
+    }
+  }
+
   // Get current node position | 获取当前节点位置
   const currentNode = nodes.value.find(n => n.id === props.id)
   const nodeX = currentNode?.position?.x || 0
   const nodeY = currentNode?.position?.y || 0
 
-  // Create video node with loading state | 创建带加载状态的视频节点
-  const videoNodeId = addNode('video', { x: nodeX + 350, y: nodeY }, {
-    url: '',
-    loading: true,
-    label: '视频生成中...'
-  })
-  createdVideoNodeId.value = videoNodeId
+  const outputNodeType = isBatchCapable.value ? 'videoBatch' : 'video'
+  let videoNodeId = findConnectedEmptyOutputNode(outputNodeType)
+  if (videoNodeId) {
+    updateNode(videoNodeId, {
+      url: '',
+      taskId: null,
+      error: null,
+      loading: true,
+      status: isBatchCapable.value ? 'queued' : undefined,
+      assets: isBatchCapable.value ? [] : undefined,
+      zipUrl: isBatchCapable.value ? '' : undefined,
+      progress: 0,
+      attempt: 0,
+      label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...'
+    })
+  } else {
+    // Create video node with loading state | 创建带加载状态的视频节点
+    videoNodeId = addNode(outputNodeType, { x: nodeX + 350, y: nodeY }, {
+      url: '',
+      error: null,
+      loading: true,
+      status: isBatchCapable.value ? 'queued' : undefined,
+      assets: isBatchCapable.value ? [] : undefined,
+      zipUrl: isBatchCapable.value ? '' : undefined,
+      outputFormats: isBatchCapable.value && localGenerateGif.value ? ['mp4', 'gif'] : ['mp4'],
+      label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...'
+    })
 
-  // Auto-connect videoConfig → video | 自动连接 视频配置 → 视频
-  addEdge({
-    source: props.id,
-    target: videoNodeId,
-    sourceHandle: 'right',
-    targetHandle: 'left'
-  })
+    // Auto-connect videoConfig → video | 自动连接 视频配置 → 视频
+    addEdge({
+      source: props.id,
+      target: videoNodeId,
+      sourceHandle: 'right',
+      targetHandle: 'left'
+    })
+  }
+  createdVideoNodeId.value = videoNodeId
 
   // Force Vue Flow to recalculate node dimensions | 强制 Vue Flow 重新计算节点尺寸
   setTimeout(() => {
@@ -374,6 +691,14 @@ const handleGenerate = async () => {
   }, 50)
 
   try {
+    const normalizedImages = (isScail2Model.value || isLocalCloudModel.value)
+      ? {
+          first_frame_image: first_frame_image || images[0] || '',
+          last_frame_image: '',
+          images: []
+        }
+      : await normalizeVideoImages({ first_frame_image, last_frame_image, images })
+
     // Build request params (raw form data) | 构建请求参数（原始表单数据）
     // These will be transformed by inputTransform | 这些会被 inputTransform 转换
     const params = {
@@ -386,18 +711,18 @@ const handleGenerate = async () => {
     }
 
     // Add first frame image | 添加首帧图片
-    if (first_frame_image) {
-      params.first_frame_image = first_frame_image
+    if (normalizedImages.first_frame_image) {
+      params.first_frame_image = normalizedImages.first_frame_image
     }
 
     // Add last frame image | 添加尾帧图片
-    if (last_frame_image) {
-      params.last_frame_image = last_frame_image
+    if (normalizedImages.last_frame_image) {
+      params.last_frame_image = normalizedImages.last_frame_image
     }
 
     // Add reference images (input_reference) | 添加参考图
-    if (images.length > 0) {
-      params.images = images
+    if (normalizedImages.images.length > 0) {
+      params.images = normalizedImages.images
     }
 
     // Add ratio/size | 添加比例参数
@@ -410,15 +735,30 @@ const handleGenerate = async () => {
       params.dur = localDuration.value
     }
 
+    if (isBatchCapable.value) {
+      params.sizes = [...localBatchSizes.value]
+      params.output_formats = localGenerateGif.value ? ['mp4', 'gif'] : ['mp4']
+    }
+
+    if (isScail2Model.value) {
+      params.driving_video = await readFileAsDataUrl(drivingVideoFile.value)
+      params.driving_video_name = drivingVideoFile.value.name
+    }
+
     // 只创建任务，获取 taskId，不在这里轮询
-    const { taskId: newTaskId, url } = await createVideoTaskOnly(params)
+    const { taskId: newTaskId, url, result } = await createVideoTaskOnly(params)
 
     // 如果有直接 URL，更新视频节点
     if (url) {
       updateNode(videoNodeId, {
         url: url,
+        taskId: result?.task_id || result?.taskId || null,
+        status: result?.status || 'completed',
+        assets: result?.assets || [],
+        zipUrl: result?.zip_url || '',
+        outputFormats: result?.output_formats || params.output_formats,
         loading: false,
-        label: '视频生成',
+        label: isBatchCapable.value ? '批量视频结果' : '视频生成',
         model: localModel.value,
         updatedAt: Date.now()
       })
@@ -430,7 +770,12 @@ const handleGenerate = async () => {
       updateNode(videoNodeId, {
         taskId: newTaskId,
         loading: true,
-        label: '视频生成中...',
+        status: result?.status || (isBatchCapable.value ? 'queued' : undefined),
+        progress: result?.progress || 0,
+        currentStep: result?.current_step || '',
+        assets: result?.assets || [],
+        outputFormats: result?.output_formats || params.output_formats,
+        label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...',
         model: localModel.value,
         updatedAt: Date.now()
       })
@@ -439,14 +784,15 @@ const handleGenerate = async () => {
       updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
     }
   } catch (err) {
+    const message = getErrorMessage(err)
     // Update node to show error | 更新节点显示错误
     updateNode(videoNodeId, {
       loading: false,
-      error: err.message || '生成失败',
+      error: message,
       label: '生成失败',
       updatedAt: Date.now()
     })
-    window.$message?.error(err.message || '视频生成失败')
+    window.$message?.error(message || '视频生成失败')
   } finally {
     isGenerating.value = false
   }
@@ -483,14 +829,10 @@ const handleDelete = () => {
 
 // Initialize on mount | 挂载时初始化
 onMounted(() => {
-  // 检查当前模型是否在可用模型列表中
-  const availableModels = modelStore.availableVideoModels
-  const isModelAvailable = availableModels.some(m => m.key === localModel.value)
-
-  if (!localModel.value || !isModelAvailable) {
-    // 使用 store 中的默认模型或第一个可用模型
-    localModel.value = modelStore.selectedVideoModel || availableModels[0]?.key || DEFAULT_VIDEO_MODEL
-    updateNode(props.id, { model: localModel.value })
+  const resolvedModel = resolveAvailableVideoModel()
+  if (!localModel.value || localModel.value !== resolvedModel) {
+    localModel.value = resolvedModel
+    updateNode(props.id, { model: resolvedModel })
   }
 })
 
@@ -498,6 +840,14 @@ onMounted(() => {
 watch(() => props.data?.model, (newModel) => {
   if (newModel && newModel !== localModel.value) {
     localModel.value = newModel
+  }
+})
+
+watch(() => modelStore.currentProvider, () => {
+  const resolvedModel = resolveAvailableVideoModel()
+  if (resolvedModel && resolvedModel !== localModel.value) {
+    localModel.value = resolvedModel
+    updateNode(props.id, { model: resolvedModel })
   }
 })
 

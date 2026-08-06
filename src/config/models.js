@@ -48,6 +48,17 @@ export const BANANA_SIZE_OPTIONS = [
 // Image generation models | 图片生成模型
 export const IMAGE_MODELS = [
     {
+        label: 'FRW 千问作图',
+        key: 'frw-qianwen',
+        provider: ['local-material'],
+        sizes: ['1024x1024', '1280x720', '720x1280', '1x1', '16:9', '9:16'],
+        defaultParams: {
+            size: '1024x1024',
+            quality: 'standard',
+            style: 'vivid'
+        }
+    },
+    {
         label: 'Nano Banana 2',
         key: 'nano-banana-2',
         provider: ['chatfire'], // 火宝渠道
@@ -118,6 +129,33 @@ export const SEEDANCE_RESOLUTION_OPTIONS = [
 
 // Video generation models | 视频生成模型
 export const VIDEO_MODELS = [
+    {
+        label: 'MiniMax H3（云端 5090｜原生音频）',
+        key: 'minimax-h3',
+        provider: ['local-material'],
+        type: 't2v+i2v',
+        ratios: ['16:9', '9:16', '1:1'],
+        durs: [{ label: '2 秒', key: 2 }, { label: '3 秒', key: 3 }, { label: '5 秒', key: 5 }],
+        defaultParams: { ratio: '16:9', duration: 2 }
+    },
+    {
+        label: 'LTX 2.3 开放版（云端 5090）',
+        key: 'ltx-2.3',
+        provider: ['local-material'],
+        type: 't2v+i2v',
+        ratios: ['16:9', '9:16', '1:1'],
+        durs: [{ label: '2 秒', key: 2 }, { label: '3 秒', key: 3 }, { label: '5 秒', key: 5 }],
+        defaultParams: { ratio: '16:9', duration: 2 }
+    },
+    {
+        label: 'FRW 视频',
+        key: 'frw-video',
+        provider: ['local-material'],
+        type: 't2v+i2v',
+        ratios: ['16:9', '9:16', '1:1'],
+        durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }, { label: '60 秒（自动拼接）', key: 60 }],
+        defaultParams: { ratio: '16:9', duration: 5 }
+    },
      // Seedance 模型 - 1.5 Pro
     {
         label: 'Seedance 1.5 Pro (图文视频)',
@@ -218,6 +256,7 @@ export const VIDEO_MODELS = [
 
 // Chat/LLM models | 对话模型
 export const CHAT_MODELS = [
+    { label: '素材文案 API', key: 'gemma4-31b-heretic', provider: ['local-material'] },
     { label: 'GPT-4o Mini', key: 'gpt-4o-mini', provider: ['openai'] },
     { label: 'GPT-4o', key: 'gpt-4o', provider: ['openai'] },
     { label: 'GPT-5.2', key: 'gpt-5.2', provider: ['openai'] },
@@ -251,14 +290,15 @@ export const VIDEO_RATIO_OPTIONS = VIDEO_RATIO_LIST
 // Video duration options | 视频时长选项
 export const VIDEO_DURATION_OPTIONS = [
     { label: '5 秒', key: 5 },
-    { label: '10 秒', key: 10 }
+    { label: '10 秒', key: 10 },
+    { label: '60 秒（自动拼接）', key: 60 }
 ]
 
 // Default values | 默认值
-export const DEFAULT_IMAGE_MODEL = 'nano-banana-pro'
-export const DEFAULT_VIDEO_MODEL = 'doubao-seedance-1-5-pro-251215'
-export const DEFAULT_CHAT_MODEL = 'gpt-4o-mini'
-export const DEFAULT_IMAGE_SIZE = '2048x2048'
+export const DEFAULT_IMAGE_MODEL = 'frw-qianwen'
+export const DEFAULT_VIDEO_MODEL = 'minimax-h3'
+export const DEFAULT_CHAT_MODEL = 'gemma4-31b-heretic'
+export const DEFAULT_IMAGE_SIZE = '1024x1024'
 export const DEFAULT_VIDEO_RATIO = '16:9'
 export const DEFAULT_VIDEO_DURATION = 5
 

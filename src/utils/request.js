@@ -4,6 +4,8 @@
  */
 
 import axios from 'axios'
+import { getDefaultProvider, getProviderConfig, normalizeProviderKey } from '@/config/providers'
+import { isMaterialApiUrl } from './apiBase.js'
 
 // Base URL from environment or default
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.chatfire.site'
@@ -18,7 +20,7 @@ const instance = axios.create({
 instance.interceptors.request.use(
   (config) => {
     // Get current provider | 获取当前渠道
-    const currentProvider = localStorage.getItem('api-provider') || 'chatfire'
+    const currentProvider = normalizeProviderKey(localStorage.getItem('api-provider') || getDefaultProvider())
 
     // Get API keys from new storage | 从新存储结构获取 API Keys
     let apiKey = ''
@@ -29,12 +31,14 @@ instance.interceptors.request.use(
     } catch (e) {
       apiKey = ''
     }
+    apiKey = apiKey || getProviderConfig(currentProvider).defaultApiKey || ''
 
     // Skip auth for certain endpoints | 跳过某些端点的认证
     const noAuthEndpoints = ['/model/page', '/model/fullName', '/model/types']
     const isNoAuth = noAuthEndpoints.some(ep => config.url?.includes(ep))
+    const isLocalMaterial = isMaterialApiUrl(config.url || '')
 
-    if (apiKey && !isNoAuth) {
+    if (apiKey && !isNoAuth && !isLocalMaterial) {
       config.headers['Authorization'] = `Bearer ${apiKey}`
     }
 
@@ -76,8 +80,11 @@ instance.interceptors.response.use(
     if (response) {
       const { status, data } = response
       const message = data?.message || data?.error?.message || error.message
+      const isAuthRequest = String(error.config?.url || '').startsWith('/auth/')
       
-      if (status === 401) {
+      if (isAuthRequest) {
+        // Login and session views render their own contextual errors.
+      } else if (status === 401) {
         window.$message?.error('API Key 无效或已过期')
       } else if (status === 429) {
         window.$message?.error('请求过于频繁，请稍后再试')

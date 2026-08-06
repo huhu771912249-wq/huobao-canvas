@@ -13,8 +13,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/auth': {
+        target: 'http://127.0.0.1:8788',
+        changeOrigin: true
+      },
       '/v1': {
-        target: 'https://api.chatfire.site',
+        target: 'http://127.0.0.1:8788',
+        changeOrigin: true
+      },
+      '/public-assets': {
+        target: 'http://127.0.0.1:8788',
         changeOrigin: true
       }
     }

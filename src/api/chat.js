@@ -3,6 +3,18 @@
  */
 
 import { request, getBaseUrl } from '@/utils'
+import { getDefaultProvider, getProviderConfig, normalizeProviderKey } from '@/config/providers'
+
+const getCurrentApiKey = () => {
+  const currentProvider = normalizeProviderKey(localStorage.getItem('api-provider') || getDefaultProvider())
+  try {
+    const apiKeysJson = localStorage.getItem('api-keys-by-provider')
+    const apiKeys = apiKeysJson ? JSON.parse(apiKeysJson) : {}
+    return apiKeys[currentProvider] || getProviderConfig(currentProvider).defaultApiKey || ''
+  } catch {
+    return getProviderConfig(currentProvider).defaultApiKey || ''
+  }
+}
 
 // 对话补全
 export const chatCompletions = (data) =>
@@ -14,7 +26,7 @@ export const chatCompletions = (data) =>
 
 // 流式对话补全
 export const streamChatCompletions = async function* (data, signal, options = {}) {
-  const apiKey = localStorage.getItem('apiKey')
+  const apiKey = getCurrentApiKey()
   // 优先使用传入的 baseUrl，否则使用默认的
   const baseUrl = options.baseUrl || getBaseUrl()
   // 使用 options.endpoint 或默认的 /chat/completions

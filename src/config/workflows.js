@@ -7,6 +7,7 @@ import workflowCover2 from '@/assets/workflow02.jpeg'
 
 import scene01 from '@/assets/scene01.jpeg'
 import shot01 from '@/assets/shot01.jpeg'
+import { VIDEO_WORKFLOW_TEMPLATES } from './videoWorkflows'
 
 // Multi-angle prompts | 多角度提示词模板
 export const MULTI_ANGLE_PROMPTS = {
@@ -44,6 +45,7 @@ export const MULTI_ANGLE_PROMPTS = {
  * Workflow Templates | 工作流模板
  */
 export const WORKFLOW_TEMPLATES = [
+  ...VIDEO_WORKFLOW_TEMPLATES,
   {
     id: 'multi-angle-storyboard',
     name: '多角度分镜',
@@ -231,7 +233,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'text',
         position: { x: startPosition.x + colSpacing, y: startPosition.y },
         data: {
-          content: '根据产品特性，生成一个适合展示该产品且时尚富有高级感的模特图，彩色人像，背景是白底，人物居中，欧美人优先',
+          content: '根据产品特性，生成一个适合展示该产品且时尚富有高级感的模特图，彩色人像，背景是白底，人物居中，默认使用成年中国人或东亚面孔。人物、产品和主要文案完整入镜，四周预留10%安全边距，避免头顶、下巴、手脚或文字被裁切',
           label: '模特图提示词'
         }
       })

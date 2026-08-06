@@ -90,8 +90,14 @@
         class="aspect-video rounded-lg bg-[var(--bg-tertiary)] flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[var(--border-color)] relative"
       >
         <n-icon :size="32" class="text-[var(--text-secondary)]"><VideocamOutline /></n-icon>
-        <span class="text-sm text-[var(--text-secondary)]">拖放视频或点击上传</span>
+        <span class="text-sm text-[var(--text-secondary)]">
+          {{ isGeneratedOutput ? '等待视频生成结果' : '拖放视频或点击上传' }}
+        </span>
+        <span v-if="isGeneratedOutput" class="text-xs text-[var(--text-secondary)]/80">
+          请在左侧视频生成节点点击生成
+        </span>
         <input 
+          v-if="!isGeneratedOutput"
           type="file" 
           accept="video/*" 
           class="absolute inset-0 opacity-0 cursor-pointer"
@@ -140,13 +146,14 @@
  * Video node component | 视频节点组件
  * Displays and manages video content
  */
-import { ref, nextTick, watch, onMounted } from 'vue'
+import { computed, ref, nextTick, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
 import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline, CreateOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
+import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import { useVideoGeneration } from '../../hooks/useApi'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import { startAssetDownload } from '../../utils/assetDownload'
 
 const props = defineProps({
   id: String,
@@ -162,6 +169,14 @@ const { pollVideoTask } = useVideoGeneration()
 // Hover state | 悬浮状态
 const showActions = ref(false)
 const showHandleMenu = ref(false)
+
+const isGeneratedOutput = computed(() => {
+  return edges.value.some(edge => {
+    if (edge.target !== props.id) return false
+    const sourceNode = nodes.value.find(node => node.id === edge.source)
+    return sourceNode?.type === 'videoConfig'
+  })
+})
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -305,15 +320,16 @@ const handlePreview = () => {
 }
 
 // Handle download | 处理下载
-const handleDownload = () => {
-  if (props.data.url) {
-    const link = document.createElement('a')
-    link.href = props.data.url
-    link.download = props.data.fileName || `video_${Date.now()}.mp4`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.$message?.success('视频下载中...')
+const handleDownload = async () => {
+  try {
+    const result = await startAssetDownload({
+      url: props.data.url,
+      fileName: props.data.fileName || `video_${Date.now()}.mp4`,
+      label: props.data.label
+    })
+    window.$message?.success(`已开始下载：${result.filename}`)
+  } catch (error) {
+    window.$message?.error(error?.message || '视频下载失败')
   }
 }
 

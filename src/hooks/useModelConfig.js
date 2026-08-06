@@ -144,7 +144,7 @@ export const useModelConfig = () => {
       key: m.key,
       isCustom: true,
       ratios: ['16x9', '9:16', '1:1'],
-      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
+      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }, { label: '60 秒（自动拼接）', key: 60 }],
       defaultParams: { ratio: '16:9', duration: 5 }
     })),
     // 添加当前渠道的自定义模型
@@ -153,7 +153,7 @@ export const useModelConfig = () => {
       key: m.key,
       isCustom: true,
       ratios: ['16x9', '9:16', '1:1'],
-      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
+      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }, { label: '60 秒（自动拼接）', key: 60 }],
       defaultParams: { ratio: '16:9', duration: 5 },
       provider: [currentProvider.value]
     }))
