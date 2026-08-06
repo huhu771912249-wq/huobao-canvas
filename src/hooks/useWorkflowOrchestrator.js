@@ -10,6 +10,8 @@
 
 import { ref, watch } from 'vue'
 import { streamChatCompletions } from '@/api'
+import { H3_DIRECTOR_MODEL, H3_DIRECTOR_SYSTEM_PROMPT } from '@/config/h3DirectorPrompt'
+import { parseDirectorResponse } from '@/utils/h3DirectorPlan'
 import { 
   nodes, 
   addNode, 
@@ -311,24 +313,23 @@ export const useWorkflowOrchestrator = () => {
     try {
       let response = ''
       for await (const chunk of streamChatCompletions({
-        model: 'gpt-4o',
+        model: H3_DIRECTOR_MODEL,
         messages: [
-          { role: 'system', content: INTENT_ANALYSIS_PROMPT },
+          { role: 'system', content: H3_DIRECTOR_SYSTEM_PROMPT },
           { role: 'user', content: userInput }
         ]
       })) {
         response += chunk
       }
-      
-      const jsonMatch = response.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        return { workflow_type: WORKFLOW_TYPES.TEXT_TO_IMAGE }
-      }
-      
-      return JSON.parse(jsonMatch[0])
+
+      const plan = parseDirectorResponse(response, userInput)
+      addLog(plan.plan_source === 'gemma' ? 'success' : 'warning', plan.plan_source === 'gemma'
+        ? '本地 Gemma 已生成 H3 专业导演方案'
+        : 'Gemma 返回格式异常，已用专业规则补全 H3 方案')
+      return plan
     } catch (err) {
       addLog('error', `分析失败: ${err.message}`)
-      return { workflow_type: WORKFLOW_TYPES.TEXT_TO_IMAGE }
+      return parseDirectorResponse('', userInput)
     } finally {
       isAnalyzing.value = false
     }
