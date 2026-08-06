@@ -27,10 +27,21 @@ export const retryNovelVideoShot = (jobId, shotId) => request({
   data: {}
 })
 
+const serializeSubtitle = subtitle => {
+  const segment = {
+    start: subtitle?.start,
+    end: subtitle?.end,
+    text: subtitle?.text
+  }
+  const speaker = String(subtitle?.speaker ?? '').trim()
+  if (speaker) segment.speaker = speaker
+  return segment
+}
+
 export const updateNovelSubtitles = (jobId, subtitles) => request({
   url: `${jobUrl(jobId)}/subtitles`,
   method: 'put',
-  data: { segments: subtitles }
+  data: { segments: (Array.isArray(subtitles) ? subtitles : []).map(serializeSubtitle) }
 })
 
 export const finalizeNovelVideoJob = (jobId, data = {}) => request({

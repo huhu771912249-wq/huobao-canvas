@@ -24,6 +24,8 @@ assert.match(workspace, /retryNovelVideoShot/)
 assert.match(workspace, /updateNovelSubtitles/)
 assert.match(workspace, /finalizeNovelVideoJob/)
 assert.match(workspace, /clearTimeout/)
+assert.match(workspace, /stopPolling[\s\S]*loading\.value = false/)
+assert.match(workspace, /AI 超分[\s\S]*(1920|1080)/)
 assert.doesNotMatch(workspace, /progress\s*\+=|setInterval/)
 assert.match(studio, /NovelVideoWorkspace/)
 assert.match(studio, /activeTab === 'quick'/)
@@ -41,6 +43,7 @@ assert.deepEqual(helpers.validateSubtitleTimeline([
 ], 3), { valid: true, message: '' })
 assert.equal(helpers.validateSubtitleTimeline([{ start: 1, end: 0.5, text: '错' }], 3).valid, false)
 assert.equal(helpers.validateSubtitleTimeline([{ start: 0, end: 4, text: '越界' }], 3).valid, false)
+assert.equal(helpers.validateSubtitleTimeline([{ start: 0, end: 1, text: '一句', speaker: '人'.repeat(201) }], 3).valid, false)
 assert.equal(helpers.validateSubtitleTimeline([{ start: 0, end: 2, text: '一' }, { start: 1.9, end: 3, text: '二' }], 3).valid, false)
 
 assert.equal(helpers.safeDownloadUrl('/v1/assets/video.mp4'), '/v1/assets/video.mp4')
@@ -51,6 +54,9 @@ assert.equal(helpers.shouldPollNovelJob({ status: 'generating' }), true)
 assert.equal(helpers.shouldPollNovelJob({ status: 'completed' }), false)
 assert.equal(helpers.shouldPollNovelJob({ status: 'failed' }), false)
 assert.equal(helpers.shouldPollNovelJob({ status: 'cancelled' }), false)
+assert.equal(helpers.shouldClearPollingLoading(2, 2, true), true)
+assert.equal(helpers.shouldClearPollingLoading(2, 3, false), true)
+assert.equal(helpers.shouldClearPollingLoading(2, 3, true), false)
 assert.deepEqual(helpers.buildSubtitlesFromShots([
   { id: 's1', subtitle: '第一句', duration_seconds: 2 },
   { id: 's2', source_text: '第二句', duration_seconds: 3 }

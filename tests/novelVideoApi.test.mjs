@@ -31,7 +31,10 @@ const apiPromises = [
   novelVideo.createNovelVideoJob({ title: '冠希小说', quality_mode: 'quality' }),
   novelVideo.getNovelVideoJob('job /1'),
   novelVideo.retryNovelVideoShot('job /1', 'shot #2'),
-  novelVideo.updateNovelSubtitles('job /1', [{ id: 'subtitle-1', text: '第一句' }]),
+  novelVideo.updateNovelSubtitles('job /1', [
+    { id: 'subtitle-1', start: 0, end: 2, text: '第一句', speaker: '', localOnly: true },
+    { id: 'subtitle-2', start: 2, end: 4, text: '第二句', speaker: '旁白', status: 'draft' }
+  ]),
   novelVideo.finalizeNovelVideoJob('job /1', { format: 'mp4' })
 ]
 
@@ -58,7 +61,10 @@ assert.deepEqual(calls, [
   {
     url: '/v1/studio/novel-video/jobs/job%20%2F1/subtitles',
     method: 'put',
-    data: { segments: [{ id: 'subtitle-1', text: '第一句' }] }
+    data: { segments: [
+      { start: 0, end: 2, text: '第一句' },
+      { start: 2, end: 4, text: '第二句', speaker: '旁白' }
+    ] }
   },
   {
     url: '/v1/studio/novel-video/jobs/job%20%2F1/finalize',

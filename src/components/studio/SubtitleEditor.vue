@@ -5,7 +5,7 @@
       <div v-for="(segment, index) in segments" :key="segment.id || index" class="grid gap-2 rounded-xl border border-slate-800 p-3 md:grid-cols-[90px_90px_120px_1fr]">
         <label class="text-xs text-slate-400">开始<input v-model.number="segment.start" type="number" min="0" step="0.1" class="subtitle-input" @input="$emit('change')" /></label>
         <label class="text-xs text-slate-400">结束<input v-model.number="segment.end" type="number" min="0" step="0.1" class="subtitle-input" @input="$emit('change')" /></label>
-        <label class="text-xs text-slate-400">说话人<input v-model="segment.speaker" class="subtitle-input" @input="$emit('change')" /></label>
+        <label class="text-xs text-slate-400">说话人<input v-model="segment.speaker" maxlength="200" class="subtitle-input" @input="$emit('change')" /></label>
         <label class="text-xs text-slate-400">字幕<input v-model="segment.text" class="subtitle-input" @input="$emit('change')" /></label>
       </div>
     </div>
