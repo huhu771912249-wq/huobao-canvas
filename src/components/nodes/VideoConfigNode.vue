@@ -60,6 +60,17 @@
           <div v-if="audioError" class="text-[11px] text-red-400">{{ audioError }}</div>
           <audio v-if="audioUrl" :src="audioUrl" controls class="h-9 w-full" />
           <a v-if="audioUrl" :href="audioUrl" download class="block text-center text-[11px] text-cyan-400 hover:underline">下载 FLAC</a>
+          <div class="border-t border-cyan-400/20 pt-2 space-y-2">
+            <div class="text-[11px] font-medium text-[var(--text-primary)]">合成带声音和字幕的 MP4</div>
+            <input v-model.trim="compositionVideoUrl" class="w-full rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1.5 text-[11px] text-[var(--text-primary)]" placeholder="视频公网地址（连接输出节点时自动读取）" />
+            <textarea v-model="subtitleText" rows="3" class="w-full resize-y rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1.5 text-[11px] text-[var(--text-primary)]" placeholder="输入字幕，每行一句；系统按音频时长生成时间轴" />
+            <button type="button" :disabled="compositionGenerating || !audioUrl || !effectiveCompositionVideoUrl || !subtitleText.trim()" class="w-full rounded-lg bg-violet-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40" @click="handleComposeMedia">
+              {{ compositionGenerating ? '正在合成…' : '生成最终 MP4' }}
+            </button>
+            <div v-if="compositionError" class="text-[11px] text-red-400">{{ compositionError }}</div>
+            <video v-if="compositionUrl" :src="compositionUrl" controls class="w-full rounded-lg" />
+            <a v-if="compositionUrl" :href="compositionUrl" download class="block text-center text-[11px] text-violet-400 hover:underline">下载带音频字幕 MP4</a>
+          </div>
         </div>
 
         <div v-if="isBatchCapable" class="space-y-3 rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3">
@@ -236,6 +247,7 @@ import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutlin
 import { useVideoGeneration } from '../../hooks'
 import { publishImageAsset } from '../../api/image'
 import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
+import { createMediaComposition } from '../../api/mediaComposition'
 import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
@@ -276,6 +288,11 @@ const drivingVideoFile = ref(null)
 const audioGenerating = ref(false)
 const audioUrl = ref(props.data?.audioUrl || '')
 const audioError = ref('')
+const compositionVideoUrl = ref(props.data?.compositionVideoUrl || '')
+const subtitleText = ref(props.data?.subtitleText || '')
+const compositionGenerating = ref(false)
+const compositionUrl = ref(props.data?.compositionUrl || '')
+const compositionError = ref('')
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -576,6 +593,40 @@ const handleGenerateAudio = async () => {
     window.$message?.error(audioError.value)
   } finally {
     audioGenerating.value = false
+  }
+}
+
+const connectedOutputVideoUrl = computed(() => {
+  for (const edge of edges.value.filter(item => item.source === props.id)) {
+    const target = nodes.value.find(node => node.id === edge.target)
+    if (target?.type === 'video' && target.data?.url) return target.data.url
+  }
+  return ''
+})
+
+const effectiveCompositionVideoUrl = computed(() => compositionVideoUrl.value || connectedOutputVideoUrl.value)
+
+const handleComposeMedia = async () => {
+  compositionGenerating.value = true
+  compositionError.value = ''
+  try {
+    const result = await createMediaComposition({
+      videoUrl: effectiveCompositionVideoUrl.value,
+      audioUrl: audioUrl.value,
+      subtitleText: subtitleText.value
+    })
+    compositionUrl.value = result.output_url
+    updateNode(props.id, {
+      compositionVideoUrl: effectiveCompositionVideoUrl.value,
+      subtitleText: subtitleText.value,
+      compositionUrl: compositionUrl.value
+    })
+    window.$message?.success('带音频和字幕的 MP4 已生成')
+  } catch (err) {
+    compositionError.value = getErrorMessage(err)
+    window.$message?.error(compositionError.value)
+  } finally {
+    compositionGenerating.value = false
   }
 }
 

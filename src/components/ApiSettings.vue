@@ -12,13 +12,19 @@
               placeholder="选择 API 渠道"
             />
           </n-form-item>
-          <n-form-item label="Base URL" path="baseUrl">
+          <div class="mb-3 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            当前状态：{{ isConfigured ? '已就绪' : '需要配置' }}
+          </div>
+          <n-button v-if="settingsVisibility.showAdvancedToggle" block secondary size="small" class="mb-3" @click="advancedOpen = !advancedOpen">
+            {{ advancedOpen ? '收起高级设置' : '高级设置' }}
+          </n-button>
+          <n-form-item v-if="settingsVisibility.showTechnicalFields" label="Base URL" path="baseUrl">
             <n-input
               v-model:value="formData.baseUrl"
               placeholder="https://api.chatfire.site/v1"
             />
           </n-form-item>
-          <n-form-item v-if="!isLocalMaterialProvider" label="API Key" path="apiKey">
+          <n-form-item v-if="settingsVisibility.showTechnicalFields" label="API Key" path="apiKey">
             <n-input
               v-model:value="formData.apiKey"
               type="password"
@@ -27,11 +33,11 @@
             />
           </n-form-item>
 
-          <n-divider title-placement="left" class="!my-3">
+          <n-divider v-if="settingsVisibility.showTechnicalFields" title-placement="left" class="!my-3">
             <span class="text-xs text-[var(--text-secondary)]">端点路径</span>
           </n-divider>
           
-          <div class="endpoint-list">
+          <div v-if="settingsVisibility.showTechnicalFields" class="endpoint-list">
             <div class="endpoint-item">
               <span class="endpoint-label">问答</span>
               <n-tag size="small" type="info" class="endpoint-tag">{{ currentEndpoints.chat }}</n-tag>
@@ -213,6 +219,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { NModal, NForm, NFormItem, NInput, NButton, NAlert, NDivider, NTag, NTabs, NTabPane, NSelect } from 'naive-ui'
 import { useModelStore } from '../stores/pinia'
 import { getProviderConfig } from '../config/providers'
+import { apiSettingsVisibility } from '../utils/apiSettingsVisibility'
 
 // Props | 属性
 const props = defineProps({
@@ -230,6 +237,8 @@ const modelStore = useModelStore()
 
 // API Config 状态
 const isLocalMaterialProvider = computed(() => formData.provider === 'local-material')
+const advancedOpen = ref(false)
+const settingsVisibility = computed(() => apiSettingsVisibility(formData.provider, advancedOpen.value))
 const materialAdapterLocation = computed(() => {
   try {
     const origin = globalThis.location?.origin || 'http://127.0.0.1'
@@ -304,6 +313,7 @@ watch(() => props.show, (val) => {
 
 // 监听渠道变化，更新表单中的 API 配置
 watch(() => formData.provider, () => {
+  advancedOpen.value = false
   updateFormApiConfig()
 })
 

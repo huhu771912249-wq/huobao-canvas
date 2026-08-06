@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "test": "node tests/videoTaskStatus.test.mjs && node tests/videoBatch.test.mjs && node tests/videoWorkflowTemplates.test.mjs && node tests/promptPolicy.test.mjs && node tests/materialVariation.test.mjs && node tests/backgroundReplace.test.mjs && node tests/dspCreativeLibrary.test.mjs && node tests/appInteractionBridge.test.mjs && node tests/projectActions.test.mjs && node tests/visibilityPolling.test.mjs && node tests/workspaceUi.test.mjs",
+    "test": "node tests/subtitleTimeline.test.mjs && node tests/apiSettingsVisibility.test.mjs && node tests/videoTaskStatus.test.mjs && node tests/videoBatch.test.mjs && node tests/videoWorkflowTemplates.test.mjs && node tests/promptPolicy.test.mjs && node tests/materialVariation.test.mjs && node tests/backgroundReplace.test.mjs && node tests/dspCreativeLibrary.test.mjs && node tests/appInteractionBridge.test.mjs && node tests/projectActions.test.mjs && node tests/visibilityPolling.test.mjs && node tests/workspaceUi.test.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
