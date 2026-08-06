@@ -19,5 +19,9 @@ assert.match(videoSource, /@change="handleModelSelect\(\$event\.target\.value\)"
 assert.match(videoSource, /@change="handleRatioSelect\(\$event\.target\.value\)"/)
 assert.match(videoSource, /@change="handleDurationSelect\(Number\(\$event\.target\.value\)\)"/)
 assert.match(imageSource, /modelStore\.setProvider\(supportedProviders\[0\]\)/, 'cross-provider image models must switch their API provider')
+assert.match(imageSource, /modelStore\.allImageModels/, 'saved image models must not be reset just because another node changed provider')
+assert.match(videoSource, /modelStore\.allVideoModels/, 'saved video models must not be reset just because another node changed provider')
+assert.match(videoSource, /activateModelProvider\(localModel\.value\)/, 'video generation must activate its own model provider')
+assert.match(imageSource, /activateModelProvider\(localModel\.value\)/, 'image generation must activate its own model provider')
 
 console.log('canvasNativeSelectors.test.mjs passed')

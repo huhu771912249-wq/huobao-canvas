@@ -383,6 +383,13 @@ const handleSelect = (item) => {
 
 // Get current model config | 获取当前模型配置
 const currentModelConfig = computed(() => getModelConfig(localModel.value))
+const activateModelProvider = (modelKey) => {
+  const config = getModelConfig(modelKey)
+  const supportedProviders = Array.isArray(config?.provider) ? config.provider : []
+  if (supportedProviders.length > 0 && !supportedProviders.includes(modelStore.currentProvider)) {
+    modelStore.setProvider(supportedProviders[0])
+  }
+}
 
 // Model options from Pinia store (filtered by provider) | 从 Pinia store 获取模型选项（根据渠道过滤）
 const modelOptions = computed(() => modelStore.allImageModelOptions)
@@ -434,7 +441,7 @@ const displaySize = computed(() => {
 // Initialize on mount | 挂载时初始化
 onMounted(() => {
   // 检查当前模型是否在可用模型列表中
-  const availableModels = modelStore.availableImageModels
+  const availableModels = modelStore.allImageModels
   const isModelAvailable = availableModels.some(m => m.key === localModel.value)
 
   if (!localModel.value || !isModelAvailable) {
@@ -626,10 +633,7 @@ const getConnectedInputs = () => {
 const handleModelSelect = (key) => {
   localModel.value = key
   const config = getModelConfig(key)
-  const supportedProviders = Array.isArray(config?.provider) ? config.provider : []
-  if (supportedProviders.length > 0 && !supportedProviders.includes(modelStore.currentProvider)) {
-    modelStore.setProvider(supportedProviders[0])
-  }
+  activateModelProvider(key)
 
   // 同步 Quality 到模型默认值
   if (config?.defaultParams?.quality) {
@@ -723,6 +727,7 @@ const hasConnectedImageWithContent = computed(() => {
 // Handle generate action | 处理生成操作
 // mode: 'auto' = 自动判断, 'replace' = 替换现有, 'new' = 新建节点
 const handleGenerate = async (mode = 'auto') => {
+  activateModelProvider(localModel.value)
   const { prompt, prompts, refImages, refImagesWithOrder } = getConnectedInputs()
 
   if (isBackgroundReplaceMode.value && !backgroundReadiness.value.ready) {

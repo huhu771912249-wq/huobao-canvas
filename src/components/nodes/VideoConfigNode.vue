@@ -522,7 +522,14 @@ const currentModelConfig = computed(() => getModelConfig(localModel.value))
 
 // Model options from Pinia store (filtered by provider) | 从 Pinia store 获取模型选项（根据渠道过滤）
 const modelOptions = computed(() => modelStore.videoModelOptions)
-const isModelAvailable = computed(() => modelStore.availableVideoModels.some(m => m.key === localModel.value))
+const isModelAvailable = computed(() => modelStore.allVideoModels.some(m => m.key === localModel.value))
+const activateModelProvider = (modelKey) => {
+  const config = getModelConfig(modelKey)
+  const supportedProviders = Array.isArray(config?.provider) ? config.provider : []
+  if (supportedProviders.length > 0 && !supportedProviders.includes(modelStore.currentProvider)) {
+    modelStore.setProvider(supportedProviders[0])
+  }
+}
 
 // Display model name | 显示模型名称
 const displayModelName = computed(() => {
@@ -543,6 +550,7 @@ const durationOptions = computed(() => {
 // Handle model selection | 处理模型选择
 const handleModelSelect = (key) => {
   localModel.value = key
+  activateModelProvider(key)
   // Update ratio and duration to model's default | 更新为模型默认比例和时长
   const config = getModelConfig(key)
   const updates = { model: key }
@@ -588,7 +596,7 @@ const toggleGif = () => {
 }
 
 const resolveAvailableVideoModel = () => {
-  const availableModels = modelStore.availableVideoModels
+  const availableModels = modelStore.allVideoModels
   if (availableModels.some(m => m.key === localModel.value)) {
     return localModel.value
   }
@@ -762,6 +770,7 @@ const findConnectedEmptyOutputNode = (nodeType) => {
 const handleGenerate = async () => {
   // 设置生成中状态
   isGenerating.value = true
+  activateModelProvider(localModel.value)
 
   const { prompt, first_frame_image, last_frame_image, images } = getConnectedInputs()
 
@@ -1017,14 +1026,6 @@ onMounted(() => {
 watch(() => props.data?.model, (newModel) => {
   if (newModel && newModel !== localModel.value) {
     localModel.value = newModel
-  }
-})
-
-watch(() => modelStore.currentProvider, () => {
-  const resolvedModel = resolveAvailableVideoModel()
-  if (resolvedModel && resolvedModel !== localModel.value) {
-    localModel.value = resolvedModel
-    updateNode(props.id, { model: resolvedModel })
   }
 })
 
