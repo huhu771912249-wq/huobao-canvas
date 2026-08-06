@@ -14,7 +14,7 @@ import { getModelByName } from '@/config/models'
 import { useApiConfig } from './useApiConfig'
 import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
-import { getVideoTaskPollingState } from '@/utils/videoTaskStatus'
+import { extractVideoTaskProgress, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
 import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from '@/config/studioProjectFlow'
 
 /**
@@ -305,8 +305,6 @@ export const useVideoGeneration = () => {
     const interval = 5000
 
     for (let i = 0; i < maxAttempts; i++) {
-      onProgress(i + 1, Math.min(Math.round((i / maxAttempts) * 100), 99))
-
       // 获取任务查询端点，支持 {taskId} 占位符替换
       let taskEndpoint = modelStore.getVideoTaskEndpoint()
       if (taskEndpoint.includes('{taskId}')) {
@@ -328,6 +326,8 @@ export const useVideoGeneration = () => {
 
       // 适配轮询响应
       const adaptedResult = adaptResponse('video', result)
+      const progressInfo = extractVideoTaskProgress(result, adaptedResult)
+      onProgress(i + 1, progressInfo.percent, progressInfo)
 
       const taskState = getVideoTaskPollingState(result, adaptedResult)
 

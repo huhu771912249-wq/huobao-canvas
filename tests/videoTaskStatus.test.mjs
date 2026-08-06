@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { buildVideoTaskStatusUrl, extractVideoCompletionMetadata, getVideoTaskPollingState, isVerifiedTargetOutput } from '../src/utils/videoTaskStatus.js'
+import { buildVideoTaskStatusUrl, extractVideoCompletionMetadata, extractVideoTaskProgress, getVideoTaskPollingState, isVerifiedTargetOutput } from '../src/utils/videoTaskStatus.js'
+
+assert.deepEqual(extractVideoTaskProgress({ status: 'upscaling', upscale_status: 'running', progress: 0.72 }), {
+  status: 'upscaling', stage: 'SeedVR2 AI 超分中', percent: 72, current_step: '', upscale_status: 'running'
+})
+assert.deepEqual(extractVideoTaskProgress({ data: { status: 'cloud_generate', current_step: '云端模型采样' } }), {
+  status: 'cloud_generate', stage: '云端模型采样', percent: null, current_step: '云端模型采样', upscale_status: ''
+})
+assert.equal(extractVideoTaskProgress({ status: 'running' }).percent, null)
 
 assert.deepEqual(extractVideoCompletionMetadata({ data: {
   status: 'completed', upscale_status: 'completed', actual_width: 1920, actual_height: 1080
@@ -18,6 +26,9 @@ for (const key of ['status', 'upscale_status', 'actual_width', 'actual_height'])
   assert.match(videoNodeSource, new RegExp(`${key}:\\s*completion\\.${key}`))
 }
 assert.match(videoNodeSource, /isVerifiedTargetOutput\(completion/)
+assert.doesNotMatch(videoNodeSource, /预计等待 1 分钟/)
+assert.match(videoNodeSource, /taskStage/)
+assert.match(videoNodeSource, /data\.progress !== null/)
 
 const submittedWithData = getVideoTaskPollingState({
   status: 'submitted',

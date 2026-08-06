@@ -172,7 +172,7 @@ const startPolling = async () => {
   polling.value = true
   try {
     const result = await pollVideoTask(taskId, (_attempt, percentage) => {
-      updateNode(props.id, { progress: Math.max(Number(props.data?.progress || 0), percentage / 100) })
+      if (Number.isFinite(percentage)) updateNode(props.id, { progress: Math.max(Number(props.data?.progress || 0), percentage / 100) })
     })
     syncResult(result)
     if (result.status === 'partial') {
