@@ -88,12 +88,15 @@
             </button>
             <button
               class="rounded-xl border px-3 py-2 text-left transition-colors"
-              :class="qualityMode === 'high_quality' ? activeOptionClass : inactiveOptionClass"
-              @click="qualityMode = 'high_quality'"
+              :class="qualityMode === 'quality' ? activeOptionClass : inactiveOptionClass"
+              @click="qualityMode = 'quality'"
             >
-              <span class="block text-sm font-medium">高质量</span>
-              <span class="mt-0.5 block text-[10px] opacity-70">按 3:1 / 6:5 / 1:1 分别生成</span>
+              <span class="block text-sm font-medium">高质量 1080p</span>
+              <span class="mt-0.5 block text-[10px] opacity-70">按尺寸分别生成；视频素材接入 AI 超分</span>
             </button>
+          </div>
+          <div class="mt-2 text-[10px] text-[var(--text-secondary)]">
+            {{ qualityMode === 'fast' ? '快速导出：保留原始生成尺寸' : '最终输出以任务返回的实际尺寸为准，不把普通放大标成 1080p' }}
           </div>
         </div>
 
@@ -160,6 +163,7 @@
           <div class="mt-2 truncate text-[10px] text-[var(--text-secondary)]">
             {{ currentStep || `任务：${jobId}` }}
           </div>
+          <div class="mt-1 text-[10px] text-[var(--text-secondary)]">AI 超分：{{ upscaleStatusLabel }} · 实际输出：{{ actualOutputLabel }}</div>
         </div>
 
         <div v-if="visibleError" class="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-400">
@@ -327,6 +331,7 @@ import {
 } from '../../utils/materialVariation'
 import { addNodes, duplicateNode, nodes, removeNode, updateNode } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 
 const props = defineProps({
   id: String,
@@ -337,7 +342,7 @@ const selectedFile = ref(null)
 const dragActive = ref(false)
 const creativeCount = ref(normalizeMaterialVariationCount(props.data?.count))
 const selectedSizes = ref(normalizeMaterialVariationSizes(props.data?.sizes))
-const qualityMode = ref(props.data?.qualityMode === 'fast' ? 'fast' : 'high_quality')
+const qualityMode = ref(props.data?.qualityMode === 'fast' ? 'fast' : 'quality')
 const strength = ref(['subtle', 'moderate', 'strong'].includes(props.data?.strength) ? props.data.strength : 'moderate')
 const task = ref(props.data?.taskSnapshot || {})
 const submitting = ref(false)
@@ -359,6 +364,7 @@ const activeOptionClass = 'border-emerald-400 bg-emerald-400/10 text-emerald-400
 const inactiveOptionClass = 'border-[var(--border-color)] bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
 
 const sourceJobId = computed(() => String(props.data?.sourceJobId || '').trim())
+const qualityProfile = computed(() => getVideoQualityProfile(qualityMode.value, '16:9'))
 const hasUsableSource = computed(() => Boolean(selectedFile.value || sourceJobId.value))
 const formatFileSize = (bytes) => {
   const size = Number(bytes || 0)
@@ -389,6 +395,15 @@ const isWorking = computed(() => ['queued', 'submitted', 'running', 'processing'
 const canRetry = computed(() => ['partial', 'failed'].includes(status.value) && Boolean(jobId.value))
 const progressPercent = computed(() => getMaterialVariationProgress(task.value?.status ? task.value : props.data))
 const currentStep = computed(() => task.value?.current_step || task.value?.currentStep || props.data?.currentStep || '')
+const upscaleStatusLabel = computed(() => {
+  const value = String(task.value?.upscale_status || props.data?.upscale_status || '').toLowerCase()
+  return ({ queued: '等待中', running: '处理中', completed: '已完成', failed: '失败' }[value] || (qualityMode.value === 'fast' ? '未启用' : '等待后端回报'))
+})
+const actualOutputLabel = computed(() => {
+  const width = Number(task.value?.actual_width || props.data?.actual_width)
+  const height = Number(task.value?.actual_height || props.data?.actual_height)
+  return width > 0 && height > 0 ? `${width}×${height}` : '等待实际尺寸'
+})
 const visibleError = computed(() => {
   const error = task.value?.error || props.data?.error
   return pollError.value || error?.message || error || ''
@@ -571,6 +586,9 @@ const syncTask = (result) => {
     count: creativeCount.value,
     sizes: [...selectedSizes.value],
     qualityMode: qualityMode.value,
+    upscale_status: synced.upscale_status || '',
+    actual_width: synced.actual_width || null,
+    actual_height: synced.actual_height || null,
     strength: strength.value,
     updatedAt: Date.now()
   })
@@ -628,7 +646,8 @@ const submitVariation = async (action) => {
       strength: strength.value,
       action
     })
-    const result = await createMaterialVariation(payload)
+    const requestPayload = { ...payload, quality_profile: qualityProfile.value }
+    const result = await createMaterialVariation(requestPayload)
     materializedJobId.value = ''
     materializedCreativeIds.value = []
     selectedComparisonId.value = ''
@@ -682,7 +701,8 @@ const handleSecondWave = async () => {
       strength: strength.value
     })
     const parentJobId = jobId.value
-    const result = await startMaterialVariationSecondWave(parentJobId, payload)
+    const requestPayload = { ...payload, quality_profile: qualityProfile.value }
+    const result = await startMaterialVariationSecondWave(parentJobId, requestPayload)
     materializedJobId.value = ''
     materializedCreativeIds.value = []
     updateNode(props.id, {

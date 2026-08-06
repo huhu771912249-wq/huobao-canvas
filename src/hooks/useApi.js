@@ -15,6 +15,7 @@ import { useApiConfig } from './useApiConfig'
 import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
 import { getVideoTaskPollingState } from '@/utils/videoTaskStatus'
+import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from '@/config/studioProjectFlow'
 
 /**
  * Base API state hook | 基础 API 状态 Hook
@@ -260,6 +261,10 @@ export const useVideoGeneration = () => {
     if (params.dur) requestData.seconds = params.dur
     if (params.sizes) requestData.sizes = params.sizes
     if (params.output_formats) requestData.output_formats = params.output_formats
+    const qualityProfile = normalizeVideoQualityRequestProfile(params.quality_profile)
+    const imageAlignment = normalizeVideoImageAlignmentRequest(params.image_alignment)
+    if (qualityProfile) requestData.quality_profile = qualityProfile
+    if (imageAlignment) requestData.image_alignment = imageAlignment
 
     // 适配请求参数
     const adaptedParams = adaptRequest('video', requestData)

@@ -48,6 +48,26 @@
           </n-dropdown>
         </div>
 
+        <div class="space-y-2 rounded-lg border border-[var(--border-color)] p-2">
+          <div class="text-xs text-[var(--text-secondary)]">清晰度</div>
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="rounded-lg border px-2 py-2 text-left text-xs" :class="localQualityMode === 'fast' ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300' : 'border-[var(--border-color)] text-[var(--text-secondary)]'" @click="handleQualitySelect('fast')">
+              <b class="block">快速导出</b><span class="text-[10px]">保留原生分辨率</span>
+            </button>
+            <button type="button" :disabled="Boolean(qualityUnavailableReason)" :title="qualityUnavailableReason" class="rounded-lg border px-2 py-2 text-left text-xs disabled:cursor-not-allowed disabled:opacity-40" :class="localQualityMode === 'quality' ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300' : 'border-[var(--border-color)] text-[var(--text-secondary)]'" @click="handleQualitySelect('quality')">
+              <b class="block">高质量 1080p</b><span class="text-[10px]">SeedVR2 AI 超分</span>
+            </button>
+          </div>
+          <div v-if="qualityUnavailableReason" class="text-[10px] text-amber-400">高质量不可用：{{ qualityUnavailableReason }}</div>
+          <div class="grid grid-cols-3 gap-1 text-[10px] text-[var(--text-secondary)]">
+            <div><b class="block text-[var(--text-primary)]">原生分辨率</b>{{ nativeVideoSize.width }}×{{ nativeVideoSize.height }}</div>
+            <div><b class="block text-[var(--text-primary)]">AI 超分</b>{{ qualityProfile.upscaler ? upscaleStatusLabel : '未启用' }}</div>
+            <div><b class="block text-[var(--text-primary)]">最终输出</b>{{ actualOutputLabel }}</div>
+          </div>
+          <div class="text-[10px] text-[var(--text-secondary)]">输入图片会按 {{ nativeVideoSize.width }}×{{ nativeVideoSize.height }} 等比裁切或填充（crop_or_pad），不会拉伸。LTX 2.3 支持原生 latent 2× 放大。</div>
+          <div class="text-[10px] text-[var(--text-secondary)]">TeaCache / KJ / EasyCache 仅保留能力提示，待 A/B 验证后再启用。</div>
+        </div>
+
         <div v-if="localModel === 'ltx-2.3'" class="space-y-2 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3">
           <div class="flex items-center justify-between">
             <span class="text-xs font-medium text-[var(--text-primary)]">LTX 2.3 原生语音</span>
@@ -261,6 +281,8 @@ import {
   supportsVideoBatch
 } from '../../utils/videoBatch'
 import { getVideoInputCapabilities } from '../../utils/videoInputCapabilities'
+import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
+import { getImageAlignmentSpec, getModelNativeVideoSize } from '../../config/studioProjectFlow'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -285,6 +307,8 @@ const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
 const localDuration = ref(props.data?.dur || 5)
+const localQualityMode = ref(props.data?.qualityMode === 'fast' ? 'fast' : 'quality')
+const qualityResult = ref(props.data?.qualityResult || {})
 const localBatchSizes = ref(normalizeVideoBatchSizes(props.data?.batchSizes || []))
 const localGenerateGif = ref(props.data?.generateGif !== false)
 const drivingVideoInputRef = ref(null)
@@ -300,6 +324,27 @@ const subtitleText = ref(props.data?.subtitleText || '')
 const compositionGenerating = ref(false)
 const compositionUrl = ref(props.data?.compositionUrl || '')
 const compositionError = ref('')
+
+const qualityProfile = computed(() => getVideoQualityProfile(localQualityMode.value, localRatio.value))
+const nativeVideoSize = computed(() => getModelNativeVideoSize(localModel.value, localRatio.value))
+const imageAlignment = computed(() => getImageAlignmentSpec(localModel.value, localRatio.value))
+const connectedQualityResult = computed(() => {
+  const outputEdge = edges.value.find(edge => edge.source === props.id)
+  return nodes.value.find(node => node.id === outputEdge?.target)?.data || {}
+})
+const qualityUnavailableReason = computed(() => {
+  if (['minimax-h3', 'ltx-2.3'].includes(localModel.value)) return ''
+  return '当前模型尚未接入已验证的 SeedVR2 超分链路'
+})
+const upscaleStatusLabel = computed(() => {
+  const raw = connectedQualityResult.value?.upscale_status || qualityResult.value?.upscale_status || props.data?.upscale_status || ''
+  return ({ queued: '等待中', running: '处理中', completed: '已完成', failed: '失败' }[String(raw).toLowerCase()] || '等待后端回报')
+})
+const actualOutputLabel = computed(() => {
+  const width = Number(connectedQualityResult.value?.actual_width || qualityResult.value?.actual_width || props.data?.actual_width)
+  const height = Number(connectedQualityResult.value?.actual_height || qualityResult.value?.actual_height || props.data?.actual_height)
+  return width > 0 && height > 0 ? `${width}×${height}` : '等待实际尺寸'
+})
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -513,6 +558,10 @@ const handleModelSelect = (key) => {
   // Update ratio and duration to model's default | 更新为模型默认比例和时长
   const config = getModelConfig(key)
   const updates = { model: key }
+  if (!['minimax-h3', 'ltx-2.3'].includes(key) && localQualityMode.value === 'quality') {
+    localQualityMode.value = 'fast'
+    updates.qualityMode = 'fast'
+  }
   if (config?.defaultParams?.ratio) {
     localRatio.value = config.defaultParams.ratio
     updates.ratio = config.defaultParams.ratio
@@ -525,6 +574,8 @@ const handleModelSelect = (key) => {
     updates.batchSizes = [...localBatchSizes.value]
     updates.generateGif = localGenerateGif.value
   }
+  updates.qualityProfile = qualityProfile.value
+  updates.imageAlignment = imageAlignment.value
   updateNode(props.id, updates)
 }
 
@@ -573,7 +624,20 @@ const handleDuplicate = () => {
 // Handle ratio selection | 处理比例选择
 const handleRatioSelect = (key) => {
   localRatio.value = key
-  updateNode(props.id, { ratio: key })
+  updateNode(props.id, { ratio: key, qualityProfile: qualityProfile.value, imageAlignment: imageAlignment.value })
+}
+
+const handleQualitySelect = (mode) => {
+  if (mode === 'quality' && qualityUnavailableReason.value) {
+    window.$message?.warning(qualityUnavailableReason.value)
+    return
+  }
+  localQualityMode.value = mode === 'fast' ? 'fast' : 'quality'
+  updateNode(props.id, {
+    qualityMode: localQualityMode.value,
+    qualityProfile: qualityProfile.value,
+    imageAlignment: imageAlignment.value
+  })
 }
 
 // Handle duration selection | 处理时长选择
@@ -810,7 +874,9 @@ const handleGenerate = async () => {
     // Build request params (raw form data) | 构建请求参数（原始表单数据）
     // These will be transformed by inputTransform | 这些会被 inputTransform 转换
     const params = {
-      model: localModel.value
+      model: localModel.value,
+      quality_profile: qualityProfile.value,
+      image_alignment: imageAlignment.value
     }
 
     // Add prompt if provided | 如果有提示词则添加
@@ -855,6 +921,14 @@ const handleGenerate = async () => {
 
     // 只创建任务，获取 taskId，不在这里轮询
     const { taskId: newTaskId, url, result } = await createVideoTaskOnly(params)
+    qualityResult.value = result || {}
+    const qualityMetadata = {
+      qualityProfile: qualityProfile.value,
+      qualityMode: localQualityMode.value,
+      upscale_status: result?.upscale_status || '',
+      actual_width: result?.actual_width || null,
+      actual_height: result?.actual_height || null
+    }
 
     // 如果有直接 URL，更新视频节点
     if (url) {
@@ -868,11 +942,12 @@ const handleGenerate = async () => {
         loading: false,
         label: isBatchCapable.value ? '批量视频结果' : '视频生成',
         model: localModel.value,
+        ...qualityMetadata,
         updatedAt: Date.now()
       })
       window.$message?.success('视频生成成功')
       // Mark this config node as executed | 标记配置节点已执行
-      updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
+      updateNode(props.id, { executed: true, outputNodeId: videoNodeId, qualityResult: result || {}, ...qualityMetadata })
     } else if (newTaskId) {
       // 需要轮询，传递 taskId 给 VideoNode
       updateNode(videoNodeId, {
@@ -885,11 +960,12 @@ const handleGenerate = async () => {
         outputFormats: result?.output_formats || params.output_formats,
         label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...',
         model: localModel.value,
+        ...qualityMetadata,
         updatedAt: Date.now()
       })
       window.$message?.success('视频任务已创建')
       // Mark this config node as executed | 标记配置节点已执行
-      updateNode(props.id, { executed: true, outputNodeId: videoNodeId })
+      updateNode(props.id, { executed: true, outputNodeId: videoNodeId, qualityResult: result || {}, ...qualityMetadata })
     }
   } catch (err) {
     const message = getErrorMessage(err)
