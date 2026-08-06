@@ -166,19 +166,19 @@
       <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
       <div
         class="canvas-prompt-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20"
-        :class="{ 'canvas-prompt-dock--collapsed': !promptDockExpanded }"
+        :class="{ 'canvas-prompt-dock--collapsed': !promptDockExpanded, 'canvas-prompt-dock--director': directorPlan }"
       >
         <button
           v-if="!promptDockExpanded"
           type="button"
           class="canvas-prompt-dock__launcher"
-          aria-label="打开 AI 创作助手"
+          aria-label="打开冠希 H3 导演"
           @click="setPromptDockExpanded(true)"
         >
           <n-icon :size="18"><ChatbubbleOutline /></n-icon>
           <span>
-            <strong>AI 创作助手</strong>
-            <small>描述需求，自动搭建工作流</small>
+            <strong>冠希 H3 导演</strong>
+            <small>说人话，自动补全人物、场景、景别和运镜</small>
           </span>
         </button>
 
@@ -190,19 +190,41 @@
         >
           <div class="flex items-center gap-2 text-sm text-[var(--accent-color)] mb-2">
             <n-spin :size="14" />
-            <span>正在生成提示词...</span>
-          </div>
-          <div v-if="currentResponse" class="text-sm text-[var(--text-primary)] whitespace-pre-wrap">
-            {{ currentResponse }}
+            <span>{{ directorStatusText || '正在生成专业 H3 方案…' }}</span>
           </div>
         </div>
 
+        <section v-if="directorPlan" class="h3-director-card">
+          <header class="h3-director-card__header">
+            <div><span>冠希 H3 导演</span><strong>{{ directorPlan.title }}</strong></div>
+            <div class="h3-director-card__chips">
+              <span>{{ directorPlan.plan_source === 'gemma' ? '本地 Gemma' : '专业规则补全' }}</span>
+              <span>H3</span><span>{{ directorPlan.aspect_ratio }}</span><span>{{ directorPlan.duration_seconds }}秒</span><span>1080p</span>
+            </div>
+          </header>
+          <div class="h3-director-card__grid">
+            <article><small>人物设定</small><strong>{{ directorPlan.character.identity }}</strong><p>{{ directorPlan.character.appearance }}；{{ directorPlan.character.wardrobe }}</p></article>
+            <article><small>地点与布景</small><strong>{{ directorPlan.environment.location }} · {{ directorPlan.environment.time }}</strong><p>{{ directorPlan.environment.set_dressing }}</p></article>
+            <article><small>景别与镜头</small><strong>{{ directorPlan.cinematography.shot_size }} · {{ directorPlan.cinematography.lens }}</strong><p>{{ directorPlan.cinematography.camera_angle }}；{{ directorPlan.cinematography.camera_movement }}</p></article>
+            <article><small>光影与色彩</small><strong>{{ directorPlan.lighting.mood }}</strong><p>{{ directorPlan.lighting.key_light }}；{{ directorPlan.lighting.color_palette }}</p></article>
+            <article class="h3-director-card__wide"><small>动作时间线</small><p>{{ directorPlan.action_timeline.join('；') }}</p></article>
+            <article class="h3-director-card__wide"><small>声音设计</small><p>{{ directorPlan.audio_direction }}</p></article>
+          </div>
+          <details><summary>查看 H3 专业提示词</summary><p>{{ directorPlan.video_prompt }}</p></details>
+          <div class="h3-director-card__actions">
+            <button type="button" :disabled="isProcessing" @click="applyDirectorPlan(false)">只应用到画布</button>
+            <button type="button" :disabled="isProcessing" class="primary" @click="applyDirectorPlan(true)">生成 H3 视频</button>
+          </div>
+        </section>
+
+        <div v-if="directorError" class="h3-director-error">{{ directorError }}</div>
+
         <div class="canvas-prompt-dock__composer bg-[var(--bg-primary)] rounded-xl border border-[var(--border-color)] p-3">
           <div class="canvas-prompt-dock__header">
-            <span>AI 创作助手</span>
+            <span>冠希 H3 导演</span>
             <button
               type="button"
-              aria-label="收起 AI 创作助手"
+              aria-label="收起冠希 H3 导演"
               title="收起"
               @click="setPromptDockExpanded(false)"
             >
@@ -224,15 +246,15 @@
                 @click="handlePolish"
                 :disabled="isProcessing || !chatInput.trim()"
                 class="px-3 py-1.5 text-xs rounded-lg bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border-color)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                title="AI 润色提示词"
+                title="生成专业 H3 导演方案"
               >
-                ✨ AI 润色
+                ✨ 生成专业方案
               </button>
             </div>
             <div class="flex items-center gap-3">
               <label class="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
                 <n-switch v-model:value="autoExecute" size="small" />
-                自动执行
+                发送后自动生成
               </label>
               <button 
                 @click="sendMessage"
@@ -333,7 +355,7 @@ import {
 } from '@vicons/ionicons5'
 import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
-import { useChat, useWorkflowOrchestrator } from '../hooks'
+import { useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
 import { projects, initProjectsStore, updateProject, renameProject, currentProject, deleteProject, duplicateProject } from '../stores/projects'
 import { nextSuggestionSetIndex } from '../utils/suggestions'
@@ -355,34 +377,6 @@ const isApiConfigured = computed(() => modelStore.isCurrentProviderConfigured)
 // Initialize models on page load | 页面加载时初始化模型
 onMounted(() => {
   loadAllModels()
-})
-
-// Chat templates | 问答模板
-const CHAT_TEMPLATES = {
-  imagePrompt: {
-    name: '生图提示词',
-    systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、構图、细节等要素。直接返回提示词，不要其他解释。',
-    model: 'gpt-4o-mini'
-  },
-  videoPrompt: {
-    name: '视频提示词',
-    systemPrompt: '你是一个专业的AI视频提示词专家。将用户输入的内容美化成高质量的视频生成提示词，包含运动、场景、镜头等要素。直接返回提示词，不要其他解释。',
-    model: 'gpt-4o-mini'
-  }
-}
-
-// Current template | 当前模板
-const currentTemplate = ref('imagePrompt')
-
-// Chat hook with image prompt template | 问答 hook
-const { 
-  loading: chatLoading, 
-  status: chatStatus, 
-  currentResponse, 
-  send: sendChat 
-} = useChat({
-  systemPrompt: CHAT_TEMPLATES.imagePrompt.systemPrompt,
-  model: CHAT_TEMPLATES.imagePrompt.model
 })
 
 // Workflow orchestrator hook | 工作流编排 hook
@@ -457,11 +451,14 @@ const edgeTypes = {
 // UI state | UI状态
 const showNodeMenu = ref(false)
 const chatInput = ref('')
-const autoExecute = ref(false)
+const autoExecute = ref(true)
 const isMobile = ref(false)
 const showGrid = ref(true)
 const showApiSettings = ref(false)
 const isProcessing = ref(false)
+const directorPlan = ref(null)
+const directorError = ref('')
+const directorStatusText = ref('')
 const promptDockExpanded = ref(false)
 const promptDockTouched = ref(false)
 const starterActions = buildCanvasStarterActions()
@@ -539,15 +536,15 @@ const nodeTypeOptions = [
 ]
 
 // Input placeholder | 输入占位符
-const inputPlaceholder = '你可以试着说"帮我生成一个二次元的卡通角色"'
+const inputPlaceholder = '例如：竖屏5秒，雨夜上海街头，年轻女设计师撑伞走向镜头'
 
 // Quick suggestions | 快捷建议
 const suggestionSets = [
   [
-    '像个魔法森林',
-    '三只不同的小猫',
-    '生成多角度分镜',
-    '夏日田野环绕漫步'
+    '年轻女设计师在上海顶楼工作室展示新产品',
+    '竖屏3秒，纽约咖啡师把咖啡递给镜头',
+    '雨夜重庆街道，出租车驶过，电影感',
+    '海边运动鞋广告，低机位跟拍'
   ],
   [
     '体育赛事高点击 GIF',
@@ -868,21 +865,40 @@ const handlePolish = async () => {
   }
 
   isProcessing.value = true
-  const originalInput = chatInput.value
-
   try {
-    // Call chat API to polish the prompt | 调用 AI 润色提示词
-    const result = await sendChat(input, true)
-    
-    if (result) {
-      chatInput.value = result
-      window.$message?.success('提示词已润色')
-    }
+    directorStatusText.value = '本地 Gemma 正在拆解人物、场景、景别、运镜和声音…'
+    directorError.value = ''
+    directorPlan.value = await analyzeIntent(input)
+    window.$message?.success('专业 H3 方案已生成，可检查后应用')
   } catch (err) {
-    chatInput.value = originalInput
-    window.$message?.error(err.message || '润色失败')
+    directorError.value = err.message || '专业方案生成失败'
+    window.$message?.error(directorError.value)
   } finally {
     isProcessing.value = false
+    directorStatusText.value = ''
+  }
+}
+
+const nextDirectorPosition = () => {
+  const maxY = nodes.value.length ? Math.max(...nodes.value.map(node => node.position?.y || 0)) : -100
+  return { x: 100, y: maxY + 200 }
+}
+
+const applyDirectorPlan = async (shouldGenerate = false) => {
+  if (!directorPlan.value) return
+  isProcessing.value = true
+  directorError.value = ''
+  directorStatusText.value = shouldGenerate ? '正在搭建工作流并提交 H3 任务…' : '正在把专业方案应用到画布…'
+  try {
+    await executeWorkflow(directorPlan.value, nextDirectorPosition(), { autoExecute: shouldGenerate })
+    window.$message?.success(shouldGenerate ? 'H3 任务已提交，可在视频节点查看真实阶段' : 'H3 工作流已应用到画布')
+    setTimeout(() => fitView({ padding: 0.2 }), 180)
+  } catch (err) {
+    directorError.value = err.message || 'H3 工作流创建失败'
+    window.$message?.error(directorError.value)
+  } finally {
+    isProcessing.value = false
+    directorStatusText.value = ''
   }
 }
 
@@ -900,68 +916,19 @@ const sendMessage = async () => {
 
   isProcessing.value = true
   const content = chatInput.value
-  chatInput.value = ''
 
   try {
-    // Calculate position to avoid overlap | 计算位置避免重叠
-    let maxY = 0
-    if (nodes.value.length > 0) {
-      maxY = Math.max(...nodes.value.map(n => n.position.y))
-    }
-    const baseX = 100
-    const baseY = maxY + 200
-
-    if (autoExecute.value) {
-      // Auto-execute mode: analyze intent and execute workflow | 自动执行模式：分析意图并执行工作流
-      window.$message?.info('正在分析工作流...')
-      
-      try {
-        // Analyze user intent | 分析用户意图
-        const result = await analyzeIntent(content)
-        
-        // Ensure we have valid workflow params | 确保有效的工作流参数
-        const workflowParams = {
-          workflow_type: result?.workflow_type || WORKFLOW_TYPES.TEXT_TO_IMAGE,
-          image_prompt: result?.image_prompt || content,
-          video_prompt: result?.video_prompt || content,
-          character: result?.character,
-          shots: result?.shots
-        }
-        
-        window.$message?.info(`执行工作流: ${result?.description || '文生图'}`)
-        
-        // Execute the workflow | 执行工作流
-        await executeWorkflow(workflowParams, { x: baseX, y: baseY })
-        
-        window.$message?.success('工作流已启动')
-      } catch (err) {
-        console.error('Workflow error:', err)
-        // Fallback to simple text-to-image | 回退到文生图
-        window.$message?.warning('使用默认文生图工作流')
-        await createTextToImageWorkflow(content, { x: baseX, y: baseY })
-      }
-    } else {
-      // Manual mode: just create nodes | 手动模式：仅创建节点
-      const textNodeId = addNode('text', { x: baseX, y: baseY }, { 
-        content: content, 
-        label: '提示词' 
-      })
-      
-      const imageConfigNodeId = addNode('imageConfig', { x: baseX + 400, y: baseY }, {
-        label: '文生图'
-      })
-      
-      addEdge({
-        source: textNodeId,
-        target: imageConfigNodeId,
-        sourceHandle: 'right',
-        targetHandle: 'left'
-      })
-    }
+    directorStatusText.value = '本地 Gemma 正在拆解人物、场景、景别、运镜和声音…'
+    directorError.value = ''
+    directorPlan.value = await analyzeIntent(content)
+    chatInput.value = ''
+    if (autoExecute.value) await applyDirectorPlan(true)
   } catch (err) {
-    window.$message?.error(err.message || '创建失败')
+    directorError.value = err.message || '专业方案生成失败'
+    window.$message?.error(directorError.value)
   } finally {
     isProcessing.value = false
+    directorStatusText.value = ''
   }
 }
 
@@ -1223,6 +1190,41 @@ onUnmounted(() => {
   max-width: 250px !important;
 }
 
+.canvas-prompt-dock--director {
+  max-width: 980px !important;
+}
+
+.h3-director-card {
+  margin-bottom: 12px;
+  max-height: 56vh;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid rgba(101, 230, 189, 0.28);
+  border-radius: 20px;
+  background: rgba(12, 20, 34, 0.96);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(24px);
+}
+
+.h3-director-card__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.h3-director-card__header > div:first-child { display: flex; flex-direction: column; gap: 4px; }
+.h3-director-card__header span, .h3-director-card article small { color: #65e6bd; font-size: 11px; }
+.h3-director-card__header strong { color: #f6f8fc; font-size: 17px; }
+.h3-director-card__chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.h3-director-card__chips span { padding: 4px 8px; border: 1px solid rgba(101, 230, 189, 0.2); border-radius: 999px; background: rgba(101, 230, 189, 0.08); }
+.h3-director-card__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.h3-director-card article { padding: 10px 12px; border: 1px solid rgba(159, 181, 215, 0.12); border-radius: 12px; background: rgba(255, 255, 255, 0.025); }
+.h3-director-card article strong, .h3-director-card article p { display: block; margin-top: 5px; color: #eef4ff; font-size: 12px; line-height: 1.55; }
+.h3-director-card article p { color: rgba(194, 205, 224, 0.76); }
+.h3-director-card__wide { grid-column: 1 / -1; }
+.h3-director-card details { margin-top: 10px; color: rgba(194, 205, 224, 0.78); font-size: 12px; }
+.h3-director-card details p { margin-top: 8px; line-height: 1.6; }
+.h3-director-card__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.h3-director-card__actions button { padding: 8px 13px; border: 1px solid rgba(159, 181, 215, 0.18); border-radius: 10px; color: #dbe8fa; }
+.h3-director-card__actions button.primary { border-color: transparent; background: #65e6bd; color: #07131d; font-weight: 700; }
+.h3-director-card__actions button:disabled { opacity: 0.5; }
+.h3-director-error { margin-bottom: 10px; padding: 10px 12px; border: 1px solid rgba(248, 113, 113, 0.35); border-radius: 12px; background: rgba(127, 29, 29, 0.28); color: #fecaca; font-size: 12px; }
+
 .canvas-prompt-dock__launcher {
   display: flex;
   width: 100%;
@@ -1341,5 +1343,10 @@ onUnmounted(() => {
     bottom: 8px !important;
     padding: 0 8px !important;
   }
+  .h3-director-card { max-height: 48vh; }
+  .h3-director-card__header { flex-direction: column; }
+  .h3-director-card__chips { justify-content: flex-start; }
+  .h3-director-card__grid { grid-template-columns: 1fr; }
+  .h3-director-card__wide { grid-column: auto; }
 }
 </style>

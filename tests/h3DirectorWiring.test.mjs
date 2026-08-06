@@ -37,4 +37,13 @@ assert.equal(keyframeVideo.data.autoExecute, false)
 assert.ok(keyframeFlow.edges.some(edge => edge.sourceKey === imageOutput.key && edge.targetKey === keyframeVideo.key && edge.type === 'imageRole'))
 assert.match(orchestrator, /executeH3Video/)
 
+const canvas = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
+for (const copy of ['冠希 H3 导演', '景别与镜头', '地点与布景', '动作时间线', '声音设计', '只应用到画布', '生成 H3 视频', '本地 Gemma', '专业规则补全']) {
+  assert.match(canvas, new RegExp(copy))
+}
+assert.match(canvas, /directorPlan/)
+assert.match(canvas, /executeWorkflow\(directorPlan\.value/)
+assert.doesNotMatch(canvas, /使用默认文生图工作流/)
+assert.doesNotMatch(canvas, /gpt-4o-mini/)
+
 console.log('h3DirectorWiring.test.mjs passed')
