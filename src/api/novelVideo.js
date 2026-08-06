@@ -1,0 +1,34 @@
+import request from '../utils/request'
+
+const JOBS_API = '/v1/studio/novel-video/jobs'
+const encodeId = id => encodeURIComponent(String(id))
+const jobUrl = jobId => `${JOBS_API}/${encodeId(jobId)}`
+
+export const createNovelVideoJob = data => request({
+  url: JOBS_API,
+  method: 'post',
+  data
+})
+
+export const getNovelVideoJob = jobId => request({
+  url: jobUrl(jobId),
+  method: 'get'
+})
+
+export const retryNovelVideoShot = (jobId, shotId) => request({
+  url: `${jobUrl(jobId)}/shots/${encodeId(shotId)}/retry`,
+  method: 'post',
+  data: {}
+})
+
+export const updateNovelSubtitles = (jobId, subtitles) => request({
+  url: `${jobUrl(jobId)}/subtitles`,
+  method: 'put',
+  data: { subtitles }
+})
+
+export const finalizeNovelVideoJob = (jobId, data = {}) => request({
+  url: `${jobUrl(jobId)}/finalize`,
+  method: 'post',
+  data
+})
