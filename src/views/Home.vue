@@ -9,6 +9,10 @@
     @open-tasks="taskRailOpen = true"
   >
     <template #main>
+      <section class="mb-6 rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5 p-5">
+        <div class="flex flex-wrap items-end justify-between gap-4"><div><div class="text-xs tracking-[0.25em] text-cyan-400">HUOBAO VIDEO</div><h2 class="mt-1 text-2xl font-semibold">视频创作中心</h2><p class="mt-2 text-sm text-[var(--text-secondary)]">文生图、文生图＋视频、小说成片和素材再创作。</p></div><n-button type="primary" @click="router.push('/video-studio')">进入视频中心</n-button></div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><button v-for="entry in studioEntries" :key="entry.key" class="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 text-left hover:border-cyan-400" @click="openStudioEntry(entry)"><b>{{ entry.title }}</b><div class="mt-1 text-xs text-[var(--text-secondary)]">{{ entry.description }}</div></button></div>
+      </section>
       <CreationLauncher
         :suggestions="suggestions"
         @launch="handleLaunch"
@@ -68,10 +72,17 @@ import CreationLauncher from '../components/home/CreationLauncher.vue'
 import RecentProjects from '../components/home/RecentProjects.vue'
 import TaskRail from '../components/workspace/TaskRail.vue'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
+import { STUDIO_ENTRIES } from '../config/studioEntries'
 
 const router = useRouter()
 const dialog = useDialog()
 const modelStore = useModelStore()
+const studioEntries = STUDIO_ENTRIES
+const openStudioEntry = (entry) => {
+  if (entry.route) router.push(entry.route)
+  else if (entry.flow === 'dsp' || entry.flow === 'variation') createFlowProject(entry.flow)
+  else if (entry.flow === 'video') createVideoProject(videoEntries.video)
+}
 
 const showApiSettings = ref(false)
 const taskRailOpen = ref(false)

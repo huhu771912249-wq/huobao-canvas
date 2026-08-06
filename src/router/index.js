@@ -15,6 +15,11 @@ const routes = [
     path: '/canvas/:id?',
     name: 'Canvas',
     component: () => import('../views/Canvas.vue')
+  },
+  {
+    path: '/video-studio',
+    name: 'VideoStudio',
+    component: () => import('../views/VideoStudio.vue')
   }
 ]
 
