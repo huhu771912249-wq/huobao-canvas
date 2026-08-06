@@ -49,3 +49,9 @@ export const finalizeNovelVideoJob = (jobId, data = {}) => request({
   method: 'post',
   data
 })
+
+export const cancelNovelVideoJob = jobId => request({
+  url: `${jobUrl(jobId)}/cancel`,
+  method: 'post',
+  data: {}
+})

@@ -1,10 +1,12 @@
 <script>
 const TERMINAL_JOB_STATUSES = new Set(['completed', 'failed', 'cancelled'])
 
-export const shouldPollNovelJob = job => Boolean(job?.status) && !TERMINAL_JOB_STATUSES.has(job.status)
+export const isNovelJobReadyForFinalize = job => job?.status === 'upscaling' && Array.isArray(job.shots) && job.shots.length > 0 && job.shots.every(shot => shot?.status === 'completed')
+export const shouldPollNovelJob = job => Boolean(job?.status) && !TERMINAL_JOB_STATUSES.has(job.status) && !isNovelJobReadyForFinalize(job)
 export const shouldClearPollingLoading = (requestGeneration, currentGeneration, isPolling) => requestGeneration === currentGeneration || !isPolling
 export const shouldAcceptSubtitleSave = (saveGeneration, currentGeneration) => saveGeneration === currentGeneration
 export const canStartShotRetry = (pendingShotIds, shotId) => Boolean(shotId) && !pendingShotIds.has(shotId)
+export const canStartJobCancel = (isPending, job) => !isPending && ['queued', 'generating', 'upscaling', 'composing', 'subtitling'].includes(job?.status)
 
 export const safeDownloadUrl = value => {
   const url = String(value || '').trim()
@@ -58,7 +60,7 @@ export const buildSubtitlesFromShots = shots => {
           <div class="flex flex-wrap items-start justify-between gap-3"><div><h2 class="text-xl font-semibold">小说成片工作区</h2><p class="mt-1 text-sm text-slate-400">逐镜修改后先保存故事板，再提交生成；系统不会自动消耗额度。</p></div><span class="rounded-full px-3 py-1 text-xs" :class="dirty ? 'bg-amber-400/10 text-amber-200' : 'bg-emerald-400/10 text-emerald-200'">{{ dirty ? '有未保存修改' : '故事板已保存' }}</span></div>
           <div class="mt-5 grid gap-3 sm:grid-cols-2"><button v-for="option in qualityOptions" :key="option.mode" type="button" :disabled="Boolean(job)" class="rounded-xl border p-4 text-left disabled:cursor-not-allowed disabled:opacity-50" :class="qualityMode === option.mode ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="qualityMode = option.mode; dirty = true"><b>{{ option.label }}</b><p class="mt-1 text-xs text-slate-400">{{ option.description }}</p></button></div>
           <div class="mt-4 grid gap-3 text-xs sm:grid-cols-3"><div class="metric"><span>原生分辨率</span><b>{{ nativeResolution }}</b></div><div class="metric"><span>AI 超分</span><b>{{ aiUpscaleResolution }}</b></div><div class="metric"><span>最终输出</span><b>{{ finalResolution }}</b></div></div>
-          <div class="mt-5 flex flex-wrap gap-3"><button type="button" class="action-secondary" :disabled="Boolean(job) || !dirty" @click="saveStoryboard">保存故事板</button><button type="button" class="action-primary" :disabled="busy || dirty || Boolean(job)" @click="generateAll">生成全部镜头</button><button v-if="polling" type="button" class="action-secondary" @click="pausePolling">取消跟踪</button><button v-else-if="job && shouldPollNovelJob(job)" type="button" class="action-secondary" @click="resumePolling">恢复跟踪</button></div><p v-if="job" class="mt-3 text-xs text-amber-200">任务已提交，修改需新建任务；当前任务仅允许重试失败镜头和校对字幕。</p>
+          <div class="mt-5 flex flex-wrap gap-3"><button type="button" class="action-secondary" :disabled="Boolean(job) || !dirty" @click="saveStoryboard">保存故事板</button><button type="button" class="action-primary" :disabled="busy || dirty || Boolean(job)" @click="generateAll">生成全部镜头</button><button v-if="polling" type="button" class="action-secondary" @click="pausePolling">暂停状态刷新</button><button v-else-if="job && shouldPollNovelJob(job)" type="button" class="action-secondary" @click="resumePolling">恢复状态刷新</button><button v-if="cancelableStatus" type="button" class="rounded-lg border border-red-400/50 px-4 py-2 text-sm text-red-200 disabled:opacity-40" :disabled="cancelPending" @click="cancelJob">{{ cancelPending ? '取消中…' : '取消任务' }}</button></div><p v-if="job" class="mt-3 text-xs text-amber-200">任务已提交，修改需新建任务；当前任务仅允许重试失败镜头和校对字幕。</p>
         </div>
         <aside class="rounded-2xl border border-slate-700 bg-slate-900/60 p-5"><h3 class="font-semibold">真实任务状态</h3><div v-if="loading" role="status" class="mt-4 text-cyan-300">正在读取任务状态…</div><div v-else-if="job" class="mt-4 space-y-3 text-sm"><div class="flex justify-between"><span class="text-slate-400">任务</span><b>{{ job.job_id }}</b></div><div class="flex justify-between"><span class="text-slate-400">阶段</span><b>{{ jobStatusLabel }}</b></div><div class="h-2 overflow-hidden rounded-full bg-slate-800"><div class="h-full bg-cyan-400 transition-all" :style="{ width: `${realProgress}%` }" /></div><p class="text-xs text-slate-400">{{ completedShots }}/{{ jobShots.length }} 个镜头由后端确认完成</p></div><p v-else class="mt-4 text-sm text-slate-400">尚未提交任务。</p></aside>
       </div>
@@ -74,11 +76,11 @@ export const buildSubtitlesFromShots = shots => {
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import NovelShotCard from './NovelShotCard.vue'
 import SubtitleEditor from './SubtitleEditor.vue'
-import { createNovelVideoJob, finalizeNovelVideoJob, getNovelVideoJob, retryNovelVideoShot, updateNovelSubtitles } from '../../api/novelVideo'
+import { cancelNovelVideoJob, createNovelVideoJob, finalizeNovelVideoJob, getNovelVideoJob, retryNovelVideoShot, updateNovelSubtitles } from '../../api/novelVideo'
 import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 
 const props = defineProps({ storyboard: { type: Object, default: null }, aspectRatio: { type: String, default: '16:9' } })
-const editableShots = ref([]); const dirty = ref(true); const qualityMode = ref('quality'); const job = ref(null); const loading = ref(false); const busy = ref(false); const error = ref(''); const polling = ref(false); const subtitles = ref([]); const subtitleDirty = ref(false); const subtitleError = ref(''); const savingSubtitles = ref(false); const retryingShotIds = ref(new Set())
+const editableShots = ref([]); const dirty = ref(true); const qualityMode = ref('quality'); const job = ref(null); const loading = ref(false); const busy = ref(false); const error = ref(''); const polling = ref(false); const subtitles = ref([]); const subtitleDirty = ref(false); const subtitleError = ref(''); const savingSubtitles = ref(false); const retryingShotIds = ref(new Set()); const cancelPending = ref(false)
 let pollTimer = null; let pollGeneration = 0; let subtitleEditGeneration = 0
 
 const cloneShots = shots => (shots || []).map((shot, index) => ({ id: String(shot.id || `shot-${index + 1}`), title: shot.title || `镜头 ${index + 1}`, source_text: shot.source_text || '', image_prompt: shot.image_prompt || '', motion_prompt: shot.motion_prompt || '', subtitle: shot.subtitle || shot.source_text || '', duration_seconds: Number(shot.duration_seconds || 5), status: shot.status || 'draft' }))
@@ -93,9 +95,10 @@ const jobShots = computed(() => job.value?.shots || [])
 const displayShots = computed(() => job.value ? jobShots.value : editableShots.value)
 const completedShots = computed(() => jobShots.value.filter(shot => shot.status === 'completed').length)
 const realProgress = computed(() => jobShots.value.length ? Math.round((completedShots.value / jobShots.value.length) * 100) : 0)
-const jobStatusLabel = computed(() => ({ queued: '排队中', generating: '逐镜生成中', upscaling: 'AI 超分中', composing: '拼接中', subtitling: '字幕处理中', completed: '已完成', failed: '失败', cancelled: '已取消' }[job.value?.status] || job.value?.status || '未知'))
+const jobStatusLabel = computed(() => isNovelJobReadyForFinalize(job.value) ? '镜头已就绪，待字幕校对与成片' : ({ queued: '排队中', generating: '逐镜生成中', upscaling: 'AI 超分中', composing: '拼接中', subtitling: '字幕处理中', completed: '已完成', failed: '失败', cancelled: '已取消' }[job.value?.status] || job.value?.status || '未知'))
 const totalDuration = computed(() => displayShots.value.reduce((sum, shot) => sum + Number(shot.duration_seconds || 0), 0))
-const canFinalize = computed(() => jobShots.value.length > 0 && jobShots.value.every(shot => shot.status === 'completed') && !subtitleDirty.value && !['composing', 'subtitling', 'completed', 'cancelled'].includes(job.value?.status))
+const canFinalize = computed(() => isNovelJobReadyForFinalize(job.value) && !subtitleDirty.value)
+const cancelableStatus = computed(() => ['queued', 'generating', 'upscaling', 'composing', 'subtitling'].includes(job.value?.status))
 
 const errorMessage = value => value?.response?.data?.error?.message || value?.message || '操作失败，请稍后重试'
 const syncJob = value => { job.value = value; if (!subtitleDirty.value) { const saved = value?.subtitles?.segments || []; subtitles.value = (saved.length ? saved : buildSubtitlesFromShots(value?.shots)).map(segment => ({ ...segment })) } }
@@ -109,6 +112,7 @@ const resumePolling = () => { if (!job.value || !shouldPollNovelJob(job.value)) 
 const pausePolling = () => stopPolling()
 const generateAll = async () => { if (dirty.value) { error.value = '请先保存故事板，再生成全部镜头'; return } busy.value = true; error.value = ''; try { const created = await createNovelVideoJob({ shots: editableShots.value.map(({ status, error: shotError, video_url, ...shot }) => shot), quality_profile: profile.value, aspect_ratio: props.aspectRatio }); syncJob(created); resumePolling() } catch (cause) { error.value = errorMessage(cause) } finally { busy.value = false } }
 const retryShot = async shotId => { if (!canStartShotRetry(retryingShotIds.value, shotId)) return; const next = new Set(retryingShotIds.value); next.add(shotId); retryingShotIds.value = next; error.value = ''; try { syncJob(await retryNovelVideoShot(job.value.job_id, shotId)); resumePolling() } catch (cause) { error.value = errorMessage(cause) } finally { const remaining = new Set(retryingShotIds.value); remaining.delete(shotId); retryingShotIds.value = remaining } }
+const cancelJob = async () => { if (!canStartJobCancel(cancelPending.value, job.value)) return; if (!window.confirm('确认取消此任务？已完成镜头会保留，但任务不能恢复。')) return; cancelPending.value = true; error.value = ''; try { const cancelled = await cancelNovelVideoJob(job.value.job_id); syncJob(cancelled); stopPolling() } catch (cause) { error.value = errorMessage(cause) } finally { cancelPending.value = false } }
 const saveSubtitles = async () => { if (savingSubtitles.value) return; const validation = validateSubtitleTimeline(subtitles.value, totalDuration.value); subtitleError.value = validation.message; if (!validation.valid) return; const saveGeneration = subtitleEditGeneration; const snapshot = subtitles.value.map(segment => ({ ...segment })); savingSubtitles.value = true; try { const saved = await updateNovelSubtitles(job.value.job_id, snapshot); if (shouldAcceptSubtitleSave(saveGeneration, subtitleEditGeneration)) { subtitleDirty.value = false; syncJob(saved) } else job.value = saved } catch (cause) { subtitleDirty.value = true; subtitleError.value = errorMessage(cause) } finally { savingSubtitles.value = false } }
 const finalize = async () => { busy.value = true; error.value = ''; try { syncJob(await finalizeNovelVideoJob(job.value.job_id, { quality_profile: profile.value })); resumePolling() } catch (cause) { error.value = errorMessage(cause) } finally { busy.value = false } }
 const artifactUrl = name => safeDownloadUrl(job.value?.artifacts?.[name] || job.value?.[name])

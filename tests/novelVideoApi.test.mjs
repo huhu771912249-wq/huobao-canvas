@@ -35,7 +35,8 @@ const apiPromises = [
     { id: 'subtitle-1', start: 0, end: 2, text: '第一句', speaker: '', localOnly: true },
     { id: 'subtitle-2', start: 2, end: 4, text: '第二句', speaker: '旁白', status: 'draft' }
   ]),
-  novelVideo.finalizeNovelVideoJob('job /1', { format: 'mp4' })
+  novelVideo.finalizeNovelVideoJob('job /1', { format: 'mp4' }),
+  novelVideo.cancelNovelVideoJob('job /1')
 ]
 
 for (const [index, apiPromise] of apiPromises.entries()) {
@@ -70,6 +71,11 @@ assert.deepEqual(calls, [
     url: '/v1/studio/novel-video/jobs/job%20%2F1/finalize',
     method: 'post',
     data: { format: 'mp4' }
+  },
+  {
+    url: '/v1/studio/novel-video/jobs/job%20%2F1/cancel',
+    method: 'post',
+    data: {}
   }
 ])
 
@@ -85,6 +91,7 @@ for (const invalidId of invalidIds) {
   assert.throws(() => novelVideo.retryNovelVideoShot('job-1', invalidId), isRequiredIdTypeError('shotId'))
   assert.throws(() => novelVideo.updateNovelSubtitles(invalidId, []), isRequiredIdTypeError('jobId'))
   assert.throws(() => novelVideo.finalizeNovelVideoJob(invalidId), isRequiredIdTypeError('jobId'))
+  assert.throws(() => novelVideo.cancelNovelVideoJob(invalidId), isRequiredIdTypeError('jobId'))
 }
 
 assert.equal(calls.length, callsBeforeInvalidIds)
