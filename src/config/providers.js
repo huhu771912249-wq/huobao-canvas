@@ -66,7 +66,7 @@ export const PROVIDERS = {
     }
   },
   chatfire: {
-    label: '火宝 (Chatfire)',
+    label: '冠希 (Chatfire)',
     defaultBaseUrl: 'https://api.chatfire.site',
     // 端点路径
     endpoints: {
@@ -75,7 +75,7 @@ export const PROVIDERS = {
       video: '/v1/video/generations',
       videoQuery: '/v1/video/task/{taskId}'
     },
-    // 火宝渠道请求适配
+    // 冠希渠道请求适配
     requestAdapter: {
       chat: (params) => {
         const adapted = {
@@ -205,7 +205,7 @@ export const PROVIDERS = {
         return adapted
       }
     },
-    // 火宝渠道响应格式
+    // 冠希渠道响应格式
     responseAdapter: {
       chat: (response) => {
         if (response.choices && response.choices.length > 0) {

@@ -2,7 +2,7 @@
   <main class="login-shell">
     <div class="login-grid"></div>
     <section class="login-story">
-      <div class="brand-mark"><img :src="logoUrl" alt="火宝" /><span>HUOBAO CANVAS</span></div>
+      <div class="brand-mark"><img :src="logoUrl" alt="冠希" /><span>冠希 CANVAS</span></div>
       <div>
         <p class="eyebrow">AI CREATIVE OPERATING SYSTEM</p>
         <h1>把灵感，变成<br /><em>可投放的素材。</em></h1>
@@ -16,7 +16,7 @@
         <label>账号<input v-model.trim="username" autocomplete="username" placeholder="请输入账号" /></label>
         <label>密码<input v-model="password" type="password" autocomplete="current-password" placeholder="请输入密码" /></label>
         <p v-if="error" class="login-error">{{ error }}</p>
-        <button :disabled="loading">{{ loading ? '正在验证…' : '进入火宝画布' }}<span>→</span></button>
+        <button :disabled="loading">{{ loading ? '正在验证…' : '进入冠希画布' }}<span>→</span></button>
         <p class="privacy">本机安全会话 · 12 小时自动失效</p>
       </form>
     </section>

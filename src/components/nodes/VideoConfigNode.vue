@@ -203,7 +203,7 @@
           {{ error.message || '生成失败' }}
         </div>
         <div v-else-if="!isModelAvailable" class="text-xs text-amber-500 mt-2 leading-relaxed">
-          当前渠道 {{ modelStore.providerLabel }} 不支持 {{ displayModelName }}。切换到火宝 (Chatfire)，或改选当前渠道的视频模型。
+          当前渠道 {{ modelStore.providerLabel }} 不支持 {{ displayModelName }}。切换到冠希 (Chatfire)，或改选当前渠道的视频模型。
         </div>
         <div v-else-if="isScail2Model && !scail2ReferenceInput" class="text-xs text-amber-500 mt-2 leading-relaxed">
           SCAIL-2 需要连接一张参考角色图，并在上方选择驱动视频。
