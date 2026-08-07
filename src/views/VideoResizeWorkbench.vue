@@ -43,6 +43,13 @@
         <section class="panel min-h-[280px]">
           <div class="flex items-center justify-between"><div><div class="step">04 · 真实任务进度</div><h2 class="mt-1 text-xl font-semibold">{{ job ? job.current_step : '等待创建任务' }}</h2></div><span v-if="job" class="text-2xl font-semibold text-cyan-300">{{ job.progress || 0 }}%</span></div>
           <div class="mt-4 h-2 overflow-hidden rounded-full bg-slate-800"><div class="h-full bg-gradient-to-r from-cyan-400 to-blue-500 transition-all" :style="{width:`${job?.progress || 0}%`}" /></div>
+          <div v-if="job?.status==='upscaling'" class="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-400/25 bg-emerald-400/5 px-4 py-3 text-sm">
+            <span class="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400"></span>
+            <b class="text-emerald-300">SeedVR2 正在真实计算</b>
+            <span>第 {{ job.active_target_index }} / {{ job.active_target_count }} 个</span>
+            <span>{{ job.active_target }}</span>
+            <span>已运行 {{ job.gpu_elapsed_seconds || 0 }} 秒</span>
+          </div>
           <p class="mt-2 text-xs text-slate-500">进度来自后端任务阶段，不用虚假倒计时。每个成品会显示实际尺寸与超分方式。</p>
           <div v-if="job?.results?.length" class="mt-5 grid gap-4 md:grid-cols-2"><article v-for="item in job.results" :key="item.mp4_url" class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950"><video class="aspect-video w-full bg-black object-contain" :src="item.mp4_url" controls/><div class="space-y-2 p-4 text-sm"><div class="flex justify-between"><b>{{ item.actual_width }} × {{ item.actual_height }}</b><span class="text-emerald-300">{{ item.upscale_method==='seedvr2' ? 'SeedVR2 AI 超分' : '高清转码（无需超分）' }}</span></div><div class="flex gap-2"><a class="nav" :href="item.mp4_url" download>下载 MP4</a><a v-if="item.gif_url" class="nav" :href="item.gif_url" download>下载 GIF</a></div></div></article></div>
           <div v-if="job" class="mt-5 flex flex-wrap gap-2"><button v-if="!terminal" class="nav" @click="cancel">取消任务</button><button v-if="['failed','cancelled'].includes(job.status)" class="nav" @click="retry">失败重试</button><button v-if="job.status==='completed'" class="nav" @click="save">保存到素材库</button><button v-if="job.status==='completed'" class="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950" @click="handoff">送入无限画布</button></div>

@@ -30,5 +30,12 @@ for (const uploadContract of [
   'const handleDrop',
   '点击选择或拖入视频'
 ]) assert.match(view, new RegExp(uploadContract))
+for (const progressContract of [
+  'active_target_index',
+  'active_target_count',
+  'active_target',
+  'gpu_elapsed_seconds',
+  'SeedVR2 正在真实计算',
+]) assert.match(view, new RegExp(progressContract))
 
 console.log('videoResizeWorkbench.test.mjs passed')
