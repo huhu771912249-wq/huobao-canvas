@@ -33,7 +33,7 @@ pnpm test
 pnpm build
 ```
 
-治理分支会增加统一的 `pnpm lint` 与 `pnpm ci` 命令。
+治理分支会增加统一的 `pnpm lint` 与 `pnpm run ci` 命令。
 
 ## 文档
 

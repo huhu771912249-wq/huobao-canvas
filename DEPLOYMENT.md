@@ -6,13 +6,22 @@
 
 ```bash
 corepack pnpm install --frozen-lockfile
-corepack pnpm ci
+corepack pnpm run ci
 ```
 
 发布工具必须显式注入 `RELEASE_ID`、`FRONTEND_COMMIT_SHA`、`BACKEND_COMMIT_SHA` 和 `BUILD_TIME`，生成 `release-manifest.json`，再把 `dist/` 与 manifest 放入不可变 release 目录。
 
 ```bash
 release_dir="${APP_ROOT}/releases/${RELEASE_ID}"
+node scripts/generate-release-manifest.mjs \
+  --release-id "$RELEASE_ID" \
+  --frontend-sha "$FRONTEND_COMMIT_SHA" \
+  --backend-sha "$BACKEND_COMMIT_SHA" \
+  --build-time "$BUILD_TIME" \
+  --output "$release_dir/release-manifest.json"
+```
+
+```bash
 ln -sfn "$release_dir" "${APP_ROOT}/current.next"
 mv -Tf "${APP_ROOT}/current.next" "${APP_ROOT}/current"
 ```

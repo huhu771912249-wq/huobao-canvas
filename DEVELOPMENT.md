@@ -22,7 +22,7 @@ Vite 基础路径是 `/huobao-canvas`。本地代理把 `/auth`、`/v1`、`/publ
 pnpm lint
 pnpm test
 pnpm build
-pnpm ci
+pnpm run ci
 ```
 
 在治理完成前，仓库可能只有 `test` 和 `build`；CI 提交会补齐 `lint` 与 `ci`。
