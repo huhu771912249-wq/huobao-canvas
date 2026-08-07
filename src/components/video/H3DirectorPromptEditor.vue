@@ -1,7 +1,8 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { compileH3DirectorPrompt, normalizeH3DirectorPrompt } from '../../utils/h3DirectorPrompt.js'
-import { chatCompletions } from '../../api/chat.js'
+import { streamChatCompletions } from '../../api/chat.js'
+import { getMaterialApiBase } from '../../utils/apiBase.js'
 
 const props = defineProps({
   references: { type: Array, default: () => [] },
@@ -43,8 +44,7 @@ function addShot() {
   plan.detailed_description.push({ start: Number(last?.end || 0), end: Number(last?.end || 0) + 2, action: '', camera: '[Static shot]' })
 }
 
-function extractJson(response) {
-  const content = response?.choices?.[0]?.message?.content || response?.data?.choices?.[0]?.message?.content || ''
+function extractJson(content) {
   const match = String(content).match(/\{[\s\S]*\}/)
   if (!match) throw new Error('AI 未返回可编辑的导演 JSON')
   return JSON.parse(match[0])
@@ -56,13 +56,15 @@ async function generateDirectorPlan() {
   aiError.value = ''
   try {
     const referenceNames = props.references.map(item => `@${item.id} ${item.role}`).join('；') || '@图1 主体多视图'
-    const response = await chatCompletions({
+    let response = ''
+    for await (const chunk of streamChatCompletions({
+      model: 'gemma4-31b-heretic',
       messages: [
         { role: 'system', content: '你是专业 MiniMax H3 视频导演。只输出 JSON，不要 Markdown。字段必须为 subject_definitions, summary, retention_analysis(required/flexible 数组), detailed_description(start/end/action/camera 数组), overall_soundscape, non_diegetic_music。镜头连续不重叠；相机指令使用英文方括号；明确使用 @图N 保持身份、脸部和服装一致。' },
         { role: 'user', content: `参考绑定：${referenceNames}\n原始创意：${props.sourcePrompt}` }
       ],
       temperature: 0.4
-    })
+    }, undefined, { baseUrl: getMaterialApiBase(), endpoint: '/v1/chat/completions' })) response += chunk
     const generatedPlan = normalizeH3DirectorPrompt({ ...extractJson(response), references: props.references })
     plan.subject_definitions = generatedPlan.subject_definitions
     plan.summary = generatedPlan.summary
