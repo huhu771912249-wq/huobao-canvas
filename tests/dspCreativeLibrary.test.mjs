@@ -15,6 +15,8 @@ import {
   buildDspCreativeDeleteUrl,
   buildDspCreativeAutoRefreshUrl,
   buildDspCreativeImportUrl,
+  buildDspH3UpgradeUrl,
+  buildDspH3UpgradeActionUrl,
   buildDspCreativeExperimentBindingsUrl,
   buildDspCreativeExperimentRefreshUrl,
   buildDspCreativeJobUrl,
@@ -46,6 +48,8 @@ import {
   getDspCreativeJobs,
   getDspCreativeJobId,
   getDspCreativeProgress,
+  getDspH3Eligibility,
+  getDspH3ViewState,
   getSampleRiskWarning,
   formatDspAutoRefreshShanghaiTime,
   isDspCreativeJobActive,
@@ -445,6 +449,44 @@ assert.equal(
   getDspCreativeProgress({ status: 'completed_with_errors', progress: 0 }),
   100,
   'all terminal base jobs must report terminal progress'
+)
+assert.equal(
+  buildDspH3UpgradeUrl('job/a'),
+  `${buildDspCreativeJobUrl('job/a')}/h3-upgrades`
+)
+assert.equal(
+  buildDspH3UpgradeActionUrl('job/a', 'h3up/1', 'retry'),
+  `${buildDspCreativeJobUrl('job/a')}/h3-upgrades/h3up%2F1/retry`
+)
+assert.deepEqual(
+  getDspH3Eligibility({
+    experiment_metrics: {
+      status: 'ready',
+      min_impressions: 1000,
+      groups: [{
+        candidate_key: 'candidate-1',
+        status: 'ready',
+        winner: { variant: 'C', impressions: 2000 }
+      }]
+    }
+  }, 'candidate-1'),
+  { eligible: true, reason: '', winner: { variant: 'C', impressions: 2000 } }
+)
+assert.equal(
+  getDspH3Eligibility({ experiment_metrics: { status: 'insufficient_exposure' } }, 'candidate-1').eligible,
+  false
+)
+assert.deepEqual(
+  getDspH3ViewState({ status: 'upscaling', progress_percent: 72 }),
+  { label: 'SeedVR2 AI 超分中', progress: 72, terminal: false }
+)
+assert.equal(
+  shouldPollDspCreativeJob({
+    status: 'completed',
+    h3_upgrades: [{ status: 'cloud_generate' }]
+  }),
+  true,
+  'a terminal GIF job must keep polling while its H3 upgrade is active'
 )
 assert.equal(
   getDspCreativeProgress({ progress: { completed_creatives: 3, total_creatives: 4 } }),

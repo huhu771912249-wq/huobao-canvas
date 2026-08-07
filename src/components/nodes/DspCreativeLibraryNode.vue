@@ -427,7 +427,7 @@
                     {{ metricGroup.winner?.experiment_label || '' }}
                   </strong>
                 </div>
-                <div class="grid grid-cols-5 divide-x divide-[var(--border-color)]">
+              <div class="grid grid-cols-5 divide-x divide-[var(--border-color)]">
                   <div
                     v-for="metric in metricGroup.variants"
                     :key="metric.variant"
@@ -440,6 +440,15 @@
                     <span class="block">Wilson {{ formatScore(metric.wilson_ctr) }}</span>
                   </div>
                 </div>
+                <DspH3UpgradeCard
+                  v-if="metricGroup.winner?.variant"
+                  :winner="metricGroup.winner"
+                  :upgrade="h3UpgradeFor(metricGroup.candidate_key)"
+                  :busy="Boolean(actionBusy)"
+                  @create="handleCreateH3(metricGroup)"
+                  @retry="handleRetryH3(h3UpgradeFor(metricGroup.candidate_key))"
+                  @cancel="handleCancelH3(h3UpgradeFor(metricGroup.candidate_key))"
+                />
               </div>
             </div>
           </div>
@@ -635,13 +644,16 @@ import { CopyOutline, TrashOutline } from '@vicons/ionicons5'
 import {
   bindDspCreativeExperiment,
   cancelDspCreativeJob,
+  cancelDspH3Upgrade,
   confirmDspCreativeJob,
+  createDspH3Upgrade,
   getDspCreativeAutoRefreshStatus,
   getDspCreativeJob,
   importDspCreatives,
   openDspCreativeDownloadFolder,
   previewDspCreatives,
   refreshDspCreativeExperiment,
+  retryDspH3Upgrade,
   retryDspCreativeJob,
   updateDspCreativeCopy
 } from '../../api/dspCreativeLibrary.js'
@@ -692,6 +704,7 @@ import {
   isDocumentVisible
 } from '../../utils/visibilityPolling.js'
 import DspGifResultPreview from '../dsp/DspGifResultPreview.vue'
+import DspH3UpgradeCard from '../dsp/DspH3UpgradeCard.vue'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 
 const props = defineProps({
@@ -883,6 +896,15 @@ const experimentMetricGroups = computed(() => (
     ? experimentMetrics.value.groups
     : []
 ))
+const h3Upgrades = computed(() => (
+  Array.isArray(job.value?.h3_upgrades) ? job.value.h3_upgrades : []
+))
+const h3UpgradeFor = (candidateKey) => {
+  const matches = h3Upgrades.value.filter((upgrade) => (
+    String(upgrade?.candidate_key || '') === String(candidateKey || '')
+  ))
+  return matches.at(-1) || null
+}
 const experimentReadout = computed(() => {
   const groups = experimentMetricGroups.value
   const sourceCount = groups.length || experimentSources.value.length
@@ -1330,6 +1352,56 @@ const handleRefreshExperimentMetrics = async () => {
   }
 }
 
+const newH3IdempotencyKey = (prefix) => (
+  `${prefix}-${globalThis.crypto?.randomUUID?.() || Date.now()}`
+)
+
+const handleCreateH3 = async (metricGroup) => {
+  if (!currentJobId.value || actionBusy.value || !metricGroup?.candidate_key) return
+  actionBusy.value = 'h3-create'
+  errorMessage.value = ''
+  try {
+    applyJob(await createDspH3Upgrade(currentJobId.value, {
+      candidate_key: metricGroup.candidate_key,
+      idempotency_key: newH3IdempotencyKey('h3-create')
+    }))
+    startPolling()
+  } catch (error) {
+    errorMessage.value = error?.message || 'H3 获胜视频提交失败'
+  } finally {
+    if (mounted) actionBusy.value = ''
+  }
+}
+
+const handleRetryH3 = async (upgrade) => {
+  if (!currentJobId.value || actionBusy.value || !upgrade?.upgrade_id) return
+  actionBusy.value = 'h3-retry'
+  errorMessage.value = ''
+  try {
+    applyJob(await retryDspH3Upgrade(currentJobId.value, upgrade.upgrade_id, {
+      idempotency_key: newH3IdempotencyKey('h3-retry')
+    }))
+    startPolling()
+  } catch (error) {
+    errorMessage.value = error?.message || 'H3 获胜视频重试失败'
+  } finally {
+    if (mounted) actionBusy.value = ''
+  }
+}
+
+const handleCancelH3 = async (upgrade) => {
+  if (!currentJobId.value || actionBusy.value || !upgrade?.upgrade_id) return
+  actionBusy.value = 'h3-cancel'
+  errorMessage.value = ''
+  try {
+    applyJob(await cancelDspH3Upgrade(currentJobId.value, upgrade.upgrade_id))
+  } catch (error) {
+    errorMessage.value = error?.message || '取消 H3 获胜视频失败'
+  } finally {
+    if (mounted) actionBusy.value = ''
+  }
+}
+
 const invalidatePreview = () => {
   previewRevision.value += 1
   previewRequestController?.abort()
@@ -1492,7 +1564,7 @@ const refreshJob = async (generation = pollGeneration) => {
     const result = await getDspCreativeJob(currentJobId.value, { signal: controller.signal })
     if (!mounted || sequence !== requestSequence || generation !== pollGeneration) return
     applyJob(result)
-    if (!shouldPollDspCreativeJob(jobStatus.value)) stopPolling()
+    if (!shouldPollDspCreativeJob(job.value)) stopPolling()
   } catch (error) {
     if (error?.name !== 'AbortError' && mounted && sequence === requestSequence) {
       errorMessage.value = error?.message || '读取任务状态失败'
@@ -1510,7 +1582,7 @@ const startPolling = async () => {
   if (!mounted || !currentJobId.value || !isDocumentVisible(document)) return
   const generation = pollGeneration
   await refreshJob(generation)
-  if (mounted && generation === pollGeneration && shouldPollDspCreativeJob(jobStatus.value)) {
+  if (mounted && generation === pollGeneration && shouldPollDspCreativeJob(job.value)) {
     pollTimer = window.setInterval(
       () => refreshJob(generation),
       DSP_CREATIVE_POLL_INTERVAL
@@ -1600,7 +1672,7 @@ const handleCancel = async () => {
     const result = await cancelDspCreativeJob(currentJobId.value)
     if (mounted) {
       applyJob(result)
-      if (!shouldPollDspCreativeJob(jobStatus.value)) stopPolling()
+      if (!shouldPollDspCreativeJob(job.value)) stopPolling()
     }
   } catch (error) {
     errorMessage.value = error?.message || '取消失败'

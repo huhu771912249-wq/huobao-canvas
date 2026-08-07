@@ -13,6 +13,8 @@ import {
   buildDspCreativeExperimentRefreshUrl,
   buildDspCreativePreviewUrl,
   buildDspCreativeRetryUrl,
+  buildDspH3UpgradeUrl,
+  buildDspH3UpgradeActionUrl,
   sanitizeDspCreativeAutoRefreshStatus,
   validateDspCreativeIdentifier
 } from '../utils/dspCreativeLibrary.js'
@@ -164,6 +166,21 @@ export const listDspCreativeJobs = (filters = {}, options = {}) => requestJson(
 export const getDspCreativeJob = (jobId, options = {}) => requestJson(
   buildDspCreativeJobUrl(jobId),
   { signal: options.signal }
+)
+
+export const createDspH3Upgrade = (jobId, data = {}, options = {}) => requestJson(
+  buildDspH3UpgradeUrl(jobId),
+  { method: 'POST', data, signal: options.signal }
+)
+
+export const retryDspH3Upgrade = (jobId, upgradeId, data = {}, options = {}) => requestJson(
+  buildDspH3UpgradeActionUrl(jobId, upgradeId, 'retry'),
+  { method: 'POST', data, signal: options.signal }
+)
+
+export const cancelDspH3Upgrade = (jobId, upgradeId, options = {}) => requestJson(
+  buildDspH3UpgradeActionUrl(jobId, upgradeId, 'cancel'),
+  { method: 'POST', data: {}, signal: options.signal }
 )
 
 export const confirmDspCreativeJob = (jobId, data = {}, options = {}) => requestJson(

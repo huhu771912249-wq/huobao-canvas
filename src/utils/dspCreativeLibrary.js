@@ -531,6 +531,19 @@ export const buildDspCreativeExperimentBindingsUrl = (jobId) => (
 export const buildDspCreativeExperimentRefreshUrl = (jobId) => (
   `${buildDspCreativeJobUrl(jobId)}/experiment-refresh`
 )
+export const buildDspH3UpgradeUrl = (jobId) => (
+  `${buildDspCreativeJobUrl(jobId)}/h3-upgrades`
+)
+export const buildDspH3UpgradeActionUrl = (jobId, upgradeId, action) => {
+  const normalizedAction = String(action || '').trim().toLowerCase()
+  if (!['retry', 'cancel'].includes(normalizedAction)) {
+    throw new TypeError('H3 升级操作只支持 retry 或 cancel')
+  }
+  const encodedUpgradeId = encodeURIComponent(
+    validateDspCreativeIdentifier(upgradeId, 'H3 升级标识')
+  )
+  return `${buildDspH3UpgradeUrl(jobId)}/${encodedUpgradeId}/${normalizedAction}`
+}
 export const buildDspCreativeCleanupUrl = () => `${DSP_CREATIVE_API_BASE}/public-assets/cleanup`
 export const buildDspCreativeDeleteUrl = (jobId) => buildDspCreativeJobUrl(jobId)
 
@@ -877,9 +890,50 @@ export const isDspCreativeJobActive = (status) => (
   ACTIVE_JOB_STATUSES.has(String(status || '').toLowerCase())
 )
 
-export const shouldPollDspCreativeJob = (status) => (
-  POLLABLE_JOB_STATUSES.has(String(status || '').toLowerCase())
-)
+export const shouldPollDspCreativeJob = (value) => {
+  const job = value && typeof value === 'object' ? value : null
+  const status = job ? job.status : value
+  if (POLLABLE_JOB_STATUSES.has(String(status || '').toLowerCase())) return true
+  return Array.isArray(job?.h3_upgrades) && job.h3_upgrades.some((upgrade) => (
+    !TERMINAL_JOB_STATUSES.has(String(upgrade?.status || '').toLowerCase())
+  ))
+}
+
+export const getDspH3Eligibility = (job = {}, candidateKey = '') => {
+  const metrics = job?.experiment_metrics
+  if (!metrics || metrics.status !== 'ready') {
+    return { eligible: false, reason: 'A-E 尚未全部达到样本门槛', winner: null }
+  }
+  const group = Array.isArray(metrics.groups)
+    ? metrics.groups.find(item => String(item?.candidate_key || '') === String(candidateKey || ''))
+    : null
+  const winner = group?.winner && typeof group.winner === 'object' ? group.winner : null
+  const minimum = Number(metrics.min_impressions ?? 1000) || 1000
+  if (group?.status !== 'ready' || !winner || Number(winner.impressions || 0) < minimum) {
+    return { eligible: false, reason: `赢家至少需要 ${minimum} 曝光`, winner }
+  }
+  return { eligible: true, reason: '', winner }
+}
+
+export const getDspH3ViewState = (upgrade = {}) => {
+  const status = String(upgrade?.status || '').toLowerCase()
+  const labels = {
+    queued: '等待 H3 队列',
+    cloud_generate: 'MiniMax H3 生成中',
+    downloading: '正在下载 H3 原片',
+    upscaling: 'SeedVR2 AI 超分中',
+    composing: '本地叠加获胜文案',
+    completed: '1080p 获胜视频已完成',
+    failed: 'H3 获胜视频生成失败',
+    cancelled: 'H3 获胜视频已取消'
+  }
+  const progress = Number(upgrade?.progress_percent ?? upgrade?.progressPercent)
+  return {
+    label: labels[status] || '等待 H3 状态',
+    progress: Number.isFinite(progress) ? Math.max(0, Math.min(100, Math.round(progress))) : 0,
+    terminal: TERMINAL_JOB_STATUSES.has(status)
+  }
+}
 
 export const canConfirmDspCreativeJob = (status, busy = false) => (
   !busy && String(status || '').toLowerCase() === 'awaiting_confirmation'
