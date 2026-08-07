@@ -1,170 +1,69 @@
-# AI Canvas
+# 冠希无限画布
 
-一个基于 Vue Flow 的可视化 AI 创作画布，支持文生图、视频生成等 AI 工作流的节点式编排。
-[体验地址](https://marketing.chatfire.site/huobao-canvas/)
+冠希无限画布是基于 Vue 3、Vite 和 Vue Flow 的 AI 素材创作前端。它负责可视化工作流、文生图/视频、小说成片、素材再创作、字幕叠加、视频尺寸处理以及异步任务状态展示；媒体处理和模型调用由独立后端完成。
 
-![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vue.js)
-![Vite](https://img.shields.io/badge/Vite-5.2-646CFF?logo=vite)
-![License](https://img.shields.io/badge/License-MIT-blue)
+配套后端：<https://github.com/huhu771912249-wq/guanxi-canvas-backend>
 
-## 📸 截图
+## 主要入口
 
-### 首页
-![首页](./doc/home.png)
+| 路径 | 用途 |
+| --- | --- |
+| `/huobao-canvas/` | 首页与项目入口 |
+| `/huobao-canvas/canvas/:id?` | Vue Flow 无限画布 |
+| `/huobao-canvas/video-studio` | 视频创作中心 |
+| `/huobao-canvas/video-resize` | 多尺寸视频处理 |
+| `/huobao-canvas/login` | 会话登录 |
 
-### 画布
-![画布](./doc/canvas.png)
+## 快速开始
 
-### API 配置
-![API 配置](./doc/api-config.png)
-
-## ✨ 特性
-
-- 🎨 **可视化节点编排** - 基于 Vue Flow 的无限画布，支持拖拽、缩放、连接
-- 🖼️ **文生图工作流** - 支持配置提示词、模型、尺寸等参数生成图片
-- 🎬 **视频生成工作流** - 支持图生视频，可设置首帧/尾帧图片
-- 🤖 **AI 提示词润色** - 一键 AI 优化提示词，提升生成质量
-- 🌓 **深色/浅色主题** - 支持主题切换，保护眼睛
-- 💾 **本地项目存储** - 项目数据本地持久化，支持多项目管理
-- ↩️ **撤销/重做** - 完整的操作历史记录
-
-## 📦 节点类型
-
-| 节点 | 描述 |
-|------|------|
-| **文本节点** | 输入/编辑提示词文本 |
-| **文生图配置** | 配置图片生成参数（模型、尺寸、数量等） |
-| **图片节点** | 展示生成的图片或上传本地图片 |
-| **视频生成配置** | 配置视频生成参数（支持首帧/尾帧图片） |
-| **视频节点** | 展示生成的视频 |
-
-## 🚀 快速开始
-
-### 环境要求
-
-- Node.js >= 18
-- pnpm / npm / yarn
-
-### 安装
+要求 Node.js 22 和 pnpm 10。
 
 ```bash
-# 克隆项目
-git clone https://github.com/chatfire-AI/huobao-canvas.git
-cd huobao-canvas
-
-# 安装依赖
-pnpm install
-# 或
-npm install
-
-# 启动开发服务器
+corepack enable
+pnpm install --frozen-lockfile
 pnpm dev
-# 或
-npm run dev
 ```
 
-### 构建
+默认开发代理把 `/auth`、`/v1` 和 `/public-assets` 转发至本地后端。代理目标仅用于本地联调，不是生产配置。
+
+质量检查：
 
 ```bash
+pnpm test
 pnpm build
-# 或
-npm run build
 ```
 
-## ⚙️ 配置
+治理分支会增加统一的 `pnpm lint` 与 `pnpm ci` 命令。
 
-首次使用需要配置 API：
+## 文档
 
-1. 点击右上角设置图标 ⚙️
-2. 填入 API Base URL 和 API Key
-3. 选择需要使用的模型
+- [系统架构](./ARCHITECTURE.md)
+- [本地开发](./DEVELOPMENT.md)
+- [前端 API 契约](./API.md)
+- [部署](./DEPLOYMENT.md)
+- [运维](./OPERATIONS.md)
+- [回滚](./ROLLBACK.md)
+- [安全](./SECURITY.md)
+- [贡献规范](./CONTRIBUTING.md)
+- [变更记录](./CHANGELOG.md)
+- [Agent 规则](./AGENTS.md)
 
-支持 OpenAI 兼容的 API 接口。
+## 仓库边界
 
-## 🛠️ 技术栈
+- 本仓库只存放可公开审查的前端源码、测试、无秘密配置示例和文档。
+- API 服务、任务队列、媒体处理、ComfyUI、FFmpeg、FRW 和 SCAIL2 属于后端仓库。
+- 密钥、Cookie、Token、运行状态、用户素材、生成媒体和模型文件禁止提交。
+- 测试通过、部署完成和业务验收是不同证据，不能相互替代。
 
-- **框架**: [Vue 3](https://vuejs.org/) + [Vite](https://vitejs.dev/)
-- **画布**: [Vue Flow](https://vueflow.dev/)
-- **UI 组件**: [Naive UI](https://www.naiveui.com/)
-- **样式**: [Tailwind CSS](https://tailwindcss.com/)
-- **图标**: [@vicons/ionicons5](https://www.xicons.org/)
-- **路由**: [Vue Router](https://router.vuejs.org/)
+## 公开属性
 
-## 📁 项目结构
+本仓库是公开上游项目的 Public Fork。浏览器收到的代码和配置必须按公开信息设计。当前仓库未跟踪许可证文件，因此历史 README 中的许可证徽章不作为许可结论；发布或再分发前需完成上游许可证核对。
 
-```
-src/
-├── api/          # API 请求封装
-├── assets/       # 静态资源
-├── components/   # 组件
-│   ├── nodes/    # 节点组件
-│   └── edges/    # 边组件
-├── hooks/        # 组合式函数
-├── router/       # 路由配置
-├── stores/       # 状态管理
-├── utils/        # 工具函数
-└── views/        # 页面视图
-```
+## 分支与发布
 
-## 🔄 自动执行工作流
+- `main`：经过 Review 和 CI 的稳定基线。
+- `feature/*`、`fix/*`、`chore/*`、`docs/*`：短期工作分支。
+- 提交采用 Conventional Commits。
+- Release 使用 `vMAJOR.MINOR.PATCH`，并记录前端、后端 Commit SHA。
 
-开启「自动执行」模式后，系统会通过 AI 分析用户意图，自动编排并执行工作流。
-
-### 工作流类型
-
-| 类型 | 触发条件 | 说明 |
-|------|---------|------|
-| `text_to_image` | 默认 | 文生图工作流 |
-| `text_to_image_to_video` | 包含"视频"、"动画"等关键词 | 文生图生视频工作流 |
-| `storyboard` | 包含"分镜"、"场景"、"镜头"等关键词 | 分镜工作流 |
-
-### 工作流 1: 文生图 / 文生图生视频
-
-![工作流架构](./doc/workflow.png)
-
-### 工作流 2: 分镜工作流 (Storyboard)
-
-![分镜工作流](./doc/workflow2.png)
-
-**示例输入:** `蜡笔小新去上学。分镜一：清晨的战争；分镜二：出发的风姿`
-
-**AI 解析:**
-- 提取角色: 蜡笔小新 (外观描述)
-- 拆分分镜: 清晨的战争、出发的风姿
-
-**执行流程:**
-1. 生成角色参考图
-2. 依次生成各分镜图片 (连接角色参考图保持一致性)
-
-### 执行流程
-
-1. **AI 意图分析** - 分析用户输入，判断工作流类型，生成优化后的提示词
-2. **创建节点** - 按顺序创建文本节点和配置节点
-3. **串行执行** - 配置节点自动执行，等待上一步完成后再执行下一步
-4. **输出结果** - 生成图片/视频节点展示结果
-
-### 核心组件
-
-- `useWorkflowOrchestrator` - 工作流编排器 Hook
-- `waitForConfigComplete` - 等待配置节点完成
-- `waitForOutputReady` - 等待输出节点就绪
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
-3. 提交更改 (`git commit -m 'Add amazing feature'`)
-4. 推送到分支 (`git push origin feature/amazing-feature`)
-5. 提交 Pull Request
-
-## 联系我
-
-扫码添加微信交流：
-
-<img src="./doc/wx-group.jpg" width="200" alt="微信二维码" />
-
-## 📄 License
-
-[MIT](./LICENSE)
+详细规则见 [CONTRIBUTING.md](./CONTRIBUTING.md) 和 [DEPLOYMENT.md](./DEPLOYMENT.md)。
