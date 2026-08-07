@@ -15,10 +15,12 @@ const videoNode = read('../src/components/nodes/VideoConfigNode.vue')
 const materialNode = read('../src/components/nodes/MaterialVariationNode.vue')
 const videoApiHook = read('../src/hooks/useApi.js')
 
-for (const [name, source] of [['studio', studio], ['videoNode', videoNode], ['materialNode', materialNode]]) {
-  assert.match(source, /快速导出/, `${name} must expose fast mode`)
-  assert.match(source, /高质量 1080p/, `${name} must expose quality mode`)
+for (const [name, source] of [['studio', studio], ['videoNode', videoNode]]) {
+  assert.doesNotMatch(source, /快速导出/, `${name} must not let video delivery bypass SeedVR2`)
+  assert.match(source, /SeedVR2 AI 超分/, `${name} must expose mandatory AI upscale`)
 }
+assert.match(materialNode, /快速导出/)
+assert.match(materialNode, /高质量 1080p/)
 assert.match(studio, /getVideoQualityProfile/)
 assert.match(videoNode, /getVideoQualityProfile/)
 assert.match(materialNode, /buildQualityProfilesBySize/)

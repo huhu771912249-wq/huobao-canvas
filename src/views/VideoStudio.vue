@@ -60,10 +60,6 @@ const selectedVideoModel = ref('minimax-h3')
 const outputWidth = ref(1280)
 const outputHeight = ref(720)
 const qualityMode = ref('quality')
-const qualityOptions = [
-  { mode: 'quality', label: '高质量 1080p', description: '模型原生生成后使用 AI 超分；以实际返回尺寸为准' },
-  { mode: 'fast', label: '快速导出', description: '保留原生分辨率，速度更快' }
-]
 const parsedDocument = ref(null); const parsingDocument = ref(false); const documentError = ref('')
 const NOVEL_TEXT_LIMIT = 200000
 const novelText = ref('')
