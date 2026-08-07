@@ -86,9 +86,10 @@
         </div>
 
         <template v-if="localModel === 'minimax-h3'">
-          <MultiViewReferencePanel @confirmed="handleMultiViewConfirmed" />
+          <MultiViewReferencePanel :source-image="connectedFirstFrameSource" @confirmed="handleMultiViewConfirmed" />
           <H3DirectorPromptEditor
             :references="confirmedMultiViewReference ? [{ id: confirmedMultiViewReference.id, role: confirmedMultiViewReference.role }] : []"
+            :source-prompt="connectedPrompt"
             @update:prompt="compiledDirectorPrompt = $event"
             @update:plan="directorPlan = $event"
           />
@@ -399,6 +400,10 @@ const isLocalCloudModel = computed(() => ['minimax-h3', 'ltx-2.3'].includes(loca
 const inputCapabilities = computed(() => getVideoInputCapabilities(localModel.value))
 const isBatchCapable = computed(() => supportsVideoBatch(localModel.value))
 const scail2ReferenceInput = computed(() => {
+  const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
+  return image ? pickVideoImageInput(image) : ''
+})
+const connectedFirstFrameSource = computed(() => {
   const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
   return image ? pickVideoImageInput(image) : ''
 })

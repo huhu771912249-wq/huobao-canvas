@@ -48,4 +48,16 @@ assert.match(canvas, /executeWorkflow\(directorPlan\.value/)
 assert.doesNotMatch(canvas, /使用默认文生图工作流/)
 assert.doesNotMatch(canvas, /gpt-4o-mini/)
 
+const videoConfig = readFileSync(new URL('../src/components/nodes/VideoConfigNode.vue', import.meta.url), 'utf8')
+const multiView = readFileSync(new URL('../src/components/video/MultiViewReferencePanel.vue', import.meta.url), 'utf8')
+const directorEditor = readFileSync(new URL('../src/components/video/H3DirectorPromptEditor.vue', import.meta.url), 'utf8')
+assert.match(videoConfig, /:source-image="connectedFirstFrameSource"/)
+assert.match(videoConfig, /:source-prompt="connectedPrompt"/)
+assert.match(multiView, /watch\(\(\) => props\.sourceImage/)
+assert.match(directorEditor, /AI 生成六段式 H3 导演提示词/)
+assert.match(directorEditor, /chatCompletions/)
+for (const field of ['subject_definitions', 'summary', 'retention_analysis', 'detailed_description', 'overall_soundscape', 'non_diegetic_music']) {
+  assert.match(directorEditor, new RegExp(field))
+}
+
 console.log('h3DirectorWiring.test.mjs passed')

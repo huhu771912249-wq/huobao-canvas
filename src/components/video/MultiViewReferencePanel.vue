@@ -1,12 +1,17 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { generateImage } from '../../api/image.js'
 
+const props = defineProps({ sourceImage: { type: String, default: '' } })
 const emit = defineEmits(['confirmed'])
 const source = ref('')
 const generated = ref('')
 const loading = ref(false)
 const error = ref('')
+
+watch(() => props.sourceImage, (value) => {
+  if (!source.value && value) source.value = value
+}, { immediate: true })
 
 function readFile(file) {
   return new Promise((resolve, reject) => {
@@ -48,7 +53,7 @@ async function createMultiView() {
 <template>
   <section class="space-y-2 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3">
     <div><b class="text-xs text-[var(--text-primary)]">AI 多视图参考</b><p class="text-[10px] text-[var(--text-secondary)]">先生成正面、侧面、背面、全身参考板，审核后再交给 H3。</p></div>
-    <label class="block cursor-pointer rounded-lg border border-dashed border-cyan-400/40 p-2 text-center text-xs text-cyan-300">上传人物/产品主参考<input type="file" accept="image/*" class="hidden" @change="selectSource" /></label>
+    <label class="block cursor-pointer rounded-lg border border-dashed border-cyan-400/40 p-2 text-center text-xs text-cyan-300">{{ source ? '更换人物/产品主参考' : '上传人物/产品主参考' }}<input type="file" accept="image/*" class="hidden" @change="selectSource" /></label>
     <img v-if="source" :src="source" class="max-h-32 w-full rounded-lg object-contain" alt="原始参考" />
     <button type="button" :disabled="!source || loading" class="w-full rounded-lg bg-cyan-400 px-2 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40" @click="createMultiView">{{ loading ? 'AI 正在生成多视图…' : '生成多视图参考板' }}</button>
     <div v-if="error" role="alert" class="text-[10px] text-red-400">{{ error }}</div>
