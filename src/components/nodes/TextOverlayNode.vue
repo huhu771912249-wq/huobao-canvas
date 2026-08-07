@@ -27,10 +27,7 @@
             <input class="hidden" type="file" accept="video/mp4,video/quicktime,video/webm" @change="handleVideoUpload" />
           </label>
           <div v-if="overlayVideoFile" class="truncate text-[10px] text-[var(--text-secondary)]">已选：{{ overlayVideoFile.name }}</div>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" class="rounded-lg border p-2 text-xs" :class="videoRatio === '16:9' ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300' : 'border-[var(--border-color)]'" @click="videoRatio = '16:9'">1920×1080 横屏</button>
-            <button type="button" class="rounded-lg border p-2 text-xs" :class="videoRatio === '9:16' ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300' : 'border-[var(--border-color)]'" @click="videoRatio = '9:16'">1080×1920 竖屏</button>
-          </div>
+          <VideoOutputSizePicker v-model:output-width="outputWidth" v-model:output-height="outputHeight" compact />
           <textarea v-model="subtitleTimeline" rows="4" class="w-full resize-y rounded-lg border border-[var(--border-color)] bg-[var(--bg-tertiary)] p-2 text-xs text-[var(--text-primary)]" placeholder="0-2 | 第一条字幕&#10;2-5 | 第二条字幕" />
           <div class="text-[10px] text-[var(--text-secondary)]">格式示例：0-2 | 第一条字幕；每行一条，可精确到 0.1 秒。</div>
           <button type="button" class="w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40" :disabled="videoRendering || !overlayVideoFile || !subtitleTimeline.trim()" @click="handleVideoRender">
@@ -144,6 +141,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
 import { CopyOutline, ImageOutline, TextOutline, TrashOutline } from '@vicons/ionicons5'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import VideoOutputSizePicker from '../VideoOutputSizePicker.vue'
 import { addEdge, addNode, duplicateNode, edges, nodes, removeNode, updateNode } from '../../stores/canvas'
 import { DEFAULT_IMAGE_MODEL, DEFAULT_IMAGE_SIZE } from '../../config/models'
 import request from '../../utils/request'
@@ -163,7 +161,8 @@ const isRendering = ref(false)
 const lastError = ref('')
 const overlayVideoFile = ref(null)
 const subtitleTimeline = ref(props.data?.subtitleTimeline || '')
-const videoRatio = ref(props.data?.videoRatio || '16:9')
+const outputWidth = ref(Number(props.data?.outputWidth || 1920))
+const outputHeight = ref(Number(props.data?.outputHeight || 1080))
 const videoRendering = ref(false)
 const videoError = ref('')
 const videoOutputUrl = ref(props.data?.videoOutputUrl || '')
@@ -223,7 +222,12 @@ const handleVideoRender = async () => {
   try {
     const segments = parseSubtitleTimeline(subtitleTimeline.value)
     const video = await readFileAsDataUrl(overlayVideoFile.value)
-    const result = await createVideoTextOverlay({ video, ratio: videoRatio.value, segments })
+    const result = await createVideoTextOverlay({
+      video,
+      output_width: outputWidth.value,
+      output_height: outputHeight.value,
+      segments
+    })
     videoOutputUrl.value = result.output_url
     const currentNode = nodes.value.find(node => node.id === props.id)
     const existingOutput = nodes.value.find(node => node.id === videoOutputNodeId.value)
@@ -248,7 +252,8 @@ const handleVideoRender = async () => {
     }
     updateNode(props.id, {
       subtitleTimeline: subtitleTimeline.value,
-      videoRatio: videoRatio.value,
+      outputWidth: outputWidth.value,
+      outputHeight: outputHeight.value,
       videoOutputUrl: videoOutputUrl.value,
       videoOutputNodeId: nextOutputId
     })

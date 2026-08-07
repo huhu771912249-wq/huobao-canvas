@@ -125,6 +125,7 @@
         </div>
 
         <!-- Aspect ratio selector | 宽高比选择 -->
+        <VideoOutputSizePicker v-model:output-width="outputWidth" v-model:output-height="outputHeight" compact />
         <div v-if="!isBatchCapable" class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">比例</span>
           <select data-testid="video-ratio-select" :value="localRatio" class="nodrag nowheel rounded-md border border-[var(--border-color)] bg-[var(--bg-tertiary)] px-2 py-1 text-sm text-[var(--text-primary)]" @change="handleRatioSelect($event.target.value)">
@@ -260,6 +261,7 @@ import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
 import { createMediaComposition } from '../../api/mediaComposition'
 import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import VideoOutputSizePicker from '../VideoOutputSizePicker.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
 import {
@@ -294,6 +296,8 @@ const showHandleMenu = ref(false)
 const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
+const outputWidth = ref(Number(props.data?.outputWidth || 1920))
+const outputHeight = ref(Number(props.data?.outputHeight || 1080))
 const localDuration = ref(props.data?.dur || 5)
 const localQualityMode = ref(props.data?.qualityMode === 'fast' ? 'fast' : 'quality')
 const qualityResult = ref(props.data?.qualityResult || {})
@@ -877,7 +881,9 @@ const handleGenerate = async () => {
     const params = {
       model: localModel.value,
       quality_profile: qualityProfile.value,
-      image_alignment: imageAlignment.value
+      image_alignment: imageAlignment.value,
+      output_width: outputWidth.value,
+      output_height: outputHeight.value
     }
 
     // Add prompt if provided | 如果有提示词则添加

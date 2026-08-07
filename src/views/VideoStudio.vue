@@ -20,7 +20,7 @@
           </div>
           <div class="rounded-2xl border border-slate-700 bg-slate-900/50 p-4"><h2 class="font-semibold">生成结果与历史</h2><p class="mt-2 text-sm text-slate-400">结果将在这里预览、下载、重试、保存到素材库或送入无限画布。</p></div>
         </div>
-        <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 class="font-semibold">智能设置</h2><div class="mt-4"><div class="mb-2 text-xs text-slate-400">清晰度</div><button v-for="option in qualityOptions" :key="option.mode" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="qualityMode === option.mode ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="qualityMode = option.mode"><b>{{ option.label }}</b><div class="mt-1 text-xs text-slate-400">{{ option.description }}</div></button></div><div v-if="selectedMode === 'image-to-video'" class="mt-4"><div class="mb-2 text-xs text-slate-400">云端视频模型</div><button v-for="model in cloudVideoModels" :key="model.key" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedVideoModel === model.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedVideoModel = model.key"><b>{{ model.label }}</b><div class="mt-1 text-xs text-slate-400">{{ model.description }}</div></button></div><div class="mt-4 space-y-2"><div class="text-xs text-slate-400">画面比例与首帧尺寸</div><button v-for="size in sizes" :key="size.key" class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === size.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = size.key">{{ size.label }}</button><button class="w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedSize === 'custom' ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedSize = 'custom'">自定义尺寸</button><div v-if="selectedSize === 'custom'" class="grid grid-cols-2 gap-2"><input v-model.number="customWidth" class="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm" placeholder="宽" /><input v-model.number="customHeight" class="rounded-lg border border-slate-700 bg-slate-950 p-2 text-sm" placeholder="高" /><div class="col-span-2 text-xs" :class="customSizeError ? 'text-red-300' : 'text-cyan-300'">{{ customSizeError || customSizeLabel }}</div></div></div><div class="mt-4 rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-xs text-emerald-200"><b>{{ qualityProfile.label }}</b><div class="mt-1 text-slate-400">{{ qualityMode === 'quality' ? `AI 超分目标 ${qualityProfile.width}×${qualityProfile.height}；只有后端确认完成才标记 1080p。` : '保留模型原生尺寸，不执行 AI 超分。' }}</div></div></aside>
+        <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 class="font-semibold">智能设置</h2><div class="mt-4"><div class="mb-2 text-xs text-slate-400">清晰度</div><div class="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-sm text-emerald-200"><b>SeedVR2 AI 超分</b><div class="mt-1 text-xs text-slate-400">所有视频成品强制经过 AI 超分，失败时明确报错，不静默降级。</div></div></div><div v-if="selectedMode === 'image-to-video'" class="mt-4"><div class="mb-2 text-xs text-slate-400">云端视频模型</div><button v-for="model in cloudVideoModels" :key="model.key" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedVideoModel === model.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedVideoModel = model.key"><b>{{ model.label }}</b><div class="mt-1 text-xs text-slate-400">{{ model.description }}</div></button></div><VideoOutputSizePicker class="mt-4" v-model:output-width="outputWidth" v-model:output-height="outputHeight" /></aside>
       </div>
       <div v-else-if="activeTab === 'novel'" class="space-y-5">
         <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
@@ -49,6 +49,7 @@ import { buildStudioCanvas } from '../config/studioProjectFlow'
 import { getVideoQualityProfile } from '../utils/videoQualityProfile'
 import { createProject, updateProject } from '../stores/projects'
 import NovelVideoWorkspace from '../components/studio/NovelVideoWorkspace.vue'
+import VideoOutputSizePicker from '../components/VideoOutputSizePicker.vue'
 
 const route = useRoute(); const router = useRouter()
 const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
@@ -56,6 +57,8 @@ const modes = [{ key: 'text-to-image', title: '文生图', description: '提示�
 const activeTab = ref(String(route.query.tab || 'quick')); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1280x720'); const sizes = COMMON_VIDEO_SIZES
 const cloudVideoModels = [{ key: 'minimax-h3', label: 'MiniMax H3', description: '默认｜人物与原生音频视频' }, { key: 'ltx-2.3', label: 'LTX 2.3', description: '开放版｜内置 2× 空间放大' }]
 const selectedVideoModel = ref('minimax-h3')
+const outputWidth = ref(1280)
+const outputHeight = ref(720)
 const qualityMode = ref('quality')
 const qualityOptions = [
   { mode: 'quality', label: '高质量 1080p', description: '模型原生生成后使用 AI 超分；以实际返回尺寸为准' },
