@@ -553,7 +553,72 @@ git add material_generation_api.py dsp_h3_upgrade.py test_dsp_h3_upgrade.py test
 git commit -m "feat: preserve 54DSP H3 target dimensions"
 ```
 
-### Task 8: Full verification, deployment, and real-media acceptance
+### Task 8: AI multi-view reference board and H3 director prompt compiler
+
+**Files:**
+- Create: `src/utils/h3DirectorPrompt.js`
+- Create: `src/components/video/H3DirectorPromptEditor.vue`
+- Create: `src/components/video/MultiViewReferencePanel.vue`
+- Modify: `src/components/nodes/VideoConfigNode.vue`
+- Create: `tests/h3DirectorPrompt.test.mjs`
+- Modify: `material_generation_api.py`
+- Create: `h3_director_prompt.py`
+- Create: `test_h3_director_prompt.py`
+
+- [ ] **Step 1: Write failing frontend prompt-compiler tests**
+
+```js
+const plan = normalizeH3DirectorPrompt({
+  references: [{ id: '图1', role: '人脸身份' }, { id: '图2', role: '服装一致性' }],
+  subject_definitions: '@图1 主体；@图2 服装',
+  summary: '9:16 竖屏，人物沿走廊前进',
+  retention_analysis: { required: ['人脸', '服装'], flexible: ['机位'] },
+  detailed_description: [{ start: 0, end: 2, action: '人物前进', camera: '[Tracking shot]' }],
+  overall_soundscape: '脚步声与环境底噪',
+  non_diegetic_music: '温暖舒缓'
+})
+assert.match(compileH3DirectorPrompt(plan), /@图1/)
+assert.match(compileH3DirectorPrompt(plan), /\[Tracking shot\]/)
+assert.ok(compileH3DirectorPrompt(plan).length <= 2000)
+assert.throws(() => normalizeH3DirectorPrompt({ subject_definitions: '@图3 不存在' }))
+```
+
+- [ ] **Step 2: Implement a precision-first director schema and editable UI**
+
+The editor must expose all six sections, reference-role bindings, required/flexible retention constraints, and timed shot rows. It emits both the structured plan and compiled prompt; locked fields survive AI re-analysis.
+
+- [ ] **Step 3: Add the multi-view reference panel**
+
+The panel uploads one or more source images, calls the existing vision/image-generation boundary to produce a reviewable front/side/back/full-body or product-equivalent sheet, assigns stable `图1...图N` identifiers, and never starts H3 generation before user confirmation.
+
+- [ ] **Step 4: Write and implement backend validation**
+
+```python
+def test_compiler_rejects_missing_reference_and_limits_prompt(self):
+    with self.assertRaises(ValueError):
+        compile_h3_director_prompt({'references': [], 'subject_definitions': '@图1 主体'})
+    compiled = compile_h3_director_prompt(valid_plan())
+    self.assertLessEqual(len(compiled), 2000)
+    self.assertIn('[Tracking shot]', compiled)
+```
+
+The API stores the structured plan and compiled prompt separately, validates referenced IDs, rejects overlapping/negative shot times, limits combined camera commands to three, and submits only the compiled prompt to H3.
+
+- [ ] **Step 5: Run focused tests and commit**
+
+```bash
+node tests/h3DirectorPrompt.test.mjs
+python3 -m unittest test_h3_director_prompt.py -v
+git add src/utils/h3DirectorPrompt.js src/components/video/H3DirectorPromptEditor.vue src/components/video/MultiViewReferencePanel.vue src/components/nodes/VideoConfigNode.vue tests/h3DirectorPrompt.test.mjs
+git commit -m "feat: add H3 multi-view director workflow"
+```
+
+```bash
+git add material_generation_api.py h3_director_prompt.py test_h3_director_prompt.py
+git commit -m "feat: validate structured H3 director prompts"
+```
+
+### Task 9: Full verification, deployment, and real-media acceptance
 
 **Files:**
 - Modify: `docs/superpowers/evidence/dsp-h3-winner-upgrade/2026-08-07-live-acceptance.md`
@@ -622,6 +687,6 @@ git commit -m "test: verify global SeedVR2 video delivery"
 
 ## Self-review result
 
-- Spec coverage: every entry point, exact-size validation, legacy migration, mandatory SeedVR2, `upscaling` status, retry persistence, text overlay, DSP isolation, deployment, and four real outputs map to Tasks 1–8.
+- Spec coverage: every entry point, exact-size validation, legacy migration, mandatory SeedVR2, `upscaling` status, retry persistence, text overlay, DSP isolation, multi-view references, structured H3 prompts, deployment, and four real outputs map to Tasks 1–9.
 - Placeholder scan: no deferred implementation markers are present.
 - Type consistency: frontend uses `output_width` / `output_height`; backend stores `requested_width` / `requested_height` and reports separate `actual_width` / `actual_height`; DSP image/GIF keeps `dimensions` separate from its H3 video target.
