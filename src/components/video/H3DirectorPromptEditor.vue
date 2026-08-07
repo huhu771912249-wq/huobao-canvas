@@ -21,6 +21,8 @@ const plan = reactive({
 const aiLoading = ref(false)
 const aiError = ref('')
 const error = computed(() => {
+  const hasContent = plan.subject_definitions || plan.summary || plan.detailed_description.some(item => item.action)
+  if (!hasContent) return ''
   try { compileH3DirectorPrompt(toPlan()); return '' } catch (reason) { return reason.message }
 })
 
@@ -51,11 +53,11 @@ function extractJson(content) {
 }
 
 async function generateDirectorPlan() {
-  if (!props.sourcePrompt.trim() || aiLoading.value) return
+  if (!props.sourcePrompt.trim() || !props.references.length || aiLoading.value) return
   aiLoading.value = true
   aiError.value = ''
   try {
-    const referenceNames = props.references.map(item => `@${item.id} ${item.role}`).join('；') || '@图1 主体多视图'
+    const referenceNames = props.references.map(item => `@${item.id} ${item.role}`).join('；')
     let response = ''
     for await (const chunk of streamChatCompletions({
       model: 'gemma4-31b-heretic',
@@ -91,7 +93,8 @@ watch([plan, () => props.references], () => {
 <template>
   <section class="space-y-2 rounded-xl border border-violet-400/25 bg-violet-400/5 p-3">
     <div><b class="text-xs text-[var(--text-primary)]">冠希 H3 导演提示模板</b><p class="text-[10px] text-[var(--text-secondary)]">结构化编辑，提交时编译成 H3 普通提示词。</p></div>
-    <button type="button" :disabled="!sourcePrompt.trim() || aiLoading" class="w-full rounded-lg border border-violet-400 bg-violet-400/10 px-2 py-2 text-xs font-semibold text-violet-300 disabled:opacity-40" @click="generateDirectorPlan">{{ aiLoading ? 'AI 正在识图并编写导演稿…' : 'AI 生成六段式 H3 导演提示词' }}</button>
+    <button type="button" :disabled="!sourcePrompt.trim() || !references.length || aiLoading" class="w-full rounded-lg border border-violet-400 bg-violet-400/10 px-2 py-2 text-xs font-semibold text-violet-300 disabled:opacity-40" @click="generateDirectorPlan">{{ aiLoading ? 'AI 正在识图并编写导演稿…' : 'AI 生成六段式 H3 导演提示词' }}</button>
+    <p v-if="!references.length" class="text-[10px] text-amber-300">请先生成并确认上方多视图参考板，再由 AI 按 @图1 编写导演稿。</p>
     <div v-if="aiError" role="alert" class="text-[10px] text-red-400">{{ aiError }}</div>
     <textarea v-model="plan.subject_definitions" rows="2" class="field" placeholder="subject_definitions：@图1 保持人脸；@图2 保持服装" />
     <textarea v-model="plan.summary" rows="2" class="field" placeholder="summary：比例、场景、主体动作、风格" />

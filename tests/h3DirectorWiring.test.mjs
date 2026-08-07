@@ -55,6 +55,8 @@ assert.match(videoConfig, /:source-image="connectedFirstFrameSource"/)
 assert.match(videoConfig, /:source-prompt="connectedPrompt"/)
 assert.match(multiView, /watch\(\(\) => props\.sourceImage/)
 assert.match(directorEditor, /AI 生成六段式 H3 导演提示词/)
+assert.match(directorEditor, /请先生成并确认上方多视图参考板/)
+assert.match(directorEditor, /!references\.length/)
 assert.match(directorEditor, /streamChatCompletions/)
 assert.match(directorEditor, /endpoint: '\/v1\/chat\/completions'/)
 for (const field of ['subject_definitions', 'summary', 'retention_analysis', 'detailed_description', 'overall_soundscape', 'non_diegetic_music']) {
