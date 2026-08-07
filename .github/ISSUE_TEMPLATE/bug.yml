@@ -1,0 +1,24 @@
+name: Bug 报告
+description: 提交可复现且不含敏感信息的问题
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题概述
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: 安全确认
+      options:
+        - label: 未附带 Token、Cookie、密码或用户素材
+          required: true
