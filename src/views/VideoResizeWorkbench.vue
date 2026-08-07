@@ -13,7 +13,13 @@
           <div class="step">01 · 导入素材</div>
           <div class="mt-3 grid grid-cols-2 gap-2"><button class="toggle" :class="sourceMode === 'url' && 'active'" @click="sourceMode='url'">公开 FB / Instagram 链接</button><button class="toggle" :class="sourceMode === 'file' && 'active'" @click="sourceMode='file'">上传 MP4 / MOV / WebM</button></div>
           <input v-if="sourceMode==='url'" v-model.trim="sourceUrl" class="field mt-3" placeholder="https://www.instagram.com/reel/..." />
-          <label v-else class="mt-3 flex cursor-pointer flex-col items-center rounded-xl border border-dashed border-cyan-700/60 bg-cyan-950/20 p-6 text-center"><span class="text-2xl">↥</span><b>{{ file?.name || '选择本地视频' }}</b><small class="mt-1 text-slate-400">最大 90MB</small><input class="hidden" type="file" accept="video/mp4,video/quicktime,video/webm" @change="selectFile" /></label>
+          <div v-else>
+            <button type="button" class="mt-3 flex w-full cursor-pointer flex-col items-center rounded-xl border border-dashed p-6 text-center transition" :class="dragActive ? 'border-cyan-300 bg-cyan-400/15' : 'border-cyan-700/60 bg-cyan-950/20'" @click="openFilePicker" @dragenter.prevent="dragActive=true" @dragover.prevent @dragleave.prevent="dragActive=false" @drop.prevent="handleDrop">
+              <span class="text-2xl">↥</span><b>{{ file?.name || '点击选择或拖入视频' }}</b><small class="mt-1 text-slate-400">MP4 / MOV / WebM · 最大 90MB</small>
+            </button>
+            <input ref="fileInput" class="hidden" type="file" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" @change="selectFile" />
+            <div v-if="file" class="mt-2 flex items-center justify-between rounded-lg bg-emerald-400/10 px-3 py-2 text-xs text-emerald-300"><span>已选择：{{ file.name }}</span><button type="button" class="text-slate-300" @click="clearFile">移除</button></div>
+          </div>
           <p class="mt-3 text-xs text-slate-500">只读取公开页面，不保存账号、Cookie 或登录信息；受限链接会明确失败。</p>
         </section>
 
@@ -53,11 +59,21 @@ import { RESIZE_PRESETS, normalizeResizeTargets, validateSocialVideoUrl } from '
 import { cancelVideoResizeJob, createVideoResizeJob, getVideoResizeJob, handoffVideoResizeJob, retryVideoResizeJob, saveVideoResizeJob } from '../api/videoResize'
 import { createProject, updateProject } from '../stores/projects'
 
-const router = useRouter(); const sourceMode = ref('url'); const sourceUrl = ref(''); const file = ref(null); const fitMode = ref('smart'); const forceAi = ref(false); const overlayText = ref(''); const targets = ref(['720x1280','1080x1920','1080x1080','1280x720','1920x1080']); const outputs = ref(['mp4']); const customWidth = ref(1080); const customHeight = ref(1350); const error = ref(''); const job = ref(null); const submitting = ref(false); let pollTimer = 0
+const router = useRouter(); const sourceMode = ref('url'); const sourceUrl = ref(''); const file = ref(null); const fileInput = ref(null); const dragActive = ref(false); const fitMode = ref('smart'); const forceAi = ref(false); const overlayText = ref(''); const targets = ref(['720x1280','1080x1920','1080x1080','1280x720','1920x1080']); const outputs = ref(['mp4']); const customWidth = ref(1080); const customHeight = ref(1350); const error = ref(''); const job = ref(null); const submitting = ref(false); let pollTimer = 0
 const presetLabels = {'720x1280':'FB/IG 竖版','1080x1920':'Reels / Stories','1080x1080':'社媒方图','1280x720':'常用横版','1920x1080':'Full HD 横版'}
 const presets = RESIZE_PRESETS.map(value=>({value,label:presetLabels[value]})); const fitModes = [{key:'smart',title:'智能主体裁剪',desc:'主体优先；检测不可用时安全居中回退'},{key:'blur',title:'完整保留＋模糊背景',desc:'画面不裁切，空白区域使用模糊背景'},{key:'center',title:'居中裁剪',desc:'固定中心构图，适合主体居中的素材'}]
 const terminal = computed(() => ['completed','failed','cancelled'].includes(job.value?.status))
-const selectFile = event => { file.value = event.target.files?.[0] || null }
+const acceptFile = selected => {
+  error.value = ''
+  if (!selected) return
+  if (!/\.(mp4|mov|webm)$/i.test(selected.name)) { error.value = '只支持 MP4、MOV、WebM 视频'; return }
+  if (selected.size > 90 * 1024 * 1024) { error.value = '视频不能超过 90MB'; return }
+  file.value = selected
+}
+const openFilePicker = () => fileInput.value?.click()
+const selectFile = event => acceptFile(event.target.files?.[0])
+const handleDrop = event => { dragActive.value = false; acceptFile(event.dataTransfer?.files?.[0]) }
+const clearFile = () => { file.value = null; if (fileInput.value) fileInput.value.value = '' }
 const toBase64 = selected => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload=()=>resolve(String(reader.result).split(',')[1]||''); reader.onerror=reject; reader.readAsDataURL(selected) })
 const addCustom = () => { try { const value = `${customWidth.value}x${customHeight.value}`; normalizeResizeTargets([value]); if (!targets.value.includes(value)) targets.value.push(value) } catch (e) { error.value=e.message } }
 const poll = async () => { if (!job.value?.job_id) return; try { job.value = await getVideoResizeJob(job.value.job_id); if (!terminal.value) pollTimer=window.setTimeout(poll,1500) } catch (e) { error.value=e?.response?.data?.error?.message||e.message } }
