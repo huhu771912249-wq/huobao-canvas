@@ -11,11 +11,11 @@ export function buildManifest({ releaseId, frontendSha, backendSha, buildTime })
   }
   if (!releaseId || !buildTime) throw new Error('releaseId and buildTime are required')
   return {
-    schemaVersion: 1,
-    releaseId,
-    frontendSha: frontendSha.toLowerCase(),
-    backendSha: backendSha.toLowerCase(),
-    buildTime
+    schema_version: 1,
+    release_id: releaseId,
+    frontend_commit_sha: frontendSha.toLowerCase(),
+    backend_commit_sha: backendSha.toLowerCase(),
+    build_time: buildTime
   }
 }
 

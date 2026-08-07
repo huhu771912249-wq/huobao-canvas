@@ -1,7 +1,7 @@
 {
-  "schemaVersion": 1,
-  "releaseId": "v1.2.3",
-  "frontendSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  "backendSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-  "buildTime": "2026-08-07T00:00:00Z"
+  "schema_version": 1,
+  "release_id": "v1.2.3",
+  "frontend_commit_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "backend_commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "build_time": "2026-08-07T00:00:00Z"
 }
