@@ -1,8 +1,18 @@
 const CAMERA_COMMAND = /\[([^\]]+)\]/g
 const REFERENCE_TOKEN = /@图\d+/g
 
+function humanText(value) {
+  if (Array.isArray(value)) return value.map(humanText).filter(Boolean).join('；')
+  if (value && typeof value === 'object') {
+    return Object.entries(value).map(([key, item]) => `${key}：${humanText(item)}`).filter(item => !item.endsWith('：')).join('；')
+  }
+  return String(value || '').trim()
+}
+
 function strings(value) {
-  return Array.isArray(value) ? value.map(item => String(item || '').trim()).filter(Boolean) : []
+  if (Array.isArray(value)) return value.map(humanText).filter(Boolean)
+  if (value && typeof value === 'object') return Object.entries(value).map(([key, item]) => `${key}：${humanText(item)}`).filter(item => !item.endsWith('：'))
+  return humanText(value).split(/[，,；;]/).map(item => item.trim()).filter(Boolean)
 }
 
 export function normalizeH3DirectorPrompt(input = {}) {
@@ -10,7 +20,7 @@ export function normalizeH3DirectorPrompt(input = {}) {
     ? input.references.map(item => ({ id: String(item?.id || '').trim(), role: String(item?.role || '').trim() })).filter(item => item.id)
     : []
   const knownReferences = new Set(references.map(item => `@${item.id}`))
-  const subjectDefinitions = String(input.subject_definitions || '').trim()
+  const subjectDefinitions = humanText(input.subject_definitions)
   for (const token of subjectDefinitions.match(REFERENCE_TOKEN) || []) {
     if (!knownReferences.has(token)) throw new TypeError(`${token} 没有对应参考图`)
   }
@@ -38,14 +48,14 @@ export function normalizeH3DirectorPrompt(input = {}) {
   return {
     references,
     subject_definitions: subjectDefinitions,
-    summary: String(input.summary || '').trim(),
+    summary: humanText(input.summary),
     retention_analysis: {
       required: strings(input.retention_analysis?.required),
       flexible: strings(input.retention_analysis?.flexible)
     },
     detailed_description: ordered,
-    overall_soundscape: String(input.overall_soundscape || '').trim(),
-    non_diegetic_music: String(input.non_diegetic_music || '').trim()
+    overall_soundscape: humanText(input.overall_soundscape),
+    non_diegetic_music: humanText(input.non_diegetic_music)
   }
 }
 

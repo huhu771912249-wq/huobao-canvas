@@ -29,6 +29,21 @@ assert.match(compiled, /\[Tracking shot\]/)
 assert.match(compiled, /0-2秒/)
 assert.ok(compiled.length <= 2000)
 
+const objectPlan = normalizeH3DirectorPrompt({
+  references: [{ id: '图1', role: '主体多视图' }],
+  subject_definitions: { '@图1': ['保持同一人物身份', '脸部五官和服装一致'] },
+  summary: { ratio: '9:16', scene: '酒店走廊', action: '人物向前行走' },
+  retention_analysis: { required: { identity: '人物身份', wardrobe: '黑色礼服' }, flexible: '机位，表情' },
+  detailed_description: [{ start: 0, end: 5, action: '人物向前行走', camera: '[Tracking shot]' }],
+  overall_soundscape: ['脚步声', '走廊底噪'],
+  non_diegetic_music: '轻柔爵士'
+})
+assert.match(objectPlan.subject_definitions, /@图1.*人物身份.*服装一致/)
+assert.match(objectPlan.summary, /9:16.*酒店走廊.*人物向前行走/)
+assert.deepEqual(objectPlan.retention_analysis.required, ['identity：人物身份', 'wardrobe：黑色礼服'])
+assert.deepEqual(objectPlan.retention_analysis.flexible, ['机位', '表情'])
+assert.equal(objectPlan.overall_soundscape, '脚步声；走廊底噪')
+
 assert.throws(() => normalizeH3DirectorPrompt({
   references: [],
   subject_definitions: '@图3 保持身份'
