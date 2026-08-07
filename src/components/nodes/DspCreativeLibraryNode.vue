@@ -445,7 +445,7 @@
                   :winner="metricGroup.winner"
                   :upgrade="h3UpgradeFor(metricGroup.candidate_key)"
                   :busy="Boolean(actionBusy)"
-                  @create="handleCreateH3(metricGroup)"
+                  @create="handleCreateH3(metricGroup, $event)"
                   @retry="handleRetryH3(h3UpgradeFor(metricGroup.candidate_key))"
                   @cancel="handleCancelH3(h3UpgradeFor(metricGroup.candidate_key))"
                 />
@@ -1356,13 +1356,15 @@ const newH3IdempotencyKey = (prefix) => (
   `${prefix}-${globalThis.crypto?.randomUUID?.() || Date.now()}`
 )
 
-const handleCreateH3 = async (metricGroup) => {
+const handleCreateH3 = async (metricGroup, outputSize = {}) => {
   if (!currentJobId.value || actionBusy.value || !metricGroup?.candidate_key) return
   actionBusy.value = 'h3-create'
   errorMessage.value = ''
   try {
     applyJob(await createDspH3Upgrade(currentJobId.value, {
       candidate_key: metricGroup.candidate_key,
+      output_width: Number(outputSize.output_width || 1920),
+      output_height: Number(outputSize.output_height || 1080),
       idempotency_key: newH3IdempotencyKey('h3-create')
     }))
     startPolling()

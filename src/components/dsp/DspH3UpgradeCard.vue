@@ -8,7 +8,7 @@
         </div>
       </div>
       <span class="rounded-full border border-cyan-300/30 px-2 py-1 text-[10px] text-cyan-200">
-        5 秒 · 1080p
+        5 秒 · SeedVR2 1080p 级 · {{ outputWidth }}×{{ outputHeight }}
       </span>
     </div>
 
@@ -60,7 +60,8 @@
       <n-card title="确认生成 H3 获胜视频" class="max-w-[520px]" :bordered="false">
         <div class="space-y-3 text-sm text-[var(--text-secondary)]">
           <p>将使用服务端确认的 {{ winner?.variant }} 方案作为参考首帧。</p>
-          <p>输出固定为 5 秒、1920×1080；H3 原片经 SeedVR2 超分，再在本地叠加获胜文案。</p>
+          <VideoOutputSizePicker v-model:output-width="outputWidth" v-model:output-height="outputHeight" />
+          <p>输出为 5 秒、{{ outputWidth }}×{{ outputHeight }}；H3 原片经 SeedVR2 超分，再在本地叠加获胜文案。</p>
           <p class="rounded-lg border border-amber-300/30 bg-amber-300/5 p-3 text-amber-200">
             确认后才会消耗 H3 / SeedVR2 资源。
           </p>
@@ -80,6 +81,7 @@
 import { computed, ref } from 'vue'
 import { NCard, NModal } from 'naive-ui'
 import { getDspH3ViewState } from '../../utils/dspCreativeLibrary.js'
+import VideoOutputSizePicker from '../VideoOutputSizePicker.vue'
 
 const props = defineProps({
   winner: { type: Object, default: null },
@@ -88,12 +90,14 @@ const props = defineProps({
 })
 const emit = defineEmits(['create', 'retry', 'cancel'])
 const showConfirm = ref(false)
+const outputWidth = ref(Number(props.upgrade?.requested_width || 1920))
+const outputHeight = ref(Number(props.upgrade?.requested_height || 1080))
 const viewState = computed(() => getDspH3ViewState(props.upgrade || {}))
 const formatInteger = value => new Intl.NumberFormat('zh-CN').format(Number(value || 0))
 const formatPercent = value => `${Number(value || 0).toFixed(2)}%`
 
 const confirmCreate = () => {
   showConfirm.value = false
-  emit('create')
+  emit('create', { output_width: outputWidth.value, output_height: outputHeight.value })
 }
 </script>

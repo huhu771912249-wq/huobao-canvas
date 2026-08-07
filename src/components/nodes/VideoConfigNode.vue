@@ -47,13 +47,8 @@
 
         <div class="space-y-2 rounded-lg border border-[var(--border-color)] p-2">
           <div class="text-xs text-[var(--text-secondary)]">清晰度</div>
-          <div class="grid grid-cols-2 gap-2">
-            <button type="button" class="rounded-lg border px-2 py-2 text-left text-xs" :class="localQualityMode === 'fast' ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300' : 'border-[var(--border-color)] text-[var(--text-secondary)]'" @click="handleQualitySelect('fast')">
-              <b class="block">快速导出</b><span class="text-[10px]">保留原生分辨率</span>
-            </button>
-            <button type="button" :disabled="Boolean(qualityUnavailableReason)" :title="qualityUnavailableReason" class="rounded-lg border px-2 py-2 text-left text-xs disabled:cursor-not-allowed disabled:opacity-40" :class="localQualityMode === 'quality' ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300' : 'border-[var(--border-color)] text-[var(--text-secondary)]'" @click="handleQualitySelect('quality')">
-              <b class="block">高质量 1080p</b><span class="text-[10px]">SeedVR2 AI 超分</span>
-            </button>
+          <div class="rounded-lg border border-cyan-400 bg-cyan-400/10 px-2 py-2 text-left text-xs text-cyan-300">
+            <b class="block">SeedVR2 AI 超分（强制）</b><span class="text-[10px]">所有视频成品统一超分；失败时不降级发布</span>
           </div>
           <div v-if="qualityUnavailableReason" class="text-[10px] text-amber-400">高质量不可用：{{ qualityUnavailableReason }}</div>
           <div class="grid grid-cols-3 gap-1 text-[10px] text-[var(--text-secondary)]">
@@ -89,6 +84,15 @@
             <a v-if="compositionUrl" :href="compositionUrl" download class="block text-center text-[11px] text-violet-400 hover:underline">下载带音频字幕 MP4</a>
           </div>
         </div>
+
+        <template v-if="localModel === 'minimax-h3'">
+          <MultiViewReferencePanel @confirmed="handleMultiViewConfirmed" />
+          <H3DirectorPromptEditor
+            :references="confirmedMultiViewReference ? [{ id: confirmedMultiViewReference.id, role: confirmedMultiViewReference.role }] : []"
+            @update:prompt="compiledDirectorPrompt = $event"
+            @update:plan="directorPlan = $event"
+          />
+        </template>
 
         <div v-if="isBatchCapable" class="space-y-3 rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3">
           <div class="flex items-center justify-between">
@@ -262,6 +266,8 @@ import { createMediaComposition } from '../../api/mediaComposition'
 import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import VideoOutputSizePicker from '../VideoOutputSizePicker.vue'
+import H3DirectorPromptEditor from '../video/H3DirectorPromptEditor.vue'
+import MultiViewReferencePanel from '../video/MultiViewReferencePanel.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelRatioOptions, getModelDurationOptions, getModelConfig, DEFAULT_VIDEO_MODEL } from '../../stores/models'
 import {
@@ -299,7 +305,7 @@ const localRatio = ref(props.data?.ratio || '16:9')
 const outputWidth = ref(Number(props.data?.outputWidth || 1920))
 const outputHeight = ref(Number(props.data?.outputHeight || 1080))
 const localDuration = ref(props.data?.dur || 5)
-const localQualityMode = ref(props.data?.qualityMode === 'fast' ? 'fast' : 'quality')
+const localQualityMode = ref('quality')
 const qualityResult = ref(props.data?.qualityResult || {})
 const localBatchSizes = ref(normalizeVideoBatchSizes(props.data?.batchSizes || []))
 const localGenerateGif = ref(props.data?.generateGif !== false)
@@ -316,6 +322,15 @@ const subtitleText = ref(props.data?.subtitleText || '')
 const compositionGenerating = ref(false)
 const compositionUrl = ref(props.data?.compositionUrl || '')
 const compositionError = ref('')
+const compiledDirectorPrompt = ref(props.data?.compiledDirectorPrompt || '')
+const directorPlan = ref(props.data?.directorPlan || null)
+const confirmedMultiViewReference = ref(props.data?.confirmedMultiViewReference || null)
+
+const handleMultiViewConfirmed = (reference) => {
+  confirmedMultiViewReference.value = reference
+  updateNode(props.id, { confirmedMultiViewReference: reference })
+  window.$message?.success('多视图已确认，将作为 H3 主参考')
+}
 
 const qualityProfile = computed(() => getVideoQualityProfile(localQualityMode.value, localRatio.value))
 const nativeVideoSize = computed(() => getModelNativeVideoSize(localModel.value, localRatio.value))
@@ -558,10 +573,6 @@ const handleModelSelect = (key) => {
   // Update ratio and duration to model's default | 更新为模型默认比例和时长
   const config = getModelConfig(key)
   const updates = { model: key }
-  if (!['minimax-h3', 'ltx-2.3'].includes(key) && localQualityMode.value === 'quality') {
-    localQualityMode.value = 'fast'
-    updates.qualityMode = 'fast'
-  }
   if (config?.defaultParams?.ratio) {
     localRatio.value = config.defaultParams.ratio
     updates.ratio = config.defaultParams.ratio
@@ -632,7 +643,7 @@ const handleQualitySelect = (mode) => {
     window.$message?.warning(qualityUnavailableReason.value)
     return
   }
-  localQualityMode.value = mode === 'fast' ? 'fast' : 'quality'
+  localQualityMode.value = 'quality'
   updateNode(props.id, {
     qualityMode: localQualityMode.value,
     qualityProfile: qualityProfile.value,
@@ -776,7 +787,13 @@ const handleGenerate = async () => {
   isGenerating.value = true
   activateModelProvider(localModel.value)
 
-  const { prompt, first_frame_image, last_frame_image, images } = getConnectedInputs()
+  let { prompt, first_frame_image, last_frame_image, images } = getConnectedInputs()
+  if (localModel.value === 'minimax-h3' && compiledDirectorPrompt.value) {
+    prompt = compiledDirectorPrompt.value
+  }
+  if (localModel.value === 'minimax-h3' && confirmedMultiViewReference.value?.image && !first_frame_image) {
+    first_frame_image = confirmedMultiViewReference.value.image
+  }
 
   const hasInput = prompt || first_frame_image || last_frame_image || images.length > 0
   if (!hasInput) {
@@ -884,6 +901,9 @@ const handleGenerate = async () => {
       image_alignment: imageAlignment.value,
       output_width: outputWidth.value,
       output_height: outputHeight.value
+    }
+    if (localModel.value === 'minimax-h3' && directorPlan.value) {
+      params.director_plan = directorPlan.value
     }
 
     // Add prompt if provided | 如果有提示词则添加

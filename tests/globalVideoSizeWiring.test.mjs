@@ -17,5 +17,6 @@ for (const path of [
   assert.match(source, /outputWidth/)
   assert.match(source, /outputHeight/)
 }
+assert.doesNotMatch(read('../src/components/nodes/VideoConfigNode.vue'), /handleQualitySelect\('fast'\)/)
 
 console.log('globalVideoSizeWiring.test.mjs passed')
