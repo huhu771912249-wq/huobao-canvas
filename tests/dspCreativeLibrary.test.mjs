@@ -421,6 +421,32 @@ assert.equal(getDspCreativeProgress({ progress: 0.437 }), 44)
 assert.equal(getDspCreativeProgress({ completed_count: 3, total_count: 4 }), 75)
 assert.equal(getDspCreativeProgress({ status: 'completed', progress: 0 }), 100)
 assert.equal(
+  getDspCreativeProgress({
+    status: 'generating',
+    progress_percent: 45,
+    progress: 100
+  }),
+  45,
+  'canonical backend progress must override stale legacy 100%'
+)
+assert.equal(
+  getDspCreativeProgress({
+    status: 'generating',
+    source_count: 2,
+    generations: [
+      { call_key: 'a', status: 'completed' },
+      { call_key: 'b', status: 'submitted' }
+    ]
+  }),
+  45,
+  'legacy jobs must infer FRW progress from terminal calls'
+)
+assert.equal(
+  getDspCreativeProgress({ status: 'completed_with_errors', progress: 0 }),
+  100,
+  'all terminal base jobs must report terminal progress'
+)
+assert.equal(
   getDspCreativeProgress({ progress: { completed_creatives: 3, total_creatives: 4 } }),
   75
 )

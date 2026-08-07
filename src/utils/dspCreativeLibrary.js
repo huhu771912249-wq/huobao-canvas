@@ -748,10 +748,59 @@ export const getDspCreativeJobSearchText = (job = {}) => {
 }
 
 export const getDspCreativeProgress = (job = {}) => {
-  if (String(job.status || '').toLowerCase() === 'completed') return 100
+  const status = String(job.status || '').toLowerCase()
+  if (TERMINAL_JOB_STATUSES.has(status)) return 100
+
+  const canonical = Number(job.progress_percent ?? job.progressPercent)
+  if (Number.isFinite(canonical)) {
+    return Math.max(0, Math.min(99, Math.round(canonical)))
+  }
+
+  if (ACTIVE_JOB_STATUSES.has(status)) {
+    const fixedStageProgress = {
+      queued: 5,
+      downloading: 15,
+      reversing: 30,
+      awaiting_confirmation: 40,
+      packaging: 90
+    }[status]
+    if (Number.isFinite(fixedStageProgress)) return fixedStageProgress
+
+    const sourceCount = Number(job.source_count ?? job.sourceCount)
+    const confirmationCalls = Number(
+      job.confirmation?.expected_calls ?? job.confirmation?.expectedCalls
+    )
+    const planCalls = Array.isArray(job.generation_plan) ? job.generation_plan.length : 0
+    const expected = planCalls > 0
+      ? planCalls
+      : Number.isFinite(confirmationCalls) && confirmationCalls > 0
+        ? confirmationCalls
+        : Number.isFinite(sourceCount) && sourceCount > 0
+          ? sourceCount * 5
+          : 0
+    const finishedKeys = new Set()
+    let anonymousFinished = 0
+    const markFinished = (entry = {}, requireStatus = true) => {
+      const terminal = new Set(['completed', 'partial', 'failed', 'cancelled', 'skipped'])
+      if (requireStatus && !terminal.has(String(entry.status || '').toLowerCase())) return
+      const callKey = String(entry.call_key || entry.callKey || '').trim()
+      if (callKey) finishedKeys.add(callKey)
+      else anonymousFinished += 1
+    }
+    if (Array.isArray(job.generations)) job.generations.forEach(entry => markFinished(entry))
+    if (Array.isArray(job.generation_failures)) {
+      job.generation_failures.forEach(entry => markFinished(entry, false))
+    }
+    const finished = finishedKeys.size + anonymousFinished
+    const inferred = expected > 0
+      ? 40 + Math.round((50 * Math.min(finished, expected)) / expected)
+      : 40
+    return Math.min(90, inferred)
+  }
+
   const raw = Number(job.progress)
   if (Number.isFinite(raw)) {
-      return Math.max(0, Math.min(100, Math.round(raw <= 1 ? raw * 100 : raw)))
+    return Math.max(0, Math.min(99, Math.round(raw <= 1 ? raw * 100 : raw)))
   }
   const nested = (
     (job.progress && typeof job.progress === 'object' ? job.progress : null)
@@ -776,7 +825,7 @@ export const getDspCreativeProgress = (job = {}) => {
     ?? job.totalCount
   )
   if (Number.isFinite(completed) && Number.isFinite(total) && total > 0) {
-    return Math.max(0, Math.min(100, Math.round((completed / total) * 100)))
+    return Math.max(0, Math.min(99, Math.round((completed / total) * 100)))
   }
   return 0
 }
