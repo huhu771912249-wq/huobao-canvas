@@ -50,6 +50,9 @@
             <span>{{ job.active_target }}</span>
             <span>已运行 {{ job.gpu_elapsed_seconds || 0 }} 秒</span>
           </div>
+          <div v-if="job?.error" role="alert" class="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+            <b>后端错误：</b>{{ job.error }}
+          </div>
           <p class="mt-2 text-xs text-slate-500">进度来自后端任务阶段，不用虚假倒计时。每个成品会显示实际尺寸与超分方式。</p>
           <div v-if="job?.results?.length" class="mt-5 grid gap-4 md:grid-cols-2"><article v-for="item in job.results" :key="item.mp4_url" class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950"><video class="aspect-video w-full bg-black object-contain" :src="item.mp4_url" controls/><div class="space-y-2 p-4 text-sm"><div class="flex justify-between"><b>{{ item.actual_width }} × {{ item.actual_height }}</b><span class="text-emerald-300">{{ item.upscale_method==='seedvr2' ? 'SeedVR2 AI 超分' : '高清转码（无需超分）' }}</span></div><div class="flex gap-2"><a class="nav" :href="item.mp4_url" download>下载 MP4</a><a v-if="item.gif_url" class="nav" :href="item.gif_url" download>下载 GIF</a></div></div></article></div>
           <div v-if="job" class="mt-5 flex flex-wrap gap-2"><button v-if="!terminal" class="nav" @click="cancel">取消任务</button><button v-if="['failed','cancelled'].includes(job.status)" class="nav" @click="retry">失败重试</button><button v-if="job.status==='completed'" class="nav" @click="save">保存到素材库</button><button v-if="job.status==='completed'" class="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950" @click="handoff">送入无限画布</button></div>

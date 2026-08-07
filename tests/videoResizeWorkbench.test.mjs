@@ -37,5 +37,7 @@ for (const progressContract of [
   'gpu_elapsed_seconds',
   'SeedVR2 正在真实计算',
 ]) assert.match(view, new RegExp(progressContract))
+assert.match(view, /job\?\.error/)
+assert.match(view, /后端错误/)
 
 console.log('videoResizeWorkbench.test.mjs passed')
