@@ -5,6 +5,7 @@ export const STUDIO_ENTRIES = [
   { key: 'dsp', title: 'DSP 素材库', description: '保留 54DSP 优秀素材', flow: 'dsp' },
   { key: 'tasks', title: '任务中心', description: '查看生成和失败任务', flow: 'dsp' },
   { key: 'batch', title: '批量广告尺寸', description: '保留 GIF / MP4 多尺寸', flow: 'video' },
+  { key: 'resize', title: '视频尺寸工作台', description: '公开链接或上传，一次生成多平台尺寸', route: '/video-resize' },
   { key: 'background', title: '背景替换', description: '保留图片背景工作流', flow: 'variation' },
   { key: 'variation', title: '素材变化', description: '保留素材裂变功能', flow: 'variation' }
 ]

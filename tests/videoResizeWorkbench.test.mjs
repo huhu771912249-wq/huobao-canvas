@@ -16,5 +16,11 @@ const api = readFileSync(new URL('../src/api/videoResize.js', import.meta.url), 
 for (const endpoint of ['/v1/video-resize/jobs', '/cancel', '/retry', '/save', '/handoff']) {
   assert.match(api, new RegExp(endpoint.replaceAll('/', '\\/')))
 }
+const router = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
+const entries = readFileSync(new URL('../src/config/studioEntries.js', import.meta.url), 'utf8')
+const view = readFileSync(new URL('../src/views/VideoResizeWorkbench.vue', import.meta.url), 'utf8')
+assert.match(router, /path: '\/video-resize'/)
+assert.match(entries, /视频尺寸工作台/)
+for (const copy of ['公开 FB / Instagram 链接', '上传 MP4 / MOV / WebM', '智能主体裁剪', '完整保留＋模糊背景', '居中裁剪', '强制 AI 超分', '取消任务', '失败重试', '送入无限画布']) assert.match(view, new RegExp(copy))
 
 console.log('videoResizeWorkbench.test.mjs passed')

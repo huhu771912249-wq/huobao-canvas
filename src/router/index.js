@@ -20,6 +20,11 @@ const routes = [
     path: '/video-studio',
     name: 'VideoStudio',
     component: () => import('../views/VideoStudio.vue')
+  },
+  {
+    path: '/video-resize',
+    name: 'VideoResizeWorkbench',
+    component: () => import('../views/VideoResizeWorkbench.vue')
   }
 ]
 
