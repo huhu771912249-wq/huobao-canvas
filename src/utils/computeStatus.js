@@ -23,6 +23,7 @@ export const summarizeComputeStatus = (status) => {
   const gpu = Array.isArray(data.gpus) ? data.gpus[0] : null
   const queues = data.queues && typeof data.queues === 'object' ? data.queues : {}
   const state = ['online', 'degraded', 'offline'].includes(data.status) ? data.status : 'loading'
+  const tasks = Array.isArray(data.current_tasks) ? data.current_tasks : []
   return {
     state,
     online: state === 'online',
@@ -34,11 +35,25 @@ export const summarizeComputeStatus = (status) => {
     powerDraw: finiteNumber(gpu?.power_draw_w, null),
     powerLimit: finiteNumber(gpu?.power_limit_w, null),
     waiting: Math.max(0, finiteNumber(queues.total_waiting)),
-    running: Math.max(0, finiteNumber(queues.comfyui_running)),
+    running: Math.max(
+      finiteNumber(queues.comfyui_running),
+      tasks.filter(task => task?.status === 'running').length
+    ),
     comfyOnline: data.comfyui?.online === true,
-    tasks: Array.isArray(data.current_tasks) ? data.current_tasks : [],
+    tasks,
     updatedAt: String(data.updated_at || '')
   }
+}
+
+export const formatElapsedSeconds = (value) => {
+  const seconds = Math.max(0, Math.floor(finiteNumber(value)))
+  if (!seconds) return ''
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remainder = seconds % 60
+  if (hours) return `已运行 ${hours}小时${minutes}分`
+  if (minutes) return `已运行 ${minutes}分${remainder}秒`
+  return `已运行 ${remainder}秒`
 }
 
 export const computeTaskStageLabel = (task) => {
