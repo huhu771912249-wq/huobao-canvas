@@ -22,14 +22,16 @@ const view = readFileSync(new URL('../src/views/VideoResizeWorkbench.vue', impor
 assert.match(router, /path: '\/video-resize'/)
 assert.match(entries, /视频尺寸工作台/)
 assert.match(view, /<main class="[^"]*h-screen[^"]*overflow-y-auto[^"]*"/, '独立工作台必须在全局滚动锁定下提供自身纵向滚动容器')
-for (const copy of ['公开 FB / Instagram 链接', '上传 MP4 / MOV / WebM', '智能主体裁剪', '完整保留＋模糊背景', '居中裁剪', '强制 AI 超分', '取消任务', '失败重试', '送入无限画布']) assert.match(view, new RegExp(copy))
+for (const copy of ['公开 FB / Instagram 链接', '上传视频 / GIF', 'MP4 / MOV / WebM / GIF', '完整保留＋黑色留边', '完整保留＋模糊背景', '居中裁剪', '强制 AI 超分', '取消任务', '失败重试', '送入无限画布']) assert.match(view, new RegExp(copy))
+assert.match(view, /\.\(mp4\|mov\|webm\|gif\)/, '独立工作台必须接受 GIF 输入')
+assert.match(view, /file\.value = null[\s\S]*只支持 MP4、MOV、WebM、GIF/, '无效的新选择必须清掉旧素材')
 for (const uploadContract of [
   'ref="fileInput"',
   '@click="openFilePicker"',
   '@dragover.prevent',
   '@drop.prevent="handleDrop"',
   'const handleDrop',
-  '点击选择或拖入视频'
+  '点击选择或拖入素材'
 ]) assert.match(view, new RegExp(uploadContract))
 for (const progressContract of [
   'active_target_index',
