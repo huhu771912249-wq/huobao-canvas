@@ -305,7 +305,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline, ExpandOutline, ContractOutline } from '@vicons/ionicons5'
 import { useVideoGeneration } from '../../hooks'
-import { publishImageAsset } from '../../api/image'
+import { importImageAsset, publishImageAsset } from '../../api/image'
 import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
 import { createMediaComposition } from '../../api/mediaComposition'
 import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
@@ -326,6 +326,11 @@ import { getImageAlignmentSpec, getModelNativeVideoSize } from '../../config/stu
 import { isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
 import { bindH3ImagePrompt } from '../../utils/h3DirectorPrompt'
 import { H3_SAMPLING_OPTIONS, normalizeH3SamplingMode } from '../../utils/h3GenerationOptions'
+import {
+  isLocalPublicAssetUrl,
+  isReadyVideoImageNode,
+  localizeGeneratedImageInput
+} from '../../utils/generatedImageHandoff'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -420,7 +425,7 @@ const connectedImages = computed(() => {
 
   for (const edge of connectedEdges) {
     const sourceNode = nodes.value.find(n => n.id === edge.source)
-    if (sourceNode?.type === 'image' && (sourceNode.data?.url || sourceNode.data?.base64 || sourceNode.data?.publicUrl)) {
+    if (sourceNode?.type === 'image' && isReadyVideoImageNode(sourceNode.data)) {
       images.push({
         nodeId: sourceNode.id,
         edgeId: edge.id,
@@ -428,6 +433,9 @@ const connectedImages = computed(() => {
         base64: sourceNode.data.base64,
         publicUrl: sourceNode.data.publicUrl || sourceNode.data.public_url || '',
         localUrl: sourceNode.data.localUrl || sourceNode.data.local_url || '',
+        assetRole: sourceNode.data.assetRole || sourceNode.data.asset_role || '',
+        model: sourceNode.data.model || '',
+        label: sourceNode.data.label || '',
         role: edge.data?.imageRole || 'first_frame_image' // Default to first frame | 默认首帧
       })
     }
@@ -459,11 +467,11 @@ const scail2ReferenceInput = computed(() => {
 })
 const connectedFirstFrameSource = computed(() => {
   const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
-  return image ? pickVideoImageInput(image) : ''
+  return image ? pickVideoImageInput(image, { preferLocal: isLocalCloudModel.value }) : ''
 })
 const connectedH3Reference = computed(() => {
   const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
-  const source = image ? pickVideoImageInput(image) : ''
+  const source = image ? pickVideoImageInput(image, { preferLocal: true }) : ''
   return source ? { id: '图1', role: '连接图片主体', image: source } : null
 })
 const activeH3Reference = computed(() => confirmedMultiViewReference.value?.image ? confirmedMultiViewReference.value : connectedH3Reference.value)
@@ -551,7 +559,8 @@ const isPublicHttpUrl = (url) => {
 
 const isDataImageUrl = (url) => String(url || '').trim().startsWith('data:image/')
 
-const pickVideoImageInput = (image = {}) => {
+const pickVideoImageInput = (image = {}, { preferLocal = false } = {}) => {
+  if (preferLocal && isLocalPublicAssetUrl(image.url)) return image.url
   if (isPublicHttpUrl(image.publicUrl)) return image.publicUrl
   if (isPublicHttpUrl(image.public_url)) return image.public_url
   if (isPublicHttpUrl(image.url)) return image.url
@@ -560,9 +569,17 @@ const pickVideoImageInput = (image = {}) => {
   return image.base64 || image.url || image.publicUrl || image.public_url || image.localUrl || image.local_url || ''
 }
 
-const publishVideoImageInput = async (value, roleLabel) => {
+const publishVideoImageInput = async (value, roleLabel, { localOnly = false, assetRole = 'input' } = {}) => {
   const source = String(value || '').trim()
   if (!source) return ''
+  if (localOnly) {
+    return localizeGeneratedImageInput(source, {
+      importAsset: importImageAsset,
+      publishAsset: publishImageAsset,
+      assetRole,
+      name: `视频${roleLabel}`
+    })
+  }
   if (isPublicHttpUrl(source)) return source
 
   if (isDataImageUrl(source)) {
@@ -580,15 +597,15 @@ const publishVideoImageInput = async (value, roleLabel) => {
   throw new Error(`${roleLabel}不是公网图片 URL，且没有可上传的 base64 图片；请重新上传图片或连接 FRW 作图输出。`)
 }
 
-const normalizeVideoImages = async ({ first_frame_image, last_frame_image, images }) => {
+const normalizeVideoImages = async ({ first_frame_image, last_frame_image, images }, options = {}) => {
   const normalized = {
-    first_frame_image: await publishVideoImageInput(first_frame_image, '首帧'),
-    last_frame_image: await publishVideoImageInput(last_frame_image, '尾帧'),
+    first_frame_image: await publishVideoImageInput(first_frame_image, '首帧', options),
+    last_frame_image: await publishVideoImageInput(last_frame_image, '尾帧', options),
     images: []
   }
 
   for (const [index, image] of images.entries()) {
-    const url = await publishVideoImageInput(image, `参考图${index + 1}`)
+    const url = await publishVideoImageInput(image, `参考图${index + 1}`, options)
     if (url) normalized.images.push(url)
   }
 
@@ -754,8 +771,8 @@ const getConnectedInputs = () => {
       // LLM node output as prompt | LLM 节点输出作为提示词
       const content = sourceNode.data?.outputContent || ''
       if (content) prompt = content
-    } else if (sourceNode.type === 'image' && (sourceNode.data?.url || sourceNode.data?.base64 || sourceNode.data?.publicUrl)) {
-      const imageData = pickVideoImageInput(sourceNode.data)
+    } else if (sourceNode.type === 'image' && isReadyVideoImageNode(sourceNode.data)) {
+      const imageData = pickVideoImageInput(sourceNode.data, { preferLocal: isLocalCloudModel.value })
       const role = edge.data?.imageRole || 'first_frame_image'
 
       if (role === 'first_frame_image') {
@@ -974,13 +991,51 @@ const handleGenerate = async () => {
   }, 50)
 
   try {
-    const normalizedImages = (isScail2Model.value || isLocalCloudModel.value)
+    const connectedReference = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
+    const connectedReferenceUrl = connectedReference
+      ? pickVideoImageInput(connectedReference, { preferLocal: isLocalCloudModel.value })
+      : ''
+    const connectedAssetRole = connectedReference?.assetRole
+      || (connectedReference?.model || /文生图|首帧结果/.test(connectedReference?.label || '') ? 'generated' : 'input')
+    const normalizedImages = isScail2Model.value
       ? {
           first_frame_image: first_frame_image || images[0] || '',
           last_frame_image: '',
           images: []
         }
-      : await normalizeVideoImages({ first_frame_image, last_frame_image, images })
+      : await normalizeVideoImages(
+          { first_frame_image, last_frame_image, images },
+          isLocalCloudModel.value
+            ? {
+                localOnly: true,
+                assetRole: first_frame_image === connectedReferenceUrl ? connectedAssetRole : 'input'
+              }
+            : {}
+        )
+
+    if (
+      isLocalCloudModel.value
+      && connectedReference?.nodeId
+      && first_frame_image === connectedReferenceUrl
+      && normalizedImages.first_frame_image !== connectedReferenceUrl
+    ) {
+      updateNode(connectedReference.nodeId, {
+        url: normalizedImages.first_frame_image,
+        publicUrl: normalizedImages.first_frame_image,
+        assetRole: connectedAssetRole
+      })
+    }
+    if (
+      isLocalCloudModel.value
+      && confirmedMultiViewReference.value?.image === first_frame_image
+      && normalizedImages.first_frame_image !== first_frame_image
+    ) {
+      confirmedMultiViewReference.value = {
+        ...confirmedMultiViewReference.value,
+        image: normalizedImages.first_frame_image
+      }
+      updateNode(props.id, { confirmedMultiViewReference: confirmedMultiViewReference.value })
+    }
 
     // Build request params (raw form data) | 构建请求参数（原始表单数据）
     // These will be transformed by inputTransform | 这些会被 inputTransform 转换

@@ -278,6 +278,10 @@ import {
   buildBackgroundReplacePayload,
   getBackgroundReplaceReadiness
 } from '../../utils/backgroundReplace'
+import {
+  clearGeneratedImageForRegeneration,
+  normalizeGeneratedImageResult
+} from '../../utils/generatedImageHandoff'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -831,7 +835,7 @@ const handleGenerate = async (mode = 'auto') => {
     // Replace mode: find any connected image node | 替换模式：查找任意连接的图片节点
     imageNodeId = findConnectedOutputImageNode(false)
     if (imageNodeId) {
-      updateNode(imageNodeId, { loading: true, url: '' })
+      updateNode(imageNodeId, clearGeneratedImageForRegeneration())
     }
   } else if (mode === 'new') {
     // New mode: always create new node | 新建模式：始终创建新节点
@@ -840,7 +844,7 @@ const handleGenerate = async (mode = 'auto') => {
     // Auto mode: check for empty connected node first | 自动模式：先检查空白连接节点
     imageNodeId = findConnectedOutputImageNode(true)
     if (imageNodeId) {
-      updateNode(imageNodeId, { loading: true })
+      updateNode(imageNodeId, clearGeneratedImageForRegeneration())
     }
   }
   
@@ -912,8 +916,11 @@ const handleGenerate = async (mode = 'auto') => {
 
     // Update image node with generated URL | 更新图片节点 URL
     if (result && result.length > 0) {
+      const generated = normalizeGeneratedImageResult(result[0])
       updateNode(imageNodeId, {
-        url: result[0].url,
+        url: generated.url,
+        publicUrl: generated.publicUrl,
+        assetRole: generated.assetRole,
         loading: false,
         label: isBackgroundReplaceMode.value ? '背景替换结果' : '文生图',
         model: localModel.value,
