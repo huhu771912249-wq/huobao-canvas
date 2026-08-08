@@ -116,7 +116,6 @@ import {
   summarizeComputeStatus
 } from '../utils/computeStatus.js'
 
-const POSITION_KEY = 'huobao-compute-monitor-position-v1'
 const COLLAPSED_KEY = 'huobao-compute-monitor-collapsed-v1'
 const monitorRef = ref(null)
 const loading = ref(false)
@@ -148,11 +147,9 @@ const taskElapsedLabel = task => formatElapsedSeconds(task?.elapsed_seconds)
 
 const readStoredState = () => {
   try {
-    const stored = JSON.parse(localStorage.getItem(POSITION_KEY) || 'null')
-    if (Number.isFinite(stored?.left) && Number.isFinite(stored?.top)) position.value = stored
     collapsed.value = localStorage.getItem(COLLAPSED_KEY) === '1'
   } catch {
-    position.value = null
+    collapsed.value = false
   }
 }
 const toggleCollapsed = () => {
@@ -175,7 +172,6 @@ const finishDrag = () => {
   dragState = null
   window.removeEventListener('pointermove', moveMonitor)
   window.removeEventListener('pointerup', finishDrag)
-  try { localStorage.setItem(POSITION_KEY, JSON.stringify(position.value)) } catch { /* storage is optional */ }
 }
 const startDrag = event => {
   if (event.button !== 0 || !monitorRef.value) return
