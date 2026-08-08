@@ -358,7 +358,7 @@ import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSam
 import { loadAllModels } from '../stores/models'
 import { useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
-import { projects, initProjectsStore, updateProject, renameProject, currentProject, deleteProject, duplicateProject } from '../stores/projects'
+import { projects, initProjectsStore, ensureProjectLoaded, updateProject, renameProject, currentProject, deleteProject, duplicateProject } from '../stores/projects'
 import { nextSuggestionSetIndex } from '../utils/suggestions'
 import {
   buildCanvasStarterActions,
@@ -951,12 +951,18 @@ const checkMobile = () => {
 }
 
 // Load project by ID | 根据ID加载项目
-const loadProjectById = (projectId) => {
+const loadProjectById = async (projectId) => {
   // Update flow key to force VueFlow re-render | 更新 key 强制 VueFlow 重新渲染
   flowKey.value = Date.now()
   
   if (projectId && projectId !== 'new') {
-    loadProject(projectId)
+    try {
+      await ensureProjectLoaded(projectId)
+      loadProject(projectId)
+    } catch (error) {
+      clearCanvas()
+      window.$message?.error(error?.response?.status === 404 ? '项目不存在或已被删除' : '项目读取失败，请稍后重试')
+    }
   } else {
     // New project - clear canvas | 新项目 - 清空画布
     clearCanvas()
@@ -966,28 +972,28 @@ const loadProjectById = (projectId) => {
 // Watch for route changes | 监听路由变化
 watch(
   () => route.params.id,
-  (newId, oldId) => {
+  async (newId, oldId) => {
     if (newId && newId !== oldId) {
       // Save current project before switching | 切换前保存当前项目
       if (oldId) {
         saveProject()
       }
       // Load new project | 加载新项目
-      loadProjectById(newId)
+      await loadProjectById(newId)
     }
   }
 )
 
 // Initialize | 初始化
-onMounted(() => {
+onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
   
   // Initialize projects store | 初始化项目存储
-  initProjectsStore()
+  await initProjectsStore()
   
   // Load project data | 加载项目数据
-  loadProjectById(route.params.id)
+  await loadProjectById(route.params.id)
   
   // Check for initial prompt from home page | 检查来自首页的初始提示词
   const initialPrompt = sessionStorage.getItem('ai-canvas-initial-prompt')
