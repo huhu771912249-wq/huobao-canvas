@@ -26,6 +26,7 @@
 | `/v1/assets/images` | 图片生成或本地图片资产 |
 | `/v1/assets/import` | 受控远程素材导入 |
 | `/v1/projects` | 项目摘要列表与按项目 JSON 持久化 |
+| `/v1/tasks` | 统一任务中心，合并视频、裂变、小说、DSP 和尺寸处理任务 |
 | `/v1/video/generations` | 视频生成 |
 | `/v1/audio/generations` | 音频生成 |
 | `/v1/media/compositions` | 媒体合成 |

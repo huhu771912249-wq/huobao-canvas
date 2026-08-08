@@ -126,7 +126,7 @@ export function buildTaskSummary(task = {}) {
   const status = String(task.status || 'running')
   const successCount = Number(task.success_count) || 0
   const failureCount = Number(task.failure_count) || 0
-  const detail = `成功 ${successCount} · 失败 ${failureCount}`
+  const detail = String(task.detail || '').trim() || `成功 ${successCount} · 失败 ${failureCount}`
   const actionMap = {
     running: ['details'],
     awaiting_confirmation: ['confirm', 'cancel', 'details'],
@@ -136,11 +136,16 @@ export function buildTaskSummary(task = {}) {
     cancelled: ['details']
   }
 
+  const actions = Array.isArray(task.actions)
+    ? [...task.actions]
+    : [...(actionMap[status] || ['details'])]
+  if (task.download_url && !actions.includes('download')) actions.push('download')
+
   return {
     title: TASK_LABELS[status] || '处理中',
     tone: normalizeTaskTone(status),
     detail,
-    actions: actionMap[status] || ['details']
+    actions
   }
 }
 
