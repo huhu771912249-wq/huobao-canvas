@@ -28,6 +28,7 @@
           <strong>{{ projectTitle || '创作工作台' }}</strong>
         </div>
         <div class="workspace-topbar__actions">
+          <ComputeStatusIndicator />
           <ServiceStatusPill
             :label="serviceStatus.label"
             :tone="serviceStatus.tone"
@@ -82,6 +83,7 @@ import {
 } from '@vicons/ionicons5'
 import { buildWorkspaceNavigation } from '../../utils/workspaceUi'
 import ServiceStatusPill from './ServiceStatusPill.vue'
+import ComputeStatusIndicator from '../ComputeStatusIndicator.vue'
 
 defineProps({
   activeSection: {

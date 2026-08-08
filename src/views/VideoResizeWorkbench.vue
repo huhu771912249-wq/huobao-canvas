@@ -3,7 +3,7 @@
     <header class="border-b border-cyan-950/80 bg-[#07101e]/95 px-6 py-4 backdrop-blur">
       <div class="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
         <div><div class="text-xs tracking-[.35em] text-cyan-400">冠希 VIDEO LAB</div><h1 class="text-2xl font-semibold">视频尺寸工作台</h1></div>
-        <nav class="flex gap-2"><button class="nav" @click="router.push('/')">首页</button><button class="nav" @click="router.push('/canvas')">无限画布</button></nav>
+        <nav class="flex items-center gap-2"><ComputeStatusIndicator /><button class="nav" @click="router.push('/')">首页</button><button class="nav" @click="router.push('/canvas')">无限画布</button></nav>
       </div>
     </header>
 
@@ -68,6 +68,7 @@ import { useRouter } from 'vue-router'
 import { RESIZE_PRESETS, normalizeResizeTargets, validateSocialVideoUrl } from '../utils/videoResize'
 import { cancelVideoResizeJob, createVideoResizeJob, getVideoResizeJob, handoffVideoResizeJob, retryVideoResizeJob, saveVideoResizeJob } from '../api/videoResize'
 import { createProject, updateProject } from '../stores/projects'
+import ComputeStatusIndicator from '../components/ComputeStatusIndicator.vue'
 
 const router = useRouter(); const sourceMode = ref('url'); const sourceUrl = ref(''); const file = ref(null); const fileInput = ref(null); const dragActive = ref(false); const fitMode = ref('contain'); const forceAi = ref(false); const overlayText = ref(''); const targets = ref(['720x1280','1080x1920','1080x1080','1280x720','1920x1080']); const outputs = ref(['mp4']); const customWidth = ref(1080); const customHeight = ref(1350); const error = ref(''); const job = ref(null); const submitting = ref(false); let pollTimer = 0
 const presetLabels = {'720x1280':'FB/IG 竖版','1080x1920':'Reels / Stories','1080x1080':'社媒方图','1280x720':'常用横版','1920x1080':'Full HD 横版'}

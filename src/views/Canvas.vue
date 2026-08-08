@@ -18,6 +18,7 @@
         </n-dropdown>
       </template>
       <template #right>
+        <ComputeStatusIndicator />
         <button 
           @click="showDownloadModal = true"
           class="p-2 hover:bg-[var(--bg-tertiary)] rounded-lg transition-colors"
@@ -369,6 +370,7 @@ import ApiSettings from '../components/ApiSettings.vue'
 import DownloadModal from '../components/DownloadModal.vue'
 import WorkflowPanel from '../components/WorkflowPanel.vue'
 import AppHeader from '../components/AppHeader.vue'
+import ComputeStatusIndicator from '../components/ComputeStatusIndicator.vue'
 
 // API Config state | API 配置状态
 const modelStore = useModelStore()
