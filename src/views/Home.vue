@@ -303,6 +303,10 @@ const handleWorkspaceNavigate = (item) => {
     openTaskCenter()
     return
   }
+  if (item.id === 'recent') {
+    router.push('/recent-generations')
+    return
+  }
   handleLaunch(item.id)
 }
 

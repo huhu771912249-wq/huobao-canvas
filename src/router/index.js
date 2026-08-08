@@ -25,6 +25,11 @@ const routes = [
     path: '/video-resize',
     name: 'VideoResizeWorkbench',
     component: () => import('../views/VideoResizeWorkbench.vue')
+  },
+  {
+    path: '/recent-generations',
+    name: 'RecentGenerations',
+    component: () => import('../views/RecentGenerations.vue')
   }
 ]
 
