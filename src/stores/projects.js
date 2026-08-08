@@ -1,11 +1,22 @@
 /**
  * Projects store | 项目状态管理
- * Manages projects with localStorage persistence
+ * Keeps project JSON on the backend and only lightweight UI state locally.
  */
-import { ref, computed, watch } from 'vue'
-
-// Storage key | 存储键
-const STORAGE_KEY = 'ai-canvas-projects'
+import { ref, computed } from 'vue'
+import {
+  deleteCanvasProject,
+  getCanvasProject,
+  listCanvasProjects,
+  publishProjectImage,
+  putCanvasProject
+} from '../api/projects.js'
+import {
+  LEGACY_PROJECTS_STORAGE_KEY,
+  prepareProjectForServer,
+  readLegacyProjects,
+  readProjectClientState,
+  writeProjectClientState
+} from '../utils/projectPersistence.js'
 
 // Generate unique ID | 生成唯一ID
 const generateId = () => `project_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -21,113 +32,102 @@ export const currentProject = computed(() => {
   return projects.value.find(p => p.id === currentProjectId.value) || null
 })
 
+let initializationPromise = null
+const projectWriteQueues = new Map()
+let lastPersistenceErrorAt = 0
+
+const browserStorage = () => {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage : null
+  } catch {
+    return null
+  }
+}
+
+const hydrateProject = project => ({
+  ...project,
+  createdAt: new Date(project.createdAt || Date.now()),
+  updatedAt: new Date(project.updatedAt || Date.now())
+})
+
+const persistClientState = (lastServerSyncAt = '') => {
+  const storage = browserStorage()
+  if (!storage) return
+  try {
+    writeProjectClientState(storage, {
+      currentProjectId: currentProjectId.value,
+      lastServerSyncAt
+    })
+  } catch (error) {
+    console.warn('Failed to save lightweight project state:', error)
+  }
+}
+
+const reportPersistenceError = error => {
+  console.error('Failed to persist project:', error)
+  const now = Date.now()
+  if (now - lastPersistenceErrorAt < 5000) return
+  lastPersistenceErrorAt = now
+  if (typeof window !== 'undefined') {
+    window.$message?.error('项目暂时无法同步到服务器，当前页面内容仍保留，请稍后重试')
+  }
+}
+
+const publishInlineImage = image => {
+  return publishProjectImage(image, `canvas-project-${Date.now()}.png`)
+}
+
+const queueProjectOperation = (projectId, operation) => {
+  const previous = projectWriteQueues.get(projectId) || Promise.resolve()
+  const next = previous.catch(() => {}).then(operation)
+  projectWriteQueues.set(projectId, next)
+  next.finally(() => {
+    if (projectWriteQueues.get(projectId) === next) projectWriteQueues.delete(projectId)
+  }).catch(() => {})
+  return next
+}
+
+const persistProject = projectId => queueProjectOperation(projectId, async () => {
+  const project = projects.value.find(item => item.id === projectId)
+  if (!project) return null
+  const snapshotUpdatedAt = new Date(project.updatedAt || 0).getTime()
+  const prepared = await prepareProjectForServer(project, {
+    publishImage: publishInlineImage
+  })
+  const saved = await putCanvasProject(projectId, prepared)
+  const current = projects.value.find(item => item.id === projectId)
+  if (current && new Date(current.updatedAt || 0).getTime() === snapshotUpdatedAt) {
+    const index = projects.value.findIndex(item => item.id === projectId)
+    projects.value[index] = hydrateProject(saved)
+  }
+  persistClientState(new Date().toISOString())
+  return saved
+})
+
+const scheduleProjectSave = projectId => {
+  if (typeof window === 'undefined') return
+  persistProject(projectId).catch(reportPersistenceError)
+}
+
 /**
- * Load projects from localStorage | 从 localStorage 加载项目
+ * Read legacy browser projects for one-time migration. New project JSON never
+ * writes to localStorage.
  */
 export const loadProjects = () => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      // Convert date strings back to Date objects | 将日期字符串转换回 Date 对象
-      projects.value = parsed.map(p => ({
-        ...p,
-        createdAt: new Date(p.createdAt),
-        updatedAt: new Date(p.updatedAt)
-      }))
-    }
-  } catch (err) {
-    console.error('Failed to load projects:', err)
-    projects.value = []
+  const storage = browserStorage()
+  if (!storage) return []
+  const legacy = readLegacyProjects(storage)
+  if (legacy.length && projects.value.length === 0) {
+    projects.value = legacy.map(hydrateProject)
   }
+  const clientState = readProjectClientState(storage)
+  currentProjectId.value = clientState.currentProjectId || currentProjectId.value
+  return legacy
 }
 
-/**
- * Clean node data for storage | 清理节点数据用于存储
- * Removes base64 data URLs to reduce storage size | 移除 base64 数据减小存储大小
- */
-const cleanNodeForStorage = (node) => {
-  if (!node.data) return node
-  
-  const cleanedData = { ...node.data }
-  
-  // Remove base64 data | 移除 base64 数据
-  if (cleanedData.base64) {
-    delete cleanedData.base64
-  }
-  
-  // If url is a base64 data URL, keep it only if it's from external source | 如果 url 是 base64，只有外部来源才保留
-  if (cleanedData.url?.startsWith?.('data:')) {
-    // For uploaded images, we can't persist them in localStorage | 上传的图片无法持久化到 localStorage
-    delete cleanedData.url
-  }
-  
-  // Remove mask data | 移除蒙版数据
-  if (cleanedData.maskData) {
-    delete cleanedData.maskData
-  }
-  
-  return { ...node, data: cleanedData }
-}
-
-/**
- * Clean project for storage | 清理项目用于存储
- */
-const cleanProjectForStorage = (project) => {
-  return {
-    ...project,
-    canvasData: project.canvasData ? {
-      ...project.canvasData,
-      nodes: project.canvasData.nodes?.map(cleanNodeForStorage) || []
-    } : project.canvasData,
-    // Remove base64 thumbnails | 移除 base64 缩略图
-    thumbnail: project.thumbnail?.startsWith?.('data:') ? '' : project.thumbnail
-  }
-}
-
-/**
- * Save projects to localStorage | 保存项目到 localStorage
- * Handles QuotaExceededError by compressing data | 通过压缩数据处理配额超限错误
- */
 export const saveProjects = () => {
-  // Always clean data before saving | 保存前始终清理数据
-  const cleanedProjects = projects.value.map(cleanProjectForStorage)
-  
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanedProjects))
-  } catch (err) {
-    if (err.name === 'QuotaExceededError') {
-      console.warn('localStorage quota exceeded, attempting aggressive cleanup...')
-      
-      // Remove thumbnails and limit old projects | 移除缩略图并限制旧项目
-      const minimalProjects = cleanedProjects.map((project, index) => ({
-        ...project,
-        thumbnail: '', // Remove all thumbnails | 移除所有缩略图
-        // Keep only essential canvas data for older projects | 旧项目只保留基本画布数据
-        canvasData: index > 10 ? { nodes: [], edges: [], viewport: project.canvasData?.viewport } : project.canvasData
-      }))
-      
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(minimalProjects))
-        console.log('Saved with aggressive cleanup')
-        window.$message?.warning('存储空间不足，已自动清理部分数据')
-      } catch (retryErr) {
-        console.error('Still failed after aggressive cleanup:', retryErr)
-        // Last resort: only keep first 5 projects | 最后手段：只保留前5个项目
-        try {
-          const essentialProjects = minimalProjects.slice(0, 5)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(essentialProjects))
-          projects.value = projects.value.slice(0, 5)
-          window.$message?.warning('存储空间严重不足，已保留最近 5 个项目')
-        } catch (finalErr) {
-          console.error('Cannot save even minimal data:', finalErr)
-          window.$message?.error('存储失败，请清理浏览器存储空间')
-        }
-      }
-    } else {
-      console.error('Failed to save projects:', err)
-    }
-  }
+  persistClientState()
+  projects.value.forEach(project => scheduleProjectSave(project.id))
 }
 
 /**
@@ -154,7 +154,9 @@ export const createProject = (name = '未命名项目') => {
   }
   
   projects.value = [newProject, ...projects.value]
-  saveProjects()
+  currentProjectId.value = id
+  persistClientState()
+  scheduleProjectSave(id)
   
   return id
 }
@@ -178,7 +180,7 @@ export const updateProject = (id, data) => {
   const [updated] = projects.value.splice(index, 1)
   projects.value = [updated, ...projects.value]
   
-  saveProjects()
+  scheduleProjectSave(id)
   return true
 }
 
@@ -218,7 +220,7 @@ export const updateProjectCanvas = (id, canvasData) => {
     }
   }
   
-  saveProjects()
+  scheduleProjectSave(id)
   return true
 }
 
@@ -232,13 +234,43 @@ export const getProjectCanvas = (id) => {
   return project?.canvasData || null
 }
 
+export const ensureProjectLoaded = async id => {
+  const existing = projects.value.find(project => project.id === id)
+  if (existing?.canvasData) {
+    currentProjectId.value = id
+    persistClientState()
+    return existing
+  }
+  const loaded = hydrateProject(await getCanvasProject(id))
+  const index = projects.value.findIndex(project => project.id === id)
+  if (index === -1) projects.value = [loaded, ...projects.value]
+  else projects.value[index] = loaded
+  currentProjectId.value = id
+  persistClientState(new Date().toISOString())
+  return loaded
+}
+
 /**
  * Delete project | 删除项目
  * @param {string} id - Project ID | 项目ID
  */
 export const deleteProject = (id) => {
-  projects.value = projects.value.filter(p => p.id !== id)
-  saveProjects()
+  const removed = projects.value.find(project => project.id === id)
+  projects.value = projects.value.filter(project => project.id !== id)
+  if (currentProjectId.value === id) currentProjectId.value = null
+  persistClientState()
+  if (typeof window === 'undefined') return
+  queueProjectOperation(id, async () => {
+    try {
+      await deleteCanvasProject(id)
+    } catch (error) {
+      if (error?.response?.status === 404) return
+      if (removed && !projects.value.some(project => project.id === id)) {
+        projects.value = [removed, ...projects.value]
+      }
+      reportPersistenceError(error)
+    }
+  })
 }
 
 /**
@@ -262,7 +294,9 @@ export const duplicateProject = (id) => {
   }
   
   projects.value = [newProject, ...projects.value]
-  saveProjects()
+  currentProjectId.value = newId
+  persistClientState()
+  scheduleProjectSave(newId)
   
   return newId
 }
@@ -317,54 +351,103 @@ export const getSortedProjects = (sortBy = 'updatedAt', order = 'desc') => {
   })
 }
 
+const sampleCanvasData = () => ({
+  nodes: [
+    {
+      id: 'node_0',
+      type: 'text',
+      position: { x: 150, y: 150 },
+      data: {
+        content: '一只金毛寻回犬在草地上奔跑，摇着尾巴，脸上带着快乐的表情。它的毛发在阳光下闪耀，眼神充满了对自由的渴望，全身散发着阳光、友善的气息。',
+        label: '文本输入'
+      }
+    },
+    {
+      id: 'node_1',
+      type: 'imageConfig',
+      position: { x: 500, y: 150 },
+      data: {
+        prompt: '',
+        model: 'doubao-seedream-4-5-251128',
+        size: '512x512',
+        label: '文生图'
+      }
+    }
+  ],
+  edges: [
+    {
+      id: 'edge_node_0_node_1',
+      source: 'node_0',
+      target: 'node_1',
+      sourceHandle: 'right',
+      targetHandle: 'left'
+    }
+  ],
+  viewport: { x: 100, y: 50, zoom: 0.8 }
+})
+
+const mergeProjectSummaries = summaries => {
+  const localById = new Map(projects.value.map(project => [project.id, project]))
+  const merged = summaries.map(summary => {
+    const local = localById.get(summary.id)
+    localById.delete(summary.id)
+    return hydrateProject({
+      ...local,
+      ...summary,
+      ...(local?.canvasData ? { canvasData: local.canvasData } : {})
+    })
+  })
+  projects.value = [...localById.values(), ...merged].sort(
+    (left, right) => new Date(right.updatedAt || 0) - new Date(left.updatedAt || 0)
+  )
+}
+
 /**
- * Initialize projects store | 初始化项目存储
+ * Load the server index and migrate the old all-projects localStorage record.
+ * The legacy key is removed only after every project has reached the backend.
  */
 export const initProjectsStore = () => {
-  loadProjects()
-  
-  // Create sample project if empty | 如果为空则创建示例项目
-  if (projects.value.length === 0) {
-    const id = createProject('示例项目')
-    const project = projects.value.find(p => p.id === id)
-    if (project) {
-      project.canvasData = {
-        nodes: [
-          {
-            id: 'node_0',
-            type: 'text',
-            position: { x: 150, y: 150 },
-            data: {
-              content: '一只金毛寻回犬在草地上奔跑，摇着尾巴，脸上带着快乐的表情。它的毛发在阳光下闪耀，眼神充满了对自由的渴望，全身散发着阳光、友善的气息。',
-              label: '文本输入'
-            }
-          },
-          {
-            id: 'node_1',
-            type: 'imageConfig',
-            position: { x: 500, y: 150 },
-            data: {
-              prompt: '',
-              model: 'doubao-seedream-4-5-251128',
-              size: '512x512',
-              label: '文生图'
-            }
-          }
-        ],
-        edges: [
-          {
-            id: 'edge_node_0_node_1',
-            source: 'node_0',
-            target: 'node_1',
-            sourceHandle: 'right',
-            targetHandle: 'left'
-          }
-        ],
-        viewport: { x: 100, y: 50, zoom: 0.8 }
+  if (initializationPromise) return initializationPromise
+  const legacy = loadProjects()
+
+  initializationPromise = (async () => {
+    try {
+      let response = await listCanvasProjects()
+      let summaries = Array.isArray(response?.projects) ? response.projects : []
+      const remoteById = new Map(summaries.map(project => [project.id, project]))
+
+      if (legacy.length) {
+        for (const project of legacy) {
+          const remote = remoteById.get(project.id)
+          const localTime = new Date(project.updatedAt || 0).getTime()
+          const remoteTime = new Date(remote?.updatedAt || 0).getTime()
+          if (!remote || localTime > remoteTime) await persistProject(project.id)
+        }
+        const storage = browserStorage()
+        storage?.removeItem?.(LEGACY_PROJECTS_STORAGE_KEY)
+        response = await listCanvasProjects()
+        summaries = Array.isArray(response?.projects) ? response.projects : []
       }
-      saveProjects()
+
+      mergeProjectSummaries(summaries)
+      if (projects.value.length === 0) {
+        const id = createProject('示例项目')
+        const project = projects.value.find(item => item.id === id)
+        if (project) {
+          project.canvasData = sampleCanvasData()
+          project.updatedAt = new Date()
+          await persistProject(id)
+        }
+      }
+      persistClientState(new Date().toISOString())
+      return projects.value
+    } catch (error) {
+      reportPersistenceError(error)
+      return projects.value
     }
-  }
+  })()
+
+  return initializationPromise
 }
 
 // Export for debugging | 导出用于调试

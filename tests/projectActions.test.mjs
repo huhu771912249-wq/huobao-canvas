@@ -37,6 +37,6 @@ assert.equal(projects.value[0].id, sourceId)
 
 deleteProject(sourceId)
 assert.equal(projects.value.length, 0)
-assert.deepEqual(JSON.parse(storage.get('ai-canvas-projects')), [])
+assert.equal(storage.has('ai-canvas-projects'), false, '项目 JSON 不应再写入 localStorage')
 
 console.log('projectActions.test.mjs passed')
