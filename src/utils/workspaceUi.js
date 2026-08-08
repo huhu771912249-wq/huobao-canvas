@@ -1,12 +1,12 @@
 const NAV_ITEMS = [
   ['home', '创作首页', '/'],
-  ['image', 'AI 作图', '/canvas/new?flow=image'],
-  ['video', '视频生成', '/canvas/new?flow=video'],
-  ['variation', '素材裂变', '/canvas/new?flow=variation'],
-  ['dsp', '54DSP 素材', '/canvas/new?flow=dsp'],
+  ['image', 'AI 作图', '/?launch=image'],
+  ['video', '视频生成', '/?launch=video'],
+  ['variation', '素材裂变', '/?launch=variation'],
+  ['dsp', '54DSP 素材', '/?launch=dsp'],
   ['recent', '最近生成', '/recent-generations'],
   ['tasks', '任务中心', '/tasks'],
-  ['projects', '我的项目', '/#projects']
+  ['projects', '我的项目', '/?section=projects']
 ]
 
 const TASK_TONES = {

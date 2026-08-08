@@ -52,6 +52,7 @@ const taskRailSource = read('src/components/workspace/TaskRail.vue')
 const dspTaskCenterSource = read('src/components/nodes/DspCreativeTaskCenterNode.vue')
 const creationLauncherSource = read('src/components/home/CreationLauncher.vue')
 const recentProjectsSource = read('src/components/home/RecentProjects.vue')
+const workspaceLaunchSource = read('src/config/workspaceLaunch.js')
 const viteConfigSource = read('vite.config.js')
 
 assert.match(viteConfigSource, /target:\s*'http:\/\/127\.0\.0\.1:8788'/)
@@ -95,8 +96,8 @@ assert.match(homeSource, /<WorkspaceShell/)
 assert.match(homeSource, /<CreationLauncher/)
 assert.match(homeSource, /<RecentProjects/)
 assert.doesNotMatch(homeSource, /fixed left-4 top-1\/2/)
-assert.match(homeSource, /type:\s*'dspCreativeLibrary'/)
-assert.match(homeSource, /type:\s*'dspCreativeTaskCenter'/)
+assert.match(workspaceLaunchSource, /type:\s*'dspCreativeLibrary'/)
+assert.match(workspaceLaunchSource, /type:\s*'dspCreativeTaskCenter'/)
 
 const installerUrl = new URL('../../../install_material_desktop_app.sh', `file://${root}/`)
 if (existsSync(installerUrl)) {
