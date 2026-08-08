@@ -16,6 +16,7 @@ assert.deepEqual(buildWorkspaceNavigation().map((item) => item.id), [
   'video',
   'variation',
   'dsp',
+  'recent',
   'tasks',
   'projects'
 ])

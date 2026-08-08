@@ -284,6 +284,10 @@ const handleWorkspaceNavigate = (item) => {
     taskRailOpen.value = true
     return
   }
+  if (item.id === 'recent') {
+    router.push('/recent-generations')
+    return
+  }
   handleLaunch(item.id)
 }
 

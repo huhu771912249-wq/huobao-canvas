@@ -102,7 +102,7 @@ defineProps({
 
 const emit = defineEmits(['navigate', 'open-settings', 'open-status', 'open-tasks'])
 const navigation = buildWorkspaceNavigation()
-const mobileNavigation = computed(() => navigation.filter((item) => ['home', 'variation', 'dsp', 'tasks'].includes(item.id)))
+const mobileNavigation = computed(() => navigation.filter((item) => ['home', 'recent', 'variation', 'tasks'].includes(item.id)))
 
 const icons = {
   home: HomeOutline,
@@ -110,6 +110,7 @@ const icons = {
   video: VideocamOutline,
   variation: SparklesOutline,
   dsp: GridOutline,
+  recent: AlbumsOutline,
   tasks: PulseOutline,
   projects: FolderOpenOutline,
   albums: AlbumsOutline,
