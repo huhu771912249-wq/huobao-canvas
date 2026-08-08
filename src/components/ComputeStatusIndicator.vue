@@ -1,5 +1,6 @@
 <template>
-  <div class="compute-monitor-host">
+  <Teleport to="body">
+    <div class="compute-monitor-host">
     <section
       ref="monitorRef"
       class="compute-monitor"
@@ -104,7 +105,8 @@
       </div>
       <footer>这里只展示实时任务；取消、重试和历史记录仍在任务中心处理。</footer>
     </aside>
-  </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
