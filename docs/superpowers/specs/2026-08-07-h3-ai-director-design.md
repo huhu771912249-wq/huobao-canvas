@@ -18,8 +18,12 @@
 - [HKUDS/ViMax](https://github.com/HKUDS/ViMax)：采用“自然语言需求 → 导演方案 → 分镜/镜头设计 → 生成检查点”的产品流程，并把角色、场景和声音作为独立可审阅字段。
 - [vericontext/vibeframe](https://github.com/vericontext/vibeframe)：采用需要一致性时先生成并复用角色/关键帧参考图，再进入图生视频的策略。
 - [awesome-seedance-2-prompts](https://github.com/YouMind-OpenLab/awesome-seedance-2-prompts)：采用按秒动作时间线、微表情、环境声和一致性约束，但没有照搬其模型专属语法。
+- [nkxx188/ComfyUI-MiniMaxH3-Easy](https://github.com/nkxx188/ComfyUI-MiniMaxH3-Easy)：采用“文生/参考生共用入口”、可视化 `@` 引用和台词块的交互模式；界面中的 `@图1` 与纯台词会在提交时分别转换为 `<Picture 1>` 与 `<d>…</d>`。
+- [T8mars/comfyui-minimax-h3-audio-T8](https://github.com/T8mars/comfyui-minimax-h3-audio-T8)：作为后续 Turbo LoRA、双时钟采样和预检契约的技术参考；当前服务没有这些节点与模型的已验证工作流，因此本轮不提供虚假的 4-step 加速开关。
 
 这些来源只用于提炼结构和产品模式；实际输出经过 H3 的 2/3/5 秒、16:9/9:16、1000 字符上限和单一连续镜头约束重新设计，不在运行时自动下载或执行不受信任的开源提示词。
+
+当前生产 H3 通道只接受提示词与单张首帧/主体参考。视频和独立音频 `@` 引用要等上游生成接口与 ComfyUI 工作流共同支持后再开放，不能仅在前端伪造输入能力。
 
 ## 工作流
 

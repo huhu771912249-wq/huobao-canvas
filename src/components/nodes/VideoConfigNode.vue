@@ -88,8 +88,12 @@
         <template v-if="localModel === 'minimax-h3'">
           <MultiViewReferencePanel :source-image="connectedFirstFrameSource" @confirmed="handleMultiViewConfirmed" />
           <H3DirectorPromptEditor
-            :references="confirmedMultiViewReference ? [{ id: confirmedMultiViewReference.id, role: confirmedMultiViewReference.role }] : []"
+            :references="confirmedMultiViewReference ? [confirmedMultiViewReference] : []"
             :source-prompt="connectedPrompt"
+            :aspect-ratio="localRatio"
+            :duration-seconds="localDuration"
+            :output-width="outputWidth"
+            :output-height="outputHeight"
             @update:prompt="compiledDirectorPrompt = $event"
             @update:plan="directorPlan = $event"
           />

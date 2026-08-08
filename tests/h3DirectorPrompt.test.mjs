@@ -6,10 +6,9 @@ import {
 
 const plan = normalizeH3DirectorPrompt({
   references: [
-    { id: '图1', role: '人脸身份' },
-    { id: '图2', role: '服装一致性' }
+    { id: '图1', role: '人脸与服装一致性' }
   ],
-  subject_definitions: '@图1 保持人脸身份；@图2 保持服装',
+  subject_definitions: '@图1 保持人脸身份和服装',
   summary: '9:16 竖屏，人物沿走廊前进',
   retention_analysis: {
     required: ['人脸身份', '服装'],
@@ -24,10 +23,27 @@ const plan = normalizeH3DirectorPrompt({
 })
 
 const compiled = compileH3DirectorPrompt(plan)
-assert.match(compiled, /@图1/)
+assert.match(compiled, /<Picture 1>/)
+assert.doesNotMatch(compiled, /@图1/)
 assert.match(compiled, /\[Tracking shot\]/)
 assert.match(compiled, /0-2秒/)
 assert.ok(compiled.length <= 2000)
+
+const dialoguePlan = normalizeH3DirectorPrompt({
+  references: [{ id: '图1', role: '人物参考' }],
+  subject_definitions: '@图1 看向镜头',
+  dialogue: '今天开始，换一种更聪明的创作方式。'
+})
+assert.equal(dialoguePlan.dialogue, '今天开始，换一种更聪明的创作方式。')
+assert.match(compileH3DirectorPrompt(dialoguePlan), /<d>今天开始，换一种更聪明的创作方式。<\/d>/)
+
+const textOnlyPlan = normalizeH3DirectorPrompt({ summary: '雨夜城市，出租车驶过' })
+assert.match(compileH3DirectorPrompt(textOnlyPlan), /雨夜城市/)
+
+assert.throws(() => compileH3DirectorPrompt({
+  references: [{ id: '视频1', role: '动作参考' }],
+  subject_definitions: '@视频1 保持动作'
+}), /当前 H3 生成通道只支持 @图1/)
 
 const objectPlan = normalizeH3DirectorPrompt({
   references: [{ id: '图1', role: '主体多视图' }],
