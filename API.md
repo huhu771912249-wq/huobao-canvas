@@ -36,6 +36,8 @@
 | `/v1/studio/novel-video/jobs` | 小说成片任务 |
 | `/v1/dsp-creatives` | DSP 素材任务与结果 |
 
+H3 的 `director_plan.references` 当前只提交已确认的单张图片参考；编辑器中的 `@图1` 在前后端都会校验并编译为 `<Picture 1>`。可选 `director_plan.dialogue` 只保存纯台词，提交时编译为 `<d>…</d>`。当前接口不接受 H3 视频或独立音频引用，也没有启用未经验证的 4-step Turbo 参数。
+
 ## 异步任务状态
 
 后端状态映射为：
