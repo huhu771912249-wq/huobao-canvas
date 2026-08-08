@@ -76,6 +76,9 @@ export const PROVIDERS = {
         const data = response.data || response
         return (Array.isArray(data) ? data : [data]).map(item => ({
           url: item.url || item.b64_json || '',
+          public_url: item.public_url || '',
+          asset_role: item.asset_role || '',
+          file_name: item.file_name || '',
           revisedPrompt: item.revised_prompt || ''
         }))
       },
