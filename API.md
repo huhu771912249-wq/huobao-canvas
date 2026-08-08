@@ -39,7 +39,7 @@
 
 项目接口：`GET /v1/projects` 返回不含 `canvasData` 的摘要列表；`GET /v1/projects/{id}` 返回单个完整项目；`PUT /v1/projects/{id}` 原子保存项目；`DELETE /v1/projects/{id}` 删除项目。项目 JSON 不接受 `data:` 或 `blob:` URL，媒体必须先转成后端素材地址。
 
-H3 的 `director_plan.references` 当前只提交已确认的单张图片参考；编辑器中的 `@图1` 在前后端都会校验并编译为 `<Picture 1>`。可选 `director_plan.dialogue` 只保存纯台词，提交时编译为 `<d>…</d>`。当前接口不接受 H3 视频或独立音频引用，也没有启用未经验证的 4-step Turbo 参数。
+H3 当前只接受单张图片参考。连接到 H3 视频节点的首帧或参考图片会自动登记为 `@图1`，并与同一张图片一起提交；编辑器或普通文字节点中的 `@图1` 会在前后端校验并编译为 `<Picture 1>`。有图片但没有显式引用时，客户端也会自动补上该官方标签；有标签但没有实际图片时必须阻止生成。可选 `director_plan.dialogue` 只保存纯台词，提交时编译为 `<d>…</d>`。当前接口不接受 H3 视频或独立音频引用，也没有启用未经验证的 4-step Turbo 参数。
 
 ## 异步任务状态
 

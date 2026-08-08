@@ -10,6 +10,30 @@ function referenceTag(id) {
   return '<Picture 1>'
 }
 
+export function bindH3ImagePrompt(value, references = []) {
+  const prompt = String(value || '').trim()
+  if (!prompt) return ''
+  const knownReferences = new Map(
+    references
+      .map(item => String(item?.id || '').trim())
+      .filter(Boolean)
+      .map(id => [`@${id}`, referenceTag(id)])
+  )
+  const compiled = prompt.replace(REFERENCE_TOKEN, token => {
+    const tag = knownReferences.get(token)
+    if (!tag) throw new TypeError(`${token} 没有对应参考图`)
+    return tag
+  })
+  const hasPictureTag = compiled.includes('<Picture 1>')
+  if (hasPictureTag && knownReferences.size === 0) {
+    throw new TypeError('<Picture 1> 没有提交参考图')
+  }
+  if (knownReferences.size > 0 && !hasPictureTag) {
+    return `<Picture 1>\n${compiled}`
+  }
+  return compiled
+}
+
 function dialogueText(value) {
   return String(value || '').trim().replace(/^<d>\s*/i, '').replace(/\s*<\/d>$/i, '')
 }

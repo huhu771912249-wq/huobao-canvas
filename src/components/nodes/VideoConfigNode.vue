@@ -88,7 +88,7 @@
         <template v-if="localModel === 'minimax-h3'">
           <MultiViewReferencePanel :source-image="connectedFirstFrameSource" @confirmed="handleMultiViewConfirmed" />
           <H3DirectorPromptEditor
-            :references="confirmedMultiViewReference ? [confirmedMultiViewReference] : []"
+            :references="activeH3References"
             :source-prompt="connectedPrompt"
             :aspect-ratio="localRatio"
             :duration-seconds="localDuration"
@@ -284,6 +284,7 @@ import { getVideoInputCapabilities } from '../../utils/videoInputCapabilities'
 import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 import { getImageAlignmentSpec, getModelNativeVideoSize } from '../../config/studioProjectFlow'
 import { isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
+import { bindH3ImagePrompt } from '../../utils/h3DirectorPrompt'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -411,6 +412,13 @@ const connectedFirstFrameSource = computed(() => {
   const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
   return image ? pickVideoImageInput(image) : ''
 })
+const connectedH3Reference = computed(() => {
+  const image = imagesByRole.value.firstFrame || imagesByRole.value.referenceImages[0]
+  const source = image ? pickVideoImageInput(image) : ''
+  return source ? { id: '图1', role: '连接图片主体', image: source } : null
+})
+const activeH3Reference = computed(() => confirmedMultiViewReference.value?.image ? confirmedMultiViewReference.value : connectedH3Reference.value)
+const activeH3References = computed(() => activeH3Reference.value ? [activeH3Reference.value] : [])
 
 const handleDrivingVideoSelect = (event) => {
   const file = event.target?.files?.[0]
@@ -796,12 +804,23 @@ const handleGenerate = async () => {
   isGenerating.value = true
   activateModelProvider(localModel.value)
 
-  let { prompt, first_frame_image, last_frame_image, images } = getConnectedInputs()
-  if (localModel.value === 'minimax-h3' && compiledDirectorPrompt.value) {
-    prompt = compiledDirectorPrompt.value
-  }
-  if (localModel.value === 'minimax-h3' && confirmedMultiViewReference.value?.image && !first_frame_image) {
-    first_frame_image = confirmedMultiViewReference.value.image
+  let prompt
+  let first_frame_image
+  let last_frame_image
+  let images
+  try {
+    ({ prompt, first_frame_image, last_frame_image, images } = getConnectedInputs())
+    if (localModel.value === 'minimax-h3' && compiledDirectorPrompt.value) {
+      prompt = compiledDirectorPrompt.value
+    }
+    if (localModel.value === 'minimax-h3') {
+      if (activeH3Reference.value?.image) first_frame_image = activeH3Reference.value.image
+      prompt = bindH3ImagePrompt(prompt, activeH3References.value)
+    }
+  } catch (err) {
+    window.$message?.error(getErrorMessage(err))
+    isGenerating.value = false
+    return
   }
 
   const hasInput = prompt || first_frame_image || last_frame_image || images.length > 0
@@ -911,7 +930,7 @@ const handleGenerate = async () => {
       output_width: outputWidth.value,
       output_height: outputHeight.value
     }
-    if (localModel.value === 'minimax-h3' && directorPlan.value) {
+    if (localModel.value === 'minimax-h3' && directorPlan.value && compiledDirectorPrompt.value) {
       params.director_plan = directorPlan.value
     }
 

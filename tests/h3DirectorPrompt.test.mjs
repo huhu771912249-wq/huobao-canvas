@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  bindH3ImagePrompt,
   compileH3DirectorPrompt,
   normalizeH3DirectorPrompt
 } from '../src/utils/h3DirectorPrompt.js'
@@ -39,6 +40,17 @@ assert.match(compileH3DirectorPrompt(dialoguePlan), /<d>今天开始，换一种
 
 const textOnlyPlan = normalizeH3DirectorPrompt({ summary: '雨夜城市，出租车驶过' })
 assert.match(compileH3DirectorPrompt(textOnlyPlan), /雨夜城市/)
+
+assert.equal(
+  bindH3ImagePrompt('让 @图1 自然转身', [{ id: '图1' }]),
+  '让 <Picture 1> 自然转身'
+)
+assert.equal(
+  bindH3ImagePrompt('人物自然转身', [{ id: '图1' }]),
+  '<Picture 1>\n人物自然转身'
+)
+assert.throws(() => bindH3ImagePrompt('让 @图1 自然转身', []), /没有对应参考图/)
+assert.throws(() => bindH3ImagePrompt('<Picture 1> 自然转身', []), /没有提交参考图/)
 
 assert.throws(() => compileH3DirectorPrompt({
   references: [{ id: '视频1', role: '动作参考' }],
