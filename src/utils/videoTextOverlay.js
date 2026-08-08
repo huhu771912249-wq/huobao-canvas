@@ -1,10 +1,11 @@
-const SUPPORTED_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm'])
+const SUPPORTED_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm', 'image/gif'])
 // Base64 expands by roughly 4/3; keep the JSON body under the live 125 MiB proxy cap.
 const MAX_BYTES = 90 * 1024 * 1024
 
 export const validateOverlayVideoFile = (file) => {
-  if (!file || !SUPPORTED_TYPES.has(String(file.type || '').toLowerCase())) {
-    return '只支持 MP4、MOV 或 WebM 视频'
+  const supportedName = /\.(mp4|mov|webm|gif)$/i.test(String(file?.name || ''))
+  if (!file || (!SUPPORTED_TYPES.has(String(file.type || '').toLowerCase()) && !supportedName)) {
+    return '只支持 MP4、MOV、WebM 或 GIF 素材'
   }
   if (Number(file.size || 0) > MAX_BYTES) return '上传视频不能超过 90MB'
   return ''
