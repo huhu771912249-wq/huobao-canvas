@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fetchComputeStatus } from '../src/api/computeStatus.js'
 import {
   computeTaskStageLabel,
+  formatElapsedSeconds,
   formatGpuMemory,
   shortGpuName,
   summarizeComputeStatus
@@ -11,6 +12,7 @@ import {
 assert.equal(formatGpuMemory(16384, 32768), '16.0 / 32.0 GB')
 assert.equal(shortGpuName('NVIDIA GeForce RTX 5090'), 'RTX 5090')
 assert.equal(computeTaskStageLabel({ stage: 'upscale' }), 'SeedVR2 超分')
+assert.equal(formatElapsedSeconds(65), '已运行 1分5秒')
 
 const payload = {
   status: 'online',
@@ -53,6 +55,10 @@ assert.match(component, /fetchComputeStatus/)
 assert.match(component, /GPU利用率/)
 assert.match(component, /当前任务/)
 assert.match(component, /window\.setInterval\(refresh, 5000\)/)
+assert.match(component, /huobao-compute-monitor-position-v1/)
+assert.match(component, /@pointerdown="startDrag"/)
+assert.match(component, /compute-task-drawer/)
+assert.match(component, /查看详细状态/)
 assert.match(canvas, /<ComputeStatusIndicator/)
 assert.match(workspace, /<ComputeStatusIndicator/)
 assert.doesNotMatch(login, /GPU 5090 ONLINE/)
