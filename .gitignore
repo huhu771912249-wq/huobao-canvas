@@ -11,12 +11,27 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
+
+# Runtime and generated artifacts
+release-manifest.json
+uploads/
+runtime/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.gguf
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+._*
 *.suo
 *.ntvs*
 *.njsproj

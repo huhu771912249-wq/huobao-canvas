@@ -1,0 +1,21 @@
+name: 功能建议
+description: 描述用户问题、验收标准和边界
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 用户问题
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+    validations:
+      required: true
+  - type: textarea
+    id: exclusions
+    attributes:
+      label: 非目标
