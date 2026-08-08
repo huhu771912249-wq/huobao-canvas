@@ -124,14 +124,14 @@ const emitNavigate = (item) => emit('navigate', item)
 .workspace-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
+  grid-template-columns: 100px minmax(0, 1fr);
   color: var(--text-primary);
   overflow: hidden;
 }
 
 .workspace-sidebar {
   z-index: 30;
-  margin: 12px 0 12px 12px;
+  margin: 12px;
   padding: 12px 8px;
   border-radius: 24px;
 }
