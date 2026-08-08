@@ -5,7 +5,8 @@ import { VIDEO_OUTPUT_PRESETS, normalizeVideoOutputSize } from '../utils/videoOu
 const props = defineProps({
   outputWidth: { type: Number, default: 1920 },
   outputHeight: { type: Number, default: 1080 },
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  qualityHint: { type: String, default: '全部经过 SeedVR2' }
 })
 const emit = defineEmits(['update:outputWidth', 'update:outputHeight'])
 
@@ -42,7 +43,7 @@ function applyCustom() {
 
 <template>
   <section class="space-y-2" aria-label="最终视频尺寸">
-    <div class="text-xs text-[var(--text-secondary)]">最终视频尺寸 · 全部经过 SeedVR2</div>
+    <div class="text-xs text-[var(--text-secondary)]">最终视频尺寸 · {{ qualityHint }}</div>
     <div class="grid gap-2" :class="compact ? 'grid-cols-2' : 'sm:grid-cols-2'">
       <button
         v-for="item in VIDEO_OUTPUT_PRESETS"

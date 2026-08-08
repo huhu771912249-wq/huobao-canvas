@@ -419,6 +419,9 @@ const DspCreativeTaskCenterNode = defineAsyncComponent(
 const TextOverlayNode = defineAsyncComponent(
   () => import('../components/nodes/TextOverlayNode.vue')
 )
+const MaterialInputNode = defineAsyncComponent(
+  () => import('../components/nodes/MaterialInputNode.vue')
+)
 
 const router = useRouter()
 const route = useRoute()
@@ -438,6 +441,7 @@ const nodeTypes = {
   dspCreativeLibrary: markRaw(DspCreativeLibraryNode),
   dspCreativeTaskCenter: markRaw(DspCreativeTaskCenterNode),
   llmConfig: markRaw(LLMConfigNode),
+  materialInput: markRaw(MaterialInputNode),
   textOverlay: markRaw(TextOverlayNode)
 }
 
@@ -515,6 +519,7 @@ const tools = [
   { id: 'image', name: '图片', icon: ImageOutline, action: () => addNewNode('image') },
   { id: 'imageConfig', name: '文生图', icon: ColorPaletteOutline, action: () => addNewNode('imageConfig') },
   { id: 'materialVariation', name: '素材裂变', icon: AppsOutline, action: () => addNewNode('materialVariation') },
+  { id: 'materialInput', name: '素材导入', icon: DownloadOutline, action: () => addNewNode('materialInput') },
   { id: 'textOverlay', name: '文字叠加', icon: TextOutline, action: () => addNewNode('textOverlay') },
   { id: 'videoConfig', name: '视频生成', icon: VideocamOutline, action: () => addNewNode('videoConfig') },
   { id: 'undo', name: '撤销', icon: ArrowUndoOutline, action: () => undo(), disabled: () => !canUndo() },
@@ -529,6 +534,7 @@ const nodeTypeOptions = [
   { type: 'dspCreativeLibrary', name: '54DSP 优秀素材', icon: BookmarkOutline, color: '#22d3ee' },
   { type: 'dspCreativeTaskCenter', name: '素材任务中心', icon: AppsOutline, color: '#fbbf24' },
   { type: 'materialVariation', name: '素材裂变', icon: AppsOutline, color: '#10b981' },
+  { type: 'materialInput', name: '素材导入', icon: DownloadOutline, color: '#38bdf8' },
   { type: 'textOverlay', name: '文字叠加', icon: TextOutline, color: '#06b6d4' },
   { type: 'videoConfig', name: '视频生成配置', icon: VideocamOutline, color: '#f59e0b' },
   { type: 'image', name: '图片节点', icon: ImageOutline, color: '#8b5cf6' },
