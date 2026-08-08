@@ -9,8 +9,8 @@ const novel = mapNovelJobToTask({ job_id: 'nvj-1', title: '家缘万事兴', sta
 
 assert.deepEqual(novel, { id: 'novel:nvj-1', source: 'novel', source_id: 'nvj-1', name: '家缘万事兴', status: 'running', progress: 30, success_count: 3, failure_count: 1 })
 assert.deepEqual(mergeRecentTasks([{ id: 'material-1' }], [novel]).map(item => item.id), ['novel:nvj-1', 'material-1'])
-assert.match(home, /listNovelVideoJobs\(\{ limit: 20/)
-assert.match(home, /mergeRecentTasks\(materialTasks\.value, novelTasks\.value\)/)
+assert.match(home, /listTaskCenterTasks\(\{ limit: 100/)
+assert.match(home, /recentTasks\.value = result\.tasks/)
 assert.match(home, /@details="openTask"/)
 assert.match(home, /:error="taskLoadError"/)
 assert.match(home, /暂时无法读取后端任务/)

@@ -6,7 +6,7 @@
     @navigate="handleWorkspaceNavigate"
     @open-settings="showApiSettings = true"
     @open-status="showApiSettings = true"
-    @open-tasks="taskRailOpen = true"
+    @open-tasks="openTaskCenter"
   >
     <template #main>
       <section class="mb-6 rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5 p-5">
@@ -36,7 +36,7 @@
         @close="taskRailOpen = false"
         @details="openTask"
         @view-results="openTask"
-        @download="openTask"
+        @download="downloadTask"
       />
     </template>
   </WorkspaceShell>
@@ -77,8 +77,7 @@ import RecentProjects from '../components/home/RecentProjects.vue'
 import TaskRail from '../components/workspace/TaskRail.vue'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { STUDIO_ENTRIES } from '../config/studioEntries'
-import { listNovelVideoJobs } from '../api/novelVideo'
-import { mapNovelJobToTask, mergeRecentTasks } from '../utils/workspaceUi'
+import { listTaskCenterTasks } from '../api/taskCenter'
 
 const router = useRouter()
 const dialog = useDialog()
@@ -92,10 +91,8 @@ const openStudioEntry = (entry) => {
 
 const showApiSettings = ref(false)
 const taskRailOpen = ref(false)
-const materialTasks = ref([])
-const novelTasks = ref([])
+const recentTasks = ref([])
 const taskLoadError = ref('')
-const recentTasks = computed(() => mergeRecentTasks(materialTasks.value, novelTasks.value))
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
@@ -106,21 +103,43 @@ const serviceStatus = computed(() => ({
 }))
 
 const refreshApiConfig = () => {}
-const loadRecentNovelTasks = async () => {
+const taskSourceLabels = {
+  material: '普通素材',
+  novel: '小说成片',
+  dsp: 'DSP 素材',
+  resize: '尺寸/文字处理'
+}
+const loadTaskCenter = async () => {
   taskLoadError.value = ''
   try {
-    const result = await listNovelVideoJobs({ limit: 20 })
-    novelTasks.value = (Array.isArray(result?.jobs) ? result.jobs : []).filter(job => job?.job_id).map(mapNovelJobToTask)
-  } catch {
-    novelTasks.value = []
-    taskLoadError.value = '暂时无法读取后端任务，请稍后重试。'
+    const result = await listTaskCenterTasks({ limit: 100 })
+    recentTasks.value = result.tasks
+    if (result.sourceErrors.length) {
+      const names = result.sourceErrors.map(source => taskSourceLabels[source] || source)
+      taskLoadError.value = `部分分类暂时未读取：${names.join('、')}`
+    }
+  } catch (error) {
+    taskLoadError.value = error?.message || '暂时无法读取后端任务，请稍后重试。'
   }
+}
+const openTaskCenter = () => {
+  taskRailOpen.value = true
+  loadTaskCenter()
 }
 const openTask = task => {
   if (task?.source === 'novel' && task.source_id) {
     taskRailOpen.value = false
     router.push({ path: '/video-studio', query: { tab: 'novel', job: task.source_id } })
+    return
   }
+  taskRailOpen.value = false
+  if (task?.source === 'resize') router.push('/video-resize')
+  else if (task?.source === 'dsp') createFlowProject('dsp')
+  else if (task?.category === 'variation') createFlowProject('variation')
+  else router.push('/video-studio')
+}
+const downloadTask = task => {
+  if (task?.download_url) window.open(task.download_url, '_blank', 'noopener')
 }
 
 const suggestionSets = [
@@ -281,7 +300,7 @@ const handleWorkspaceNavigate = (item) => {
     return
   }
   if (item.id === 'tasks') {
-    taskRailOpen.value = true
+    openTaskCenter()
     return
   }
   if (item.id === 'recent') {
@@ -330,5 +349,5 @@ const confirmRename = () => {
   renameValue.value = ''
 }
 
-onMounted(() => { initProjectsStore(); loadRecentNovelTasks() })
+onMounted(() => { initProjectsStore(); loadTaskCenter() })
 </script>

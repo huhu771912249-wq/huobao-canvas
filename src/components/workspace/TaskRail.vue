@@ -11,10 +11,25 @@
         </button>
       </header>
 
-      <div v-if="tasks.length" class="task-rail__list">
-        <article v-for="task in tasks" :key="task.id" class="task-card">
+      <div v-if="tasks.length" class="task-categories" aria-label="任务分类">
+        <button
+          v-for="category in categoryTabs"
+          :key="category.id"
+          type="button"
+          :class="{ active: activeCategory === category.id }"
+          @click="activeCategory = category.id"
+        >
+          {{ category.label }} <span>{{ category.count }}</span>
+        </button>
+      </div>
+
+      <p v-if="error && tasks.length" class="task-rail__warning">{{ error }}</p>
+
+      <div v-if="filteredTasks.length" class="task-rail__list">
+        <article v-for="task in filteredTasks" :key="task.id" class="task-card">
           <div class="task-card__top">
             <div>
+              <span class="task-card__category">{{ task.category_label || '素材任务' }}</span>
               <strong>{{ taskSummary(task).title }}</strong>
               <p>{{ task.name || task.id }}</p>
             </div>
@@ -41,19 +56,21 @@
 
       <div v-else class="task-rail__empty">
         <n-icon :size="36"><SparklesOutline /></n-icon>
-        <strong>{{ error ? '任务读取失败' : '当前没有运行任务' }}</strong>
-        <p>{{ error || '生成、逆向和裂变任务会集中显示在这里。' }}</p>
+        <strong>{{ emptyTitle }}</strong>
+        <p>{{ emptyMessage }}</p>
       </div>
     </aside>
   </Transition>
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
 import { NIcon } from 'naive-ui'
 import { CloseOutline, SparklesOutline } from '@vicons/ionicons5'
 import { buildTaskSummary } from '../../utils/workspaceUi'
+import { buildTaskCategoryTabs, filterTaskCenterTasks } from '../../utils/taskCenter'
 
-defineProps({
+const props = defineProps({
   open: {
     type: Boolean,
     default: false
@@ -69,6 +86,18 @@ defineProps({
 })
 
 defineEmits(['close', 'retry', 'cancel', 'download', 'details', 'confirm', 'view-results'])
+
+const activeCategory = ref('all')
+const categoryTabs = computed(() => buildTaskCategoryTabs(props.tasks))
+const filteredTasks = computed(() => filterTaskCenterTasks(props.tasks, activeCategory.value))
+const emptyTitle = computed(() => {
+  if (props.tasks.length) return '该分类暂无任务'
+  return props.error ? '任务读取失败' : '暂无任务记录'
+})
+const emptyMessage = computed(() => {
+  if (props.tasks.length) return '选择其他分类查看已有任务。'
+  return props.error || '视频、素材裂变、小说成片、DSP 和尺寸处理任务会集中显示在这里。'
+})
 
 const taskSummary = (task) => buildTaskSummary(task)
 
@@ -139,11 +168,56 @@ const actionLabel = (action) => ({
   margin-top: 18px;
 }
 
+.task-categories {
+  display: flex;
+  gap: 7px;
+  margin-top: 16px;
+  padding-bottom: 4px;
+  overflow-x: auto;
+}
+
+.task-categories button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.task-categories button.active {
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+  background: rgba(101, 230, 189, 0.1);
+}
+
+.task-categories span {
+  margin-left: 3px;
+  color: var(--accent-color);
+}
+
+.task-rail__warning {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  color: var(--warning-color);
+  background: rgba(245, 158, 11, 0.08);
+  font-size: 11px;
+}
+
 .task-card {
   padding: 16px;
   border: 1px solid var(--border-color);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.025);
+}
+
+.task-card__category {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-color);
+  font-size: 10px;
+  letter-spacing: 0.08em;
 }
 
 .task-card p {
