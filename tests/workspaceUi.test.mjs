@@ -113,4 +113,19 @@ for (const component of [
   )
 }
 
+const workspaceShellSource = readFileSync(
+  new URL('../src/components/workspace/WorkspaceShell.vue', import.meta.url),
+  'utf8'
+)
+assert.match(
+  workspaceShellSource,
+  /grid-template-columns:\s*100px minmax\(0, 1fr\)/,
+  'desktop workspace must reserve the full sidebar width before main content'
+)
+assert.match(
+  workspaceShellSource,
+  /\.workspace-sidebar\s*\{[^}]*margin:\s*12px;/s,
+  'desktop sidebar must keep an outer gap on every side'
+)
+
 console.log('workspaceUi.test.mjs passed')

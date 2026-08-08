@@ -8,7 +8,7 @@
         <h1>把灵感，变成<br /><em>可投放的素材。</em></h1>
         <p class="lead">H3 视频、LTX 2.3 原生音频、素材裂变与数据回流，都在一张无限画布里完成。</p>
       </div>
-      <div class="signal-row"><span><i></i> GPU 5090 ONLINE</span><span>LTX 2.3</span><span>H3</span></div>
+      <div class="signal-row"><span><i></i> GPU STATUS · 登录后实时查看</span><span>LTX 2.3</span><span>H3</span></div>
     </section>
     <section class="login-panel">
       <form class="login-card" @submit.prevent="submit">

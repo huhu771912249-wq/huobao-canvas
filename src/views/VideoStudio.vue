@@ -2,7 +2,7 @@
   <main class="min-h-screen bg-[#07101e] text-slate-100">
     <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 px-6 py-4">
       <div><div class="text-xs tracking-[0.3em] text-cyan-400">冠希 VIDEO</div><h1 class="text-xl font-semibold">视频创作中心</h1></div>
-      <nav class="flex gap-2 text-sm"><button class="studio-chip" @click="router.push('/')">首页</button><button class="studio-chip" @click="router.push('/canvas')">无限画布</button></nav>
+      <nav class="flex items-center gap-2 text-sm"><ComputeStatusIndicator /><button class="studio-chip" @click="router.push('/')">首页</button><button class="studio-chip" @click="router.push('/canvas')">无限画布</button></nav>
     </header>
     <section class="mx-auto max-w-[1500px] p-6">
       <div class="mb-6 flex flex-wrap gap-2">
@@ -50,6 +50,7 @@ import { getVideoQualityProfile } from '../utils/videoQualityProfile'
 import { createProject, updateProject } from '../stores/projects'
 import NovelVideoWorkspace from '../components/studio/NovelVideoWorkspace.vue'
 import VideoOutputSizePicker from '../components/VideoOutputSizePicker.vue'
+import ComputeStatusIndicator from '../components/ComputeStatusIndicator.vue'
 
 const route = useRoute(); const router = useRouter()
 const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
