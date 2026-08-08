@@ -5,8 +5,12 @@ const base = {
   model: 'minimax-h3', prompt: 'test', size: '16:9', seconds: 5,
   quality_profile: { mode: 'quality', width: 1920, height: 1080, upscaler: 'seedvr2-3b-fp16', label: '高质量 1080p' },
   image_alignment: { mode: 'crop_or_pad', width: 608, height: 352, preserve_aspect_ratio: true, allow_stretch: false },
+  h3_generation_profile: 'stable',
   should_never_leak: 'secret'
 }
+
+const local = PROVIDERS['local-material'].requestAdapter.video(base)
+assert.equal(local.h3_generation_profile, 'stable', 'local provider dropped H3 generation profile')
 
 for (const provider of ['local-material', 'chatfire', 'openai']) {
   const adapted = PROVIDERS[provider].requestAdapter.video(base)

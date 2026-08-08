@@ -11,7 +11,7 @@ const withVideoQualityContract = (params, adapted) => {
 
 const adaptLocalVideoRequest = (params = {}) => {
   const adapted = { model: params.model, prompt: params.prompt || '' }
-  for (const key of ['first_frame_image', 'last_frame_image', 'images', 'driving_video', 'driving_video_name', 'size', 'seconds', 'sizes', 'output_formats']) {
+  for (const key of ['first_frame_image', 'last_frame_image', 'images', 'driving_video', 'driving_video_name', 'size', 'seconds', 'sizes', 'output_formats', 'h3_generation_profile']) {
     if (params[key] !== undefined) adapted[key] = params[key]
   }
   return withVideoQualityContract(params, adapted)

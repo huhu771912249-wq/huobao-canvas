@@ -261,6 +261,7 @@ export const useVideoGeneration = () => {
     if (params.dur) requestData.seconds = params.dur
     if (params.sizes) requestData.sizes = params.sizes
     if (params.output_formats) requestData.output_formats = params.output_formats
+    if (params.h3_generation_profile) requestData.h3_generation_profile = params.h3_generation_profile
     const qualityProfile = normalizeVideoQualityRequestProfile(params.quality_profile)
     const imageAlignment = normalizeVideoImageAlignmentRequest(params.image_alignment)
     if (qualityProfile) requestData.quality_profile = qualityProfile

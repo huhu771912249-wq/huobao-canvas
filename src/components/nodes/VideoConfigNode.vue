@@ -86,6 +86,31 @@
         </div>
 
         <template v-if="localModel === 'minimax-h3'">
+          <div class="mb-3 space-y-2 rounded-xl border border-violet-400/30 bg-violet-400/5 p-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-medium text-[var(--text-primary)]">H3 生成速度</span>
+              <span class="text-[10px] text-violet-300">成品仍强制 SeedVR2 超分</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                v-for="profile in h3GenerationProfiles"
+                :key="profile.id"
+                type="button"
+                :disabled="!profile.enabled"
+                class="rounded-lg border px-2 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                :class="localH3GenerationProfile === profile.id
+                  ? 'border-violet-400 bg-violet-400/15 text-violet-200'
+                  : 'border-[var(--border-color)] text-[var(--text-secondary)]'"
+                @click="handleH3GenerationProfileSelect(profile)"
+              >
+                <b class="block text-xs">{{ profile.name }}</b>
+                <span class="text-[10px]">{{ profile.sampling_steps }} 步{{ profile.experimental ? ' · 实验' : '' }}</span>
+              </button>
+            </div>
+            <div v-if="h3TurboDisabledReason" class="text-[10px] leading-relaxed text-amber-400">
+              高速模式待启用：{{ h3TurboDisabledReason }}
+            </div>
+          </div>
           <MultiViewReferencePanel :source-image="connectedFirstFrameSource" @confirmed="handleMultiViewConfirmed" />
           <H3DirectorPromptEditor
             :references="confirmedMultiViewReference ? [{ id: confirmedMultiViewReference.id, role: confirmedMultiViewReference.role }] : []"
@@ -264,6 +289,7 @@ import { useVideoGeneration } from '../../hooks'
 import { publishImageAsset } from '../../api/image'
 import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
 import { createMediaComposition } from '../../api/mediaComposition'
+import { fetchVideoCapabilities } from '../../api/videoCapabilities'
 import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import VideoOutputSizePicker from '../VideoOutputSizePicker.vue'
@@ -280,6 +306,10 @@ import { getVideoInputCapabilities } from '../../utils/videoInputCapabilities'
 import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 import { getImageAlignmentSpec, getModelNativeVideoSize } from '../../config/studioProjectFlow'
 import { isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
+import {
+  getH3GenerationProfiles,
+  normalizeH3GenerationProfile
+} from '../../utils/h3GenerationProfile'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -326,6 +356,37 @@ const compositionError = ref('')
 const compiledDirectorPrompt = ref(props.data?.compiledDirectorPrompt || '')
 const directorPlan = ref(props.data?.directorPlan || null)
 const confirmedMultiViewReference = ref(props.data?.confirmedMultiViewReference || null)
+const h3Capability = ref(null)
+const localH3GenerationProfile = ref(
+  props.data?.h3GenerationProfile || props.data?.h3_generation_profile || 'stable'
+)
+const h3GenerationProfiles = computed(() => getH3GenerationProfiles(h3Capability.value))
+const h3TurboDisabledReason = computed(() => {
+  const turbo = h3GenerationProfiles.value.find(profile => profile.id === 'turbo')
+  return turbo && !turbo.enabled ? turbo.disabled_reason || '服务器尚未启用' : ''
+})
+
+const loadH3Capabilities = async () => {
+  const models = await fetchVideoCapabilities()
+  h3Capability.value = models?.['minimax-h3'] || null
+  const normalized = normalizeH3GenerationProfile(
+    localH3GenerationProfile.value,
+    h3Capability.value
+  )
+  if (normalized !== localH3GenerationProfile.value) {
+    localH3GenerationProfile.value = normalized
+    updateNode(props.id, { h3GenerationProfile: normalized })
+  }
+}
+
+const handleH3GenerationProfileSelect = (profile) => {
+  if (!profile?.enabled) {
+    window.$message?.warning(profile?.disabled_reason || '该模式尚未在服务器启用')
+    return
+  }
+  localH3GenerationProfile.value = profile.id
+  updateNode(props.id, { h3GenerationProfile: profile.id })
+}
 
 const handleMultiViewConfirmed = (reference) => {
   confirmedMultiViewReference.value = reference
@@ -593,6 +654,7 @@ const handleModelSelect = (key) => {
   updates.qualityProfile = qualityProfile.value
   updates.imageAlignment = imageAlignment.value
   updateNode(props.id, updates)
+  if (key === 'minimax-h3') void loadH3Capabilities()
 }
 
 const toggleBatchSize = (size) => {
@@ -910,6 +972,9 @@ const handleGenerate = async () => {
     if (localModel.value === 'minimax-h3' && directorPlan.value) {
       params.director_plan = directorPlan.value
     }
+    if (localModel.value === 'minimax-h3') {
+      params.h3_generation_profile = localH3GenerationProfile.value
+    }
 
     // Add prompt if provided | 如果有提示词则添加
     if (prompt) {
@@ -959,7 +1024,8 @@ const handleGenerate = async () => {
       qualityMode: localQualityMode.value,
       upscale_status: result?.upscale_status || '',
       actual_width: result?.actual_width || null,
-      actual_height: result?.actual_height || null
+      actual_height: result?.actual_height || null,
+      h3GenerationProfile: localModel.value === 'minimax-h3' ? localH3GenerationProfile.value : undefined
     }
     const verified1080p = isVerifiedTargetOutput(qualityMetadata, qualityProfile.value)
 
@@ -1052,12 +1118,19 @@ onMounted(() => {
     localModel.value = resolvedModel
     updateNode(props.id, { model: resolvedModel })
   }
+  if (localModel.value === 'minimax-h3') void loadH3Capabilities()
 })
 
 // Watch for model changes from props | 监听 props 中模型变化
 watch(() => props.data?.model, (newModel) => {
   if (newModel && newModel !== localModel.value) {
     localModel.value = newModel
+  }
+})
+
+watch(() => props.data?.h3GenerationProfile, (newProfile) => {
+  if (newProfile && newProfile !== localH3GenerationProfile.value) {
+    localH3GenerationProfile.value = normalizeH3GenerationProfile(newProfile, h3Capability.value)
   }
 })
 
