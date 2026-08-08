@@ -23,8 +23,8 @@
 
 | 路径 | 前端用途 |
 | --- | --- |
-| `/v1/assets/images` | 图片生成或本地图片资产 |
-| `/v1/assets/recent` | 最近生成的图片、视频、GIF 和音频列表 |
+| `/v1/assets/images` | 发布内嵌输入图片；返回 `asset_role: "input"`，不进入最近生成 |
+| `/v1/assets/recent` | 最近生成的最终图片、视频、GIF 和音频列表，不包含导入/引用素材 |
 | `/v1/assets/import` | 受控远程素材导入 |
 | `/v1/projects` | 项目摘要列表与按项目 JSON 持久化 |
 | `/v1/tasks` | 统一任务中心，合并视频、裂变、小说、DSP 和尺寸处理任务 |
