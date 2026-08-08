@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  createBatchVideoTemplateFlow,
   createImageToVideoTemplateFlow,
   createTextToVideoTemplateFlow,
   VIDEO_WORKFLOW_TEMPLATES
@@ -47,8 +48,14 @@ assert.deepEqual(
 
 assert.deepEqual(
   VIDEO_WORKFLOW_TEMPLATES.map((workflow) => workflow.id),
-  ['text-to-video', 'image-to-video']
+  ['text-to-video', 'image-to-video', 'batch-video']
 )
+
+const batchFlow = createBatchVideoTemplateFlow({ x: 40, y: 60 })
+assert.deepEqual(batchFlow.nodes.map((node) => node.type), ['text', 'videoConfig', 'videoBatch'])
+assert.equal(batchFlow.nodes[1].data.model, 'frw-video')
+assert.equal(batchFlow.nodes[1].data.generateGif, true)
+assert.deepEqual(batchFlow.nodes[1].data.batchSizes, ['300x100', '300x250', '720x240', '200x200'])
 
 const frwVideo = VIDEO_MODELS.find((model) => model.key === 'frw-video')
 const h3Video = VIDEO_MODELS.find((model) => model.key === 'minimax-h3')

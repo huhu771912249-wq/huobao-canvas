@@ -4,6 +4,7 @@
     project-title="最近生成"
     :service-status="serviceStatus"
     @navigate="handleWorkspaceNavigate"
+    @open-tasks="router.push(resolveWorkspaceNavigationTarget('tasks'))"
   >
     <template #main>
       <section class="recent-page">
@@ -89,6 +90,7 @@ import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { listRecentGenerations } from '../api/recentGenerations.js'
 import { createProject, initProjectsStore, updateProject } from '../stores/projects.js'
 import { buildRecentImageCanvas, formatRecentAssetSize } from '../utils/recentGenerations.js'
+import { resolveWorkspaceNavigationTarget } from '../config/workspaceLaunch.js'
 
 const router = useRouter()
 const filters = [
@@ -150,7 +152,7 @@ const openImageInCanvas = async asset => {
 
 const handleWorkspaceNavigate = item => {
   if (item.id === 'recent') return
-  router.push(item.to)
+  router.push(resolveWorkspaceNavigationTarget(item.id))
 }
 
 onMounted(() => {

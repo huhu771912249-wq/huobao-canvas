@@ -53,8 +53,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { NButton, NInput, NModal, useDialog } from 'naive-ui'
 import {
   projects,
@@ -66,10 +66,7 @@ import {
   renameProject
 } from '../stores/projects'
 import { useModelStore } from '../stores/pinia'
-import {
-  createImageToVideoTemplateFlow,
-  createTextToVideoTemplateFlow
-} from '../config/videoWorkflows'
+import { buildCanvasLaunch, WORKSPACE_LAUNCH_LABELS } from '../config/workspaceLaunch'
 import { nextSuggestionSetIndex } from '../utils/suggestions'
 import ApiSettings from '../components/ApiSettings.vue'
 import CreationLauncher from '../components/home/CreationLauncher.vue'
@@ -80,13 +77,13 @@ import { STUDIO_ENTRIES } from '../config/studioEntries'
 import { listTaskCenterTasks } from '../api/taskCenter'
 
 const router = useRouter()
+const route = useRoute()
 const dialog = useDialog()
 const modelStore = useModelStore()
 const studioEntries = STUDIO_ENTRIES
 const openStudioEntry = (entry) => {
   if (entry.route) router.push(entry.route)
-  else if (entry.flow === 'dsp' || entry.flow === 'variation') createFlowProject(entry.flow)
-  else if (entry.flow === 'video') createVideoProject(videoEntries.video)
+  else if (entry.action === 'tasks') openTaskCenter()
 }
 
 const showApiSettings = ref(false)
@@ -192,8 +189,8 @@ const createNewProject = () => {
 const createPromptProject = (prompt = '') => {
   checkApiKeyAndNavigate(() => {
     const cleanPrompt = String(prompt || '').trim()
-    const id = createProject(cleanPrompt || '未命名项目')
-    sessionStorage.setItem('ai-canvas-initial-prompt', cleanPrompt)
+    const id = createProject(cleanPrompt || WORKSPACE_LAUNCH_LABELS.image)
+    updateProject(id, { canvasData: buildCanvasLaunch('image', { prompt: cleanPrompt }) })
     router.push(`/canvas/${id}`)
   })
 }
@@ -203,74 +200,20 @@ const videoEntries = {
   'image-to-video': { id: 'image-to-video', title: '图生视频' }
 }
 
-const buildVideoTemplateCanvas = (entry, prompt) => {
-  const flow = entry.id === 'image-to-video'
-    ? createImageToVideoTemplateFlow({ x: 120, y: 120 })
-    : createTextToVideoTemplateFlow({ x: 120, y: 180 })
-
-  return {
-    nodes: flow.nodes.map((node) => node.type === 'text' && prompt
-      ? { ...node, data: { ...node.data, content: prompt } }
-      : node),
-    edges: flow.edges,
-    viewport: { x: 80, y: 60, zoom: 0.8 }
-  }
-}
-
 const createVideoProject = (entry, prompt = '') => {
   checkApiKeyAndNavigate(() => {
     const cleanPrompt = String(prompt || '').trim()
     const id = createProject(cleanPrompt || entry.title)
-    updateProject(id, { canvasData: buildVideoTemplateCanvas(entry, cleanPrompt) })
+    const flow = entry.id === 'image-to-video' ? 'image-to-video' : 'video'
+    updateProject(id, { canvasData: buildCanvasLaunch(flow, { prompt: cleanPrompt }) })
     router.push(`/canvas/${id}`)
   })
 }
 
 const createFlowProject = (flow) => {
   checkApiKeyAndNavigate(() => {
-    const names = {
-      variation: '素材裂变',
-      dsp: '54DSP 优秀素材'
-    }
-    const id = createProject(names[flow] || '创作项目')
-    if (flow === 'dsp') {
-      updateProject(id, {
-        canvasData: {
-          nodes: [
-            {
-              id: `dsp-library-${id}`,
-              type: 'dspCreativeLibrary',
-              position: { x: 120, y: 100 },
-              data: { label: '54DSP 优秀素材' }
-            },
-            {
-              id: `dsp-tasks-${id}`,
-              type: 'dspCreativeTaskCenter',
-              position: { x: 1120, y: 100 },
-              data: { label: '素材任务中心', jobIds: [] }
-            }
-          ],
-          edges: [],
-          viewport: { x: 40, y: 50, zoom: 0.68 }
-        }
-      })
-    } else if (flow === 'variation') {
-      updateProject(id, {
-        canvasData: {
-          nodes: [
-            {
-              id: `variation-${id}`,
-              type: 'materialVariation',
-              position: { x: 160, y: 100 },
-              data: { label: '素材裂变' }
-            }
-          ],
-          edges: [],
-          viewport: { x: 100, y: 80, zoom: 0.8 }
-        }
-      })
-    }
-    sessionStorage.setItem('ai-canvas-launch-flow', flow)
+    const id = createProject(WORKSPACE_LAUNCH_LABELS[flow] || '创作项目')
+    updateProject(id, { canvasData: buildCanvasLaunch(flow) })
     router.push({ path: `/canvas/${id}`, query: { flow } })
   })
 }
@@ -349,5 +292,26 @@ const confirmRename = () => {
   renameValue.value = ''
 }
 
-onMounted(() => { initProjectsStore(); loadTaskCenter() })
+onMounted(async () => {
+  await initProjectsStore()
+  loadTaskCenter()
+  const launch = String(route.query.launch || '')
+  const panel = String(route.query.panel || '')
+  const section = String(route.query.section || '')
+  if (launch && WORKSPACE_LAUNCH_LABELS[launch]) {
+    await router.replace({ path: '/' })
+    handleLaunch(launch)
+    return
+  }
+  if (panel === 'tasks') {
+    await router.replace({ path: '/' })
+    openTaskCenter()
+    return
+  }
+  if (section === 'projects') {
+    await router.replace({ path: '/' })
+    await nextTick()
+    document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+})
 </script>

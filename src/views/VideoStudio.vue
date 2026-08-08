@@ -40,7 +40,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { COMMON_VIDEO_SIZES, normalizeVideoSize } from '../config/videoSizes'
 import { detectStudioIntent } from '../utils/studioIntent'
@@ -51,11 +51,12 @@ import { createProject, updateProject } from '../stores/projects'
 import NovelVideoWorkspace from '../components/studio/NovelVideoWorkspace.vue'
 import VideoOutputSizePicker from '../components/VideoOutputSizePicker.vue'
 import ComputeStatusIndicator from '../components/ComputeStatusIndicator.vue'
+import { normalizeStudioTab } from '../config/workspaceLaunch'
 
 const route = useRoute(); const router = useRouter()
 const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
 const modes = [{ key: 'text-to-image', title: '文生图', description: '提示词生成图片变体' }, { key: 'image-to-video', title: '文生图＋视频', description: '先确认首帧，再生成动态镜头' }, { key: 'asset', title: '上传素材', description: '自动识别图片、视频和文档' }]
-const activeTab = ref(String(route.query.tab || 'quick')); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1280x720'); const sizes = COMMON_VIDEO_SIZES
+const activeTab = ref(normalizeStudioTab(route.query.tab)); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1280x720'); const sizes = COMMON_VIDEO_SIZES
 const cloudVideoModels = [{ key: 'minimax-h3', label: 'MiniMax H3', description: '默认｜人物与原生音频视频' }, { key: 'ltx-2.3', label: 'LTX 2.3', description: '开放版｜内置 2× 空间放大' }]
 const selectedVideoModel = ref('minimax-h3')
 const outputWidth = ref(1280)
@@ -71,6 +72,7 @@ const customSizeLabel = computed(() => `${customWidth.value} × ${customHeight.v
 const intent = computed(() => detectStudioIntent({ prompt: prompt.value, fileName: fileName.value, wantsVideo: selectedMode.value === 'image-to-video' }))
 const intentLabel = computed(() => ({ 'text-to-image': '文生图', 'image-to-video': '文生图＋视频', 'novel-video': '小说成片', asset: '素材再创作' }[intent.value]))
 const setTab = key => { activeTab.value = key; router.replace({ query: key === 'quick' ? {} : { tab: key } }) }
+watch(() => route.query.tab, value => { activeTab.value = normalizeStudioTab(value) })
 const handleFile = async event => {
   const file = event.target?.files?.[0]
   fileName.value = file?.name || ''

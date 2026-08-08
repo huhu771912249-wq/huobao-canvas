@@ -117,6 +117,48 @@ export const createImageToVideoTemplateFlow = (startPosition) => {
   }
 }
 
+export const createBatchVideoTemplateFlow = (startPosition) => {
+  const promptId = 'batch_video_prompt'
+  const configId = 'batch_video_config'
+  const outputId = 'batch_video_output'
+
+  return {
+    nodes: [
+      {
+        id: promptId,
+        type: 'text',
+        position: { x: startPosition.x, y: startPosition.y },
+        data: { content: '', label: '批量视频提示词' }
+      },
+      {
+        id: configId,
+        type: 'videoConfig',
+        position: { x: startPosition.x + 360, y: startPosition.y },
+        data: {
+          label: '批量广告尺寸',
+          mode: 'text_to_video',
+          model: 'frw-video',
+          batchSizes: ['300x100', '300x250', '720x240', '200x200'],
+          generateGif: true
+        }
+      },
+      {
+        id: outputId,
+        type: 'videoBatch',
+        position: { x: startPosition.x + 720, y: startPosition.y },
+        data: { label: '多尺寸结果', status: 'idle', assets: [] }
+      }
+    ],
+    edges: [
+      createEdge(promptId, configId, {
+        type: 'promptOrder',
+        data: { promptOrder: 1 }
+      }),
+      createEdge(configId, outputId)
+    ]
+  }
+}
+
 export const VIDEO_WORKFLOW_TEMPLATES = [
   {
     id: 'text-to-video',
@@ -133,5 +175,13 @@ export const VIDEO_WORKFLOW_TEMPLATES = [
     icon: 'VideocamOutline',
     category: 'video',
     createNodes: createImageToVideoTemplateFlow
+  },
+  {
+    id: 'batch-video',
+    name: '批量广告尺寸',
+    description: '一次生成多种广告尺寸，并同时保留 MP4 / GIF',
+    icon: 'GridOutline',
+    category: 'video',
+    createNodes: createBatchVideoTemplateFlow
   }
 ]
