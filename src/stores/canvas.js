@@ -5,6 +5,17 @@
 import { ref, watch } from 'vue'
 import { updateProjectCanvas, getProjectCanvas } from './projects'
 import { IMAGE_MODELS, VIDEO_MODELS, CHAT_MODELS, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, DEFAULT_CHAT_MODEL } from '../config/models'
+import {
+  DEFAULT_MATERIAL_VARIATION_COUNT,
+  DEFAULT_MATERIAL_VARIATION_SIZES
+} from '../utils/materialVariation'
+import {
+  DEFAULT_DSP_DIMENSIONS,
+  DEFAULT_DSP_MEDIA_TYPES,
+  DEFAULT_DSP_THRESHOLDS,
+  getDefaultShanghaiDateRange,
+  sanitizeDspCreativeCanvasNodeData
+} from '../utils/dspCreativeLibrary'
 
 // Node ID counter | 节点ID计数器
 let nodeId = 0
@@ -254,6 +265,8 @@ const getDefaultNodeData = (type) => {
         prompt: '',
         ratio: videoModel?.defaultParams?.ratio || '16:9',
         duration: videoModel?.defaultParams?.duration || 5,
+        batchSizes: ['300x100', '300x250', '720x240', '200x200'],
+        generateGif: true,
         model: DEFAULT_VIDEO_MODEL,
         label: '图生视频'
       }
@@ -264,11 +277,84 @@ const getDefaultNodeData = (type) => {
         duration: 0,
         label: '视频节点'
       }
+    case 'videoBatch':
+      return {
+        taskId: '',
+        status: 'queued',
+        progress: 0,
+        currentStep: '等待批量生成',
+        assets: [],
+        zipUrl: '',
+        outputFormats: ['mp4', 'gif'],
+        label: '批量视频结果'
+      }
+    case 'materialVariation':
+      return {
+        label: '素材裂变',
+        fileName: '',
+        sourceJobId: '',
+        count: DEFAULT_MATERIAL_VARIATION_COUNT,
+        sizes: [...DEFAULT_MATERIAL_VARIATION_SIZES],
+        qualityMode: 'high_quality',
+        strength: 'moderate',
+        jobId: '',
+        status: '',
+        progress: 0,
+        currentStep: '',
+        assets: [],
+        zipUrl: '',
+        reverseAnalysis: null,
+        materializedJobId: '',
+        materializedCreativeIds: []
+      }
+    case 'dspCreativeLibrary': {
+      const range = getDefaultShanghaiDateRange()
+      return {
+        label: '54DSP 优秀素材',
+        startDate: range.startDate,
+        endDate: range.endDate,
+        timezone: range.timezone,
+        mediaTypes: [...DEFAULT_DSP_MEDIA_TYPES],
+        dimensions: [...DEFAULT_DSP_DIMENSIONS],
+        account: '',
+        minImpressions: DEFAULT_DSP_THRESHOLDS.minImpressions,
+        minClicks: DEFAULT_DSP_THRESHOLDS.minClicks,
+        topN: DEFAULT_DSP_THRESHOLDS.topN,
+        selectedIds: [],
+        previewRef: '',
+        jobId: ''
+      }
+    }
+    case 'dspCreativeTaskCenter':
+      return {
+        label: '素材任务中心',
+        jobIds: [],
+        uiPrefs: {
+          status: '',
+          mediaType: '',
+          query: ''
+        }
+      }
     case 'image':
       return {
         url: '',
         label: '图片节点',
         publicProps: { name: '图片' }  // 公共属性（可被 @ 引用）
+      }
+    case 'textOverlay':
+      return {
+        label: '文字叠加',
+        text: '',
+        x: 50,
+        y: 78,
+        fontSize: 48,
+        boxWidth: 76,
+        color: '#ffffff',
+        strokeColor: '#111111',
+        strokeWidth: 4,
+        align: 'center',
+        shadow: true,
+        outputNodeId: ''
       }
     case 'llmConfig':
       return {
@@ -428,7 +514,10 @@ export const loadProject = (projectId) => {
   
   if (canvasData) {
     // Restore nodes | 恢复节点
-    nodes.value = canvasData.nodes || []
+    nodes.value = (canvasData.nodes || []).map((node) => ({
+      ...node,
+      data: sanitizeDspCreativeCanvasNodeData(node.type, node.data)
+    }))
     edges.value = canvasData.edges || []
     canvasViewport.value = canvasData.viewport || { x: 100, y: 50, zoom: 0.8 }
     
@@ -466,7 +555,10 @@ export const loadProject = (projectId) => {
 export const saveProject = () => {
   if (!currentProjectId.value) return
   updateProjectCanvas(currentProjectId.value, {
-    nodes: nodes.value,
+    nodes: nodes.value.map((node) => ({
+      ...node,
+      data: sanitizeDspCreativeCanvasNodeData(node.type, node.data)
+    })),
     edges: edges.value,
     viewport: canvasViewport.value
   })

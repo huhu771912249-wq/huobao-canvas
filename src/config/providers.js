@@ -1,3 +1,22 @@
+import { getMaterialApiBase } from '../utils/apiBase.js'
+import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from './studioProjectFlow.js'
+
+const withVideoQualityContract = (params, adapted) => {
+  const qualityProfile = normalizeVideoQualityRequestProfile(params?.quality_profile)
+  const imageAlignment = normalizeVideoImageAlignmentRequest(params?.image_alignment)
+  if (qualityProfile) adapted.quality_profile = qualityProfile
+  if (imageAlignment) adapted.image_alignment = imageAlignment
+  return adapted
+}
+
+const adaptLocalVideoRequest = (params = {}) => {
+  const adapted = { model: params.model, prompt: params.prompt || '' }
+  for (const key of ['first_frame_image', 'last_frame_image', 'images', 'driving_video', 'driving_video_name', 'size', 'seconds', 'sizes', 'output_formats']) {
+    if (params[key] !== undefined) adapted[key] = params[key]
+  }
+  return withVideoQualityContract(params, adapted)
+}
+
 /**
  * API Provider Adapters | API 渠道适配器
  * 适配不同 API 提供商的请求参数和响应格式
@@ -5,8 +24,66 @@
 
 // 渠道适配配置
 export const PROVIDERS = {
+  'local-material': {
+    label: '冠希本地 API',
+    defaultBaseUrl: getMaterialApiBase(),
+    defaultApiKey: '',
+    endpoints: {
+      chat: '/v1/chat/completions',
+      image: '/v1/images/generations',
+      video: '/v1/video/generations',
+      videoQuery: '/v1/video/task/{taskId}'
+    },
+    requestAdapter: {
+      chat: (params) => {
+        const adapted = {
+          model: params.model,
+          messages: params.messages
+        }
+        if (params.temperature !== undefined) adapted.temperature = params.temperature
+        if (params.max_tokens !== undefined) adapted.max_tokens = params.max_tokens
+        if (params.stream !== undefined) adapted.stream = params.stream
+        return adapted
+      },
+      image: (params) => {
+        const adapted = {
+          model: params.model || 'frw-qianwen',
+          prompt: params.prompt
+        }
+        if (params.size) adapted.size = params.size
+        if (params.n) adapted.n = params.n
+        if (params.image) adapted.image = params.image
+        if (params.edit_mode) adapted.edit_mode = params.edit_mode
+        if (params.subject_image) adapted.subject_image = params.subject_image
+        if (params.background_reference_image) {
+          adapted.background_reference_image = params.background_reference_image
+        }
+        if (params.background_instruction) {
+          adapted.background_instruction = params.background_instruction
+        }
+        return adapted
+      },
+      video: adaptLocalVideoRequest
+    },
+    responseAdapter: {
+      chat: (response) => {
+        if (response.choices && response.choices.length > 0) {
+          return response.choices[0].message?.content || ''
+        }
+        return ''
+      },
+      image: (response) => {
+        const data = response.data || response
+        return (Array.isArray(data) ? data : [data]).map(item => ({
+          url: item.url || item.b64_json || '',
+          revisedPrompt: item.revised_prompt || ''
+        }))
+      },
+      video: (response) => response
+    }
+  },
   chatfire: {
-    label: '火宝 (Chatfire)',
+    label: '冠希 (Chatfire)',
     defaultBaseUrl: 'https://api.chatfire.site',
     // 端点路径
     endpoints: {
@@ -15,7 +92,7 @@ export const PROVIDERS = {
       video: '/v1/video/generations',
       videoQuery: '/v1/video/task/{taskId}'
     },
-    // 火宝渠道请求适配
+    // 冠希渠道请求适配
     requestAdapter: {
       chat: (params) => {
         const adapted = {
@@ -100,7 +177,7 @@ export const PROVIDERS = {
             generate_audio: params.generateAudio !== false
           }
 
-          return adapted
+          return withVideoQualityContract(params, adapted)
         }
 
         // Kling 模型 - 使用 kling 特定格式
@@ -129,7 +206,7 @@ export const PROVIDERS = {
             adapted.image = params.first_frame_image
           }
 
-          return adapted
+          return withVideoQualityContract(params, adapted)
         }
 
         // 默认格式（veo 等）
@@ -142,10 +219,10 @@ export const PROVIDERS = {
         if (params.size) adapted.size = params.size
         if (params.seconds) adapted.seconds = params.seconds
 
-        return adapted
+        return withVideoQualityContract(params, adapted)
       }
     },
-    // 火宝渠道响应格式
+    // 冠希渠道响应格式
     responseAdapter: {
       chat: (response) => {
         if (response.choices && response.choices.length > 0) {
@@ -212,7 +289,7 @@ export const PROVIDERS = {
         if (params.last_frame_image) adapted.last_frame_image = params.last_frame_image
         if (params.size) adapted.size = params.size
         if (params.seconds) adapted.seconds = params.seconds
-        return adapted
+        return withVideoQualityContract(params, adapted)
       }
     },
     // 响应数据适配
@@ -242,7 +319,7 @@ export const PROVIDERS = {
   
 
   // 默认使用 OpenAI 格式
-  default: 'chatfire'
+  default: 'local-material'
 }
 
 // 获取渠道列表
@@ -260,6 +337,11 @@ export const getDefaultProvider = () => {
   return PROVIDERS.default || 'chatfire'
 }
 
+// 归一化渠道 Key，避免 localStorage 残留旧值时“显示默认渠道、过滤旧渠道模型”
+export const normalizeProviderKey = (providerKey) => {
+  return PROVIDERS[providerKey] ? providerKey : getDefaultProvider()
+}
+
 // 获取渠道的默认 Base URL
 export const getDefaultBaseUrl = (providerKey) => {
   const config = getProviderConfig(providerKey)
@@ -268,5 +350,5 @@ export const getDefaultBaseUrl = (providerKey) => {
 
 // 获取渠道配置
 export const getProviderConfig = (providerKey) => {
-  return PROVIDERS[providerKey] || PROVIDERS[PROVIDERS.default]
+  return PROVIDERS[normalizeProviderKey(providerKey)]
 }

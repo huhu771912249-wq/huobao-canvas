@@ -1,0 +1,10 @@
+allowBuilds:
+  esbuild: true
+  vue-demi: true
+
+overrides:
+  form-data@<4.0.6: 4.0.6
+  lodash: 4.18.1
+  lodash-es: 4.18.1
+  picomatch@<2.3.2: 2.3.2
+  "picomatch@>=4.0.0 <4.0.5": 4.0.5

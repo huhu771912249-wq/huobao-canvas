@@ -16,7 +16,7 @@
             v-for="(asset, idx) in imageAssets" 
             :key="idx"
             class="relative aspect-square rounded-lg overflow-hidden bg-[var(--bg-tertiary)] cursor-pointer group"
-            @click="downloadAsset(asset)"
+            @click="handleDownload(asset)"
           >
             <img :src="asset.url" class="w-full h-full object-cover" />
             <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -34,7 +34,7 @@
             v-for="(asset, idx) in videoAssets" 
             :key="idx"
             class="flex items-center gap-3 p-2 rounded-lg bg-[var(--bg-tertiary)] hover:bg-[var(--bg-secondary)] cursor-pointer transition-colors"
-            @click="downloadAsset(asset)"
+            @click="handleDownload(asset)"
           >
             <div class="w-16 h-10 rounded bg-[var(--bg-primary)] flex items-center justify-center">
               <n-icon :size="20"><VideocamOutline /></n-icon>
@@ -71,6 +71,7 @@ import { computed } from 'vue'
 import { NModal, NButton, NIcon } from 'naive-ui'
 import { DownloadOutline, VideocamOutline } from '@vicons/ionicons5'
 import { nodes } from '../stores/canvas'
+import { startAssetDownload } from '../utils/assetDownload'
 
 // Props | 属性
 const props = defineProps({
@@ -96,6 +97,7 @@ const imageAssets = computed(() => {
     .map(n => ({
       url: n.data.url,
       label: n.data.label || '图片',
+      fileName: n.data.fileName || `${n.data.label || '图片'}-${n.id}.png`,
       nodeId: n.id
     }))
 })
@@ -107,14 +109,19 @@ const videoAssets = computed(() => {
     .map(n => ({
       url: n.data.url,
       label: n.data.label || '视频',
+      fileName: n.data.fileName || `${n.data.label || '视频'}-${n.id}.mp4`,
       duration: n.data.duration,
       nodeId: n.id
     }))
 })
 
 // Download single asset | 下载单个素材
-const downloadAsset = (asset) => {
-  window.open(asset.url, '_blank')
-  window.$message?.success('已在新标签页打开')
+const handleDownload = async (asset) => {
+  try {
+    const result = await startAssetDownload(asset)
+    window.$message?.success(`已开始下载：${result.filename}`)
+  } catch (error) {
+    window.$message?.error(error?.message || '素材下载失败')
+  }
 }
 </script>

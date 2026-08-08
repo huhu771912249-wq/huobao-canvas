@@ -12,13 +12,19 @@
               placeholder="选择 API 渠道"
             />
           </n-form-item>
-          <n-form-item label="Base URL" path="baseUrl">
+          <div class="mb-3 rounded-lg bg-[var(--bg-secondary)] px-3 py-2 text-xs text-[var(--text-secondary)]">
+            当前状态：{{ isConfigured ? '已就绪' : '需要配置' }}
+          </div>
+          <n-button v-if="settingsVisibility.showAdvancedToggle" block secondary size="small" class="mb-3" @click="advancedOpen = !advancedOpen">
+            {{ advancedOpen ? '收起高级设置' : '高级设置' }}
+          </n-button>
+          <n-form-item v-if="settingsVisibility.showTechnicalFields" label="Base URL" path="baseUrl">
             <n-input
               v-model:value="formData.baseUrl"
               placeholder="https://api.chatfire.site/v1"
             />
           </n-form-item>
-          <n-form-item label="API Key" path="apiKey">
+          <n-form-item v-if="settingsVisibility.showTechnicalFields" label="API Key" path="apiKey">
             <n-input
               v-model:value="formData.apiKey"
               type="password"
@@ -27,11 +33,11 @@
             />
           </n-form-item>
 
-          <n-divider title-placement="left" class="!my-3">
+          <n-divider v-if="settingsVisibility.showTechnicalFields" title-placement="left" class="!my-3">
             <span class="text-xs text-[var(--text-secondary)]">端点路径</span>
           </n-divider>
           
-          <div class="endpoint-list">
+          <div v-if="settingsVisibility.showTechnicalFields" class="endpoint-list">
             <div class="endpoint-item">
               <span class="endpoint-label">问答</span>
               <n-tag size="small" type="info" class="endpoint-tag">{{ currentEndpoints.chat }}</n-tag>
@@ -50,7 +56,16 @@
             </div>
           </div>
 
-          <n-alert v-if="!isConfigured" type="warning" title="未配置" class="mb-4">
+          <n-alert
+            v-if="isLocalMaterialProvider"
+            type="success"
+            :title="`${materialAdapterLocation} API 已接入`"
+            class="mb-4"
+          >
+            文案走 /v1/chat/completions，作图走 /v1/images/generations；上游 Key 只在后端读取，前端不用填。
+          </n-alert>
+
+          <n-alert v-else-if="!isConfigured" type="warning" title="未配置" class="mb-4">
             <div class="flex flex-col gap-2">
               <p>请配置 API Key 以使用 AI 功能</p>
               <a 
@@ -171,7 +186,14 @@
 
     <template #footer>
       <div class="flex justify-between items-center">
+        <span
+          v-if="isLocalMaterialProvider"
+          class="text-xs text-[var(--text-secondary)]"
+        >
+          {{ materialAdapterLocation }}适配器已自动配置
+        </span>
         <a 
+          v-else
           href="https://api.chatfire.site/login?inviteCode=EEE80324" 
           target="_blank"
           class="text-xs text-[var(--text-secondary)] hover:text-[var(--accent-color)] transition-colors"
@@ -197,6 +219,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { NModal, NForm, NFormItem, NInput, NButton, NAlert, NDivider, NTag, NTabs, NTabPane, NSelect } from 'naive-ui'
 import { useModelStore } from '../stores/pinia'
 import { getProviderConfig } from '../config/providers'
+import { apiSettingsVisibility } from '../utils/apiSettingsVisibility'
 
 // Props | 属性
 const props = defineProps({
@@ -209,11 +232,30 @@ const props = defineProps({
 // Emits | 事件
 const emit = defineEmits(['update:show', 'saved'])
 
-// API Config 状态
-const isConfigured = computed(() => !!modelStore.currentApiKey)
-
 // Model Store (Pinia) | 模型配置 Store
 const modelStore = useModelStore()
+
+// API Config 状态
+const isLocalMaterialProvider = computed(() => formData.provider === 'local-material')
+const advancedOpen = ref(false)
+const settingsVisibility = computed(() => apiSettingsVisibility(formData.provider, advancedOpen.value))
+const materialAdapterLocation = computed(() => {
+  try {
+    const origin = globalThis.location?.origin || 'http://127.0.0.1'
+    const hostname = new URL(formData.baseUrl || origin, origin).hostname
+    return ['127.0.0.1', 'localhost', '::1'].includes(hostname) ? '本地' : '云端'
+  } catch {
+    return '后端'
+  }
+})
+const effectiveApiKey = computed(() => {
+  const config = getProviderConfig(formData.provider)
+  return formData.apiKey || config.defaultApiKey || ''
+})
+const isConfigured = computed(() => {
+  if (isLocalMaterialProvider.value) return true
+  return !!(modelStore.currentApiKey || effectiveApiKey.value)
+})
 
 // Provider options for select | 渠道下拉选项
 const providerOptions = modelStore.providerList.map(p => ({
@@ -256,7 +298,7 @@ const newVideoModel = ref('')
 const updateFormApiConfig = () => {
   const provider = formData.provider
   const config = getProviderConfig(provider)
-  formData.apiKey = modelStore.apiKeysByProvider[provider] || ''
+  formData.apiKey = modelStore.apiKeysByProvider[provider] || config.defaultApiKey || ''
   formData.baseUrl = modelStore.baseUrlsByProvider[provider] || config.defaultBaseUrl || ''
 }
 
@@ -271,6 +313,7 @@ watch(() => props.show, (val) => {
 
 // 监听渠道变化，更新表单中的 API 配置
 watch(() => formData.provider, () => {
+  advancedOpen.value = false
   updateFormApiConfig()
 })
 
@@ -316,11 +359,13 @@ const handleRemoveVideoModel = (modelKey) => {
 
 // Handle save | 处理保存
 const handleSave = () => {
+  const config = getProviderConfig(formData.provider)
   if (formData.provider) {
     modelStore.setProvider(formData.provider)
   }
-  if (formData.apiKey) {
-    modelStore.setApiKeyByProvider(formData.provider, formData.apiKey)
+  const apiKey = formData.apiKey || config.defaultApiKey || ''
+  if (apiKey) {
+    modelStore.setApiKeyByProvider(formData.provider, apiKey)
   }
   if (formData.baseUrl) {
     modelStore.setBaseUrlByProvider(formData.provider, formData.baseUrl)
@@ -331,6 +376,14 @@ const handleSave = () => {
 
 // Handle clear | 处理清除
 const handleClear = () => {
+  if (formData.provider === 'local-material') {
+    const config = getProviderConfig(formData.provider)
+    formData.apiKey = config.defaultApiKey || ''
+    formData.baseUrl = config.defaultBaseUrl || ''
+    modelStore.setApiKeyByProvider(formData.provider, formData.apiKey)
+    modelStore.setBaseUrlByProvider(formData.provider, formData.baseUrl)
+    return
+  }
   modelStore.clearApiConfigByProvider(formData.provider)
   modelStore.clearCustomModels()
   formData.apiKey = ''

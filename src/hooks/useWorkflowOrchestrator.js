@@ -10,15 +10,22 @@
 
 import { ref, watch } from 'vue'
 import { streamChatCompletions } from '@/api'
+import { H3_DIRECTOR_MODEL, H3_DIRECTOR_SYSTEM_PROMPT } from '@/config/h3DirectorPrompt'
+import { parseDirectorResponse } from '@/utils/h3DirectorPlan'
+import { buildH3DirectorWorkflow } from '@/utils/h3DirectorWorkflow'
+import { getMaterialApiBase } from '@/utils/apiBase'
 import { 
   nodes, 
   addNode, 
   addEdge, 
+  addNodes,
+  addEdges,
   updateNode 
 } from '@/stores/canvas'
 
 // Workflow types | 工作流类型
 const WORKFLOW_TYPES = {
+  H3_VIDEO: 'h3_video',
   TEXT_TO_IMAGE: 'text_to_image',
   TEXT_TO_IMAGE_TO_VIDEO: 'text_to_image_to_video',
   STORYBOARD: 'storyboard', // 分镜工作流
@@ -114,6 +121,8 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
 
 提示词优化要求：
 - image_prompt: 基于用户输入扩展，添加画面细节、艺术风格、光影效果等
+- 所有涉及人物的生图提示词：默认使用成年中国人或东亚面孔；用户明确指定其他人种时按用户要求
+- 所有生图构图：人物、产品和主要文案完整入镜，四周预留10%安全边距，避免头顶、下巴、手脚或文字被裁切
 - video_prompt: 描述画面如何动起来，如镜头移动、主体动作、氛围变化等
 - character.description: 详细描述角色外观特征，便于后续分镜保持一致性
 - shots[].prompt: 每个分镜的完整画面描述，需包含角色名以保持一致性
@@ -309,24 +318,26 @@ export const useWorkflowOrchestrator = () => {
     try {
       let response = ''
       for await (const chunk of streamChatCompletions({
-        model: 'gpt-4o',
+        model: H3_DIRECTOR_MODEL,
         messages: [
-          { role: 'system', content: INTENT_ANALYSIS_PROMPT },
+          { role: 'system', content: H3_DIRECTOR_SYSTEM_PROMPT },
           { role: 'user', content: userInput }
         ]
+      }, undefined, {
+        baseUrl: getMaterialApiBase(),
+        endpoint: '/v1/chat/completions'
       })) {
         response += chunk
       }
-      
-      const jsonMatch = response.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) {
-        return { workflow_type: WORKFLOW_TYPES.TEXT_TO_IMAGE }
-      }
-      
-      return JSON.parse(jsonMatch[0])
+
+      const plan = parseDirectorResponse(response, userInput)
+      addLog(plan.plan_source === 'gemma' ? 'success' : 'warning', plan.plan_source === 'gemma'
+        ? '本地 Gemma 已生成 H3 专业导演方案'
+        : 'Gemma 返回格式异常，已用专业规则补全 H3 方案')
+      return plan
     } catch (err) {
       addLog('error', `分析失败: ${err.message}`)
-      return { workflow_type: WORKFLOW_TYPES.TEXT_TO_IMAGE }
+      return parseDirectorResponse('', userInput)
     } finally {
       isAnalyzing.value = false
     }
@@ -370,6 +381,44 @@ export const useWorkflowOrchestrator = () => {
     
     addLog('success', '文生图工作流已启动')
     return { textNodeId, imageConfigId }
+  }
+
+  /**
+   * Build an explicit MiniMax H3 workflow. Keyframe mode waits for the FRW
+   * image before triggering H3; apply-only mode creates the complete graph
+   * without spending generation quota.
+   */
+  const executeH3Video = async (plan, position, { autoExecute = false } = {}) => {
+    addLog('info', `搭建 MiniMax H3 专业工作流：${plan?.title || '未命名镜头'}`)
+    const flow = buildH3DirectorWorkflow(plan, position, autoExecute)
+    const ids = addNodes(flow.nodes.map(item => ({
+      type: item.type,
+      position: item.position,
+      data: item.data
+    })))
+    const idByKey = Object.fromEntries(flow.nodes.map((item, index) => [item.key, ids[index]]))
+    addEdges(flow.edges.map(item => ({
+      source: idByKey[item.sourceKey],
+      target: idByKey[item.targetKey],
+      sourceHandle: 'right',
+      targetHandle: 'left',
+      type: item.type,
+      data: item.data
+    })))
+
+    totalSteps.value = plan?.requires_keyframe ? 2 : 1
+    currentStep.value = 1
+
+    if (autoExecute && plan?.requires_keyframe) {
+      addLog('info', '先生成一致性关键帧，再启动 H3 图生视频')
+      const imageOutputId = await waitForConfigComplete(idByKey.imageConfig)
+      await waitForOutputReady(imageOutputId)
+      currentStep.value = 2
+      updateNode(idByKey.videoConfig, { autoExecute: true })
+    }
+
+    addLog('success', autoExecute ? 'H3 生成工作流已启动' : 'H3 专业工作流已应用到画布')
+    return { ...idByKey, plan }
   }
   
   /**
@@ -883,7 +932,7 @@ export const useWorkflowOrchestrator = () => {
    * @param {object} params - 工作流参数
    * @param {object} position - 起始位置
    */
-  const executeWorkflow = async (params, position) => {
+  const executeWorkflow = async (params, position, options = {}) => {
     isExecuting.value = true
     clearWatchers()
     executionLog.value = []
@@ -892,6 +941,8 @@ export const useWorkflowOrchestrator = () => {
 
     try {
       switch (workflow_type) {
+        case WORKFLOW_TYPES.H3_VIDEO:
+          return await executeH3Video(params, position, options)
         case WORKFLOW_TYPES.PICTURE_BOOK:
           return await executePictureBook(picture_book, position)
         case WORKFLOW_TYPES.MULTI_ANGLE_STORYBOARD:
@@ -963,6 +1014,7 @@ export const useWorkflowOrchestrator = () => {
     // Methods
     analyzeIntent,
     executeWorkflow,
+    executeH3Video,
     createTextToImageWorkflow,
     createMultiAngleStoryboard,
     createPictureBook,

@@ -15,6 +15,7 @@
       
       <!-- GitHub link | GitHub 链接 -->
       <a 
+        v-if="showGithub"
         :href="githubUrl"
         target="_blank"
         rel="noopener noreferrer"
@@ -59,6 +60,10 @@ defineProps({
   githubUrl: {
     type: String,
     default: 'https://github.com/chatfire-AI/huobao-canvas'
+  },
+  showGithub: {
+    type: Boolean,
+    default: false
   }
 })
 </script>

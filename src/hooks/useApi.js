@@ -14,6 +14,8 @@ import { getModelByName } from '@/config/models'
 import { useApiConfig } from './useApiConfig'
 import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
+import { extractVideoTaskProgress, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
+import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from '@/config/studioProjectFlow'
 
 /**
  * Base API state hook | 基础 API 状态 Hook
@@ -180,6 +182,14 @@ export const useImageGeneration = () => {
       if (params.image) {
         requestData.image = params.image
       }
+      if (params.edit_mode) requestData.edit_mode = params.edit_mode
+      if (params.subject_image) requestData.subject_image = params.subject_image
+      if (params.background_reference_image) {
+        requestData.background_reference_image = params.background_reference_image
+      }
+      if (params.background_instruction) {
+        requestData.background_instruction = params.background_instruction
+      }
 
       // 适配请求参数
       const adaptedParams = adaptRequest('image', requestData)
@@ -224,6 +234,12 @@ export const useVideoGeneration = () => {
     percentage: 0
   })
 
+  const isTaskNotReadyError = (err) => {
+    const status = err?.response?.status || err?.status
+    const message = String(err?.response?.data?.message || err?.response?.data?.error?.message || err?.message || '')
+    return status === 404 || /404|not found|不存在|未找到/i.test(message)
+  }
+
   /**
    * Create video task only (no polling) | 仅创建视频任务（不轮询）
    */
@@ -238,8 +254,17 @@ export const useVideoGeneration = () => {
     // Add optional params | 添加可选参数
     if (params.first_frame_image) requestData.first_frame_image = params.first_frame_image
     if (params.last_frame_image) requestData.last_frame_image = params.last_frame_image
+    if (params.images) requestData.images = params.images
+    if (params.driving_video) requestData.driving_video = params.driving_video
+    if (params.driving_video_name) requestData.driving_video_name = params.driving_video_name
     if (params.ratio) requestData.size = params.ratio
     if (params.dur) requestData.seconds = params.dur
+    if (params.sizes) requestData.sizes = params.sizes
+    if (params.output_formats) requestData.output_formats = params.output_formats
+    const qualityProfile = normalizeVideoQualityRequestProfile(params.quality_profile)
+    const imageAlignment = normalizeVideoImageAlignmentRequest(params.image_alignment)
+    if (qualityProfile) requestData.quality_profile = qualityProfile
+    if (imageAlignment) requestData.image_alignment = imageAlignment
 
     // 适配请求参数
     const adaptedParams = adaptRequest('video', requestData)
@@ -249,6 +274,7 @@ export const useVideoGeneration = () => {
       requestType: 'json',
       endpoint: modelStore.getVideoEndpoint()
     })
+    const taskResult = task?.data?.task_id ? task.data : task
 
     // Check if async (need polling) | 检查是否异步
     const isAsync = modelConfig?.async !== false
@@ -256,18 +282,19 @@ export const useVideoGeneration = () => {
     // If has video URL directly, return | 如果直接有视频 URL，返回
     if (!isAsync || task.data?.url || task.url || task.content?.video_url) {
       return {
-        taskId: null,
-        url: task.data?.url || task.url || task.content?.video_url
+        taskId: taskResult?.task_id || taskResult?.taskId || null,
+        url: task.data?.url || task.url || task.content?.video_url,
+        result: taskResult
       }
     }
 
     // Get task ID | 获取任务 ID
-    const newTaskId = task.id || task.task_id || task.taskId
+    const newTaskId = task.id || task.task_id || task.taskId || task.data?.task_id || task.data?.id
     if (!newTaskId) {
       throw new Error('未获取到任务 ID')
     }
 
-    return { taskId: newTaskId }
+    return { taskId: newTaskId, result: taskResult }
   }
 
   /**
@@ -278,29 +305,47 @@ export const useVideoGeneration = () => {
     const interval = 5000
 
     for (let i = 0; i < maxAttempts; i++) {
-      onProgress(i + 1, Math.min(Math.round((i / maxAttempts) * 100), 99))
-
       // 获取任务查询端点，支持 {taskId} 占位符替换
       let taskEndpoint = modelStore.getVideoTaskEndpoint()
       if (taskEndpoint.includes('{taskId}')) {
         taskEndpoint = taskEndpoint.replace('{taskId}', pollTaskId)
       }
 
-      const result = await getVideoTaskStatus(pollTaskId, {
-        endpoint: taskEndpoint
-      })
+      let result
+      try {
+        result = await getVideoTaskStatus(pollTaskId, {
+          endpoint: taskEndpoint
+        })
+      } catch (err) {
+        if (isTaskNotReadyError(err)) {
+          await new Promise(resolve => setTimeout(resolve, interval))
+          continue
+        }
+        throw err
+      }
 
       // 适配轮询响应
       const adaptedResult = adaptResponse('video', result)
+      const progressInfo = extractVideoTaskProgress(result, adaptedResult)
+      onProgress(i + 1, progressInfo.percent, progressInfo)
+
+      const taskState = getVideoTaskPollingState(result, adaptedResult)
 
       // Check for completion | 检查是否完成
-      if (result.status === 'completed' || result.status === 'succeeded' || result.data) {
-        const videoUrl = adaptedResult.url || result.data?.url || result.data?.[0]?.url || result.url || result.content?.video_url || result.video_url
-        return { ...adaptedResult, url: videoUrl,  }
+      if (taskState.state === 'completed') {
+        return { ...result, ...adaptedResult, url: taskState.url }
+      }
+
+      if (taskState.state === 'partial') {
+        return { ...result, ...adaptedResult, url: taskState.url, status: 'partial' }
+      }
+
+      if (taskState.state === 'missing_url') {
+        throw new Error('视频任务已完成但未返回视频 URL')
       }
 
       // Check for failure | 检查是否失败
-      if (result.status === 'failed' || result.status === 'error') {
+      if (taskState.state === 'failed') {
         throw new Error(result.error?.message || result.message || '视频生成失败')
       }
 

@@ -112,11 +112,11 @@ const { updateNodeInternals } = useVueFlow()
 
 // API config state | API 配置状态
 const modelStore = useModelStore()
-const isApiConfigured = computed(() => !!modelStore.currentApiKey)
+const isApiConfigured = computed(() => modelStore.isCurrentProviderConfigured)
 
 // Chat hook for polish | 润色用的 Chat hook
 const { send: sendChat } = useChat({
-  systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、構图、细节等要素。直接返回提示词，不要其他解释。',
+  systemPrompt: '你是一个专业的AI绘画提示词专家。将用户输入的内容美化成高质量的生图提示词，包含风格、光线、构图、细节等要素。如画面包含人物，默认使用成年中国人或东亚面孔；用户明确指定其他人种时按用户要求。人物、产品和主要文案必须完整入镜，四周预留10%安全边距，避免头顶、下巴、手脚或文字被裁切。直接返回提示词，不要其他解释。',
   model: 'gpt-4o-mini'
 })
 
@@ -789,7 +789,7 @@ const handleVideoGen = () => {
 <style>
 
 /* Inline mention in editor | editor 中内联提及 */
-.editor-content :deep(.mention-inline) {
+.editor-content .mention-inline {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -801,7 +801,7 @@ const handleVideoGen = () => {
   white-space: nowrap;
 }
 
-.editor-content :deep(.mention-inline img) {
+.editor-content .mention-inline img {
   width: 16px;
   height: 16px;
   border-radius: 2px;

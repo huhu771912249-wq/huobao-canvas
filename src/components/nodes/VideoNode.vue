@@ -63,7 +63,15 @@
           />
         </div>
 
-        <span class="text-sm text-white font-medium relative z-10">{{ data.taskId ? '创作中，预计等待 1 分钟' : '任务创建中...' }}</span>
+        <div class="relative z-10 w-4/5 text-center text-white">
+          <div class="text-sm font-medium">{{ data.taskId ? taskStage : '任务创建中…' }}</div>
+          <div v-if="data.status" class="mt-1 text-xs text-white/80">后端状态：{{ data.status }}</div>
+          <div v-if="data.progress !== null && data.progress !== undefined" class="mt-3">
+            <div class="mb-1 flex justify-between text-xs"><span>{{ progressLabel }}</span><span>{{ Math.round(data.progress) }}%</span></div>
+            <div class="h-1.5 overflow-hidden rounded-full bg-white/25"><div class="h-full rounded-full bg-white transition-all" :style="{ width: `${Math.max(0, Math.min(100, data.progress))}%` }"></div></div>
+          </div>
+          <div v-else class="mt-2 text-xs text-white/75">上游暂未提供百分比，正在持续查询阶段状态</div>
+        </div>
       </div>
       <!-- Error state | 错误状态 -->
       <div 
@@ -90,8 +98,14 @@
         class="aspect-video rounded-lg bg-[var(--bg-tertiary)] flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[var(--border-color)] relative"
       >
         <n-icon :size="32" class="text-[var(--text-secondary)]"><VideocamOutline /></n-icon>
-        <span class="text-sm text-[var(--text-secondary)]">拖放视频或点击上传</span>
+        <span class="text-sm text-[var(--text-secondary)]">
+          {{ isGeneratedOutput ? '等待视频生成结果' : '拖放视频或点击上传' }}
+        </span>
+        <span v-if="isGeneratedOutput" class="text-xs text-[var(--text-secondary)]/80">
+          请在左侧视频生成节点点击生成
+        </span>
         <input 
+          v-if="!isGeneratedOutput"
           type="file" 
           accept="video/*" 
           class="absolute inset-0 opacity-0 cursor-pointer"
@@ -140,13 +154,15 @@
  * Video node component | 视频节点组件
  * Displays and manages video content
  */
-import { ref, nextTick, watch, onMounted } from 'vue'
+import { computed, ref, nextTick, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NSpin } from 'naive-ui'
 import { TrashOutline, ExpandOutline, VideocamOutline, CopyOutline, CloseCircleOutline, DownloadOutline, EyeOutline, CreateOutline } from '@vicons/ionicons5'
-import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes } from '../../stores/canvas'
+import { updateNode, removeNode, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
 import { useVideoGeneration } from '../../hooks/useApi'
 import NodeHandleMenu from './NodeHandleMenu.vue'
+import { startAssetDownload } from '../../utils/assetDownload'
+import { extractVideoCompletionMetadata, extractVideoTaskProgress, isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
 
 const props = defineProps({
   id: String,
@@ -163,6 +179,14 @@ const { pollVideoTask } = useVideoGeneration()
 const showActions = ref(false)
 const showHandleMenu = ref(false)
 
+const isGeneratedOutput = computed(() => {
+  return edges.value.some(edge => {
+    if (edge.target !== props.id) return false
+    const sourceNode = nodes.value.find(node => node.id === edge.source)
+    return sourceNode?.type === 'videoConfig'
+  })
+})
+
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
 const editingLabelValue = ref('')
@@ -175,6 +199,8 @@ const operations = [
 
 // Polling state | 轮询状态
 const isPolling = ref(false)
+const taskStage = computed(() => extractVideoTaskProgress(props.data || {}).stage)
+const progressLabel = computed(() => extractVideoTaskProgress(props.data || {}).progressLabel)
 
 // Watch for taskId changes and start polling | 监听 taskId 变化并开始轮询
 watch(() => props.data?.taskId, (taskId) => {
@@ -198,19 +224,29 @@ const startPolling = async (taskId) => {
   isPolling.value = true
 
   try {
-    const result = await pollVideoTask(taskId, (attempt, percentage) => {
+    const result = await pollVideoTask(taskId, (attempt, percentage, progressInfo) => {
       // 更新进度
       updateNode(props.id, {
         progress: percentage,
-        attempt
+        attempt,
+        status: progressInfo?.status || props.data?.status || 'submitted',
+        currentStep: progressInfo?.stage || '',
+        progressScope: progressInfo?.progress_scope || '',
+        upscale_status: progressInfo?.upscale_status || props.data?.upscale_status || ''
       })
     })
+    const completion = extractVideoCompletionMetadata(result)
+    const verified1080p = isVerifiedTargetOutput(completion, props.data?.qualityProfile || {})
     // 轮询成功，更新视频节点
     updateNode(props.id, {
       url: result.url,
       loading: false,
       progress: 100,
-      label: '视频生成',
+      status: completion.status || 'completed',
+      upscale_status: completion.upscale_status,
+      actual_width: completion.actual_width,
+      actual_height: completion.actual_height,
+      label: verified1080p ? '高质量 1080p 视频' : '视频结果',
       taskId: null  // 清除 taskId
     })
     window.$message?.success('视频生成成功')
@@ -305,15 +341,16 @@ const handlePreview = () => {
 }
 
 // Handle download | 处理下载
-const handleDownload = () => {
-  if (props.data.url) {
-    const link = document.createElement('a')
-    link.href = props.data.url
-    link.download = props.data.fileName || `video_${Date.now()}.mp4`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.$message?.success('视频下载中...')
+const handleDownload = async () => {
+  try {
+    const result = await startAssetDownload({
+      url: props.data.url,
+      fileName: props.data.fileName || `video_${Date.now()}.mp4`,
+      label: props.data.label
+    })
+    window.$message?.success(`已开始下载：${result.filename}`)
+  } catch (error) {
+    window.$message?.error(error?.message || '视频下载失败')
   }
 }
 

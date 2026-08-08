@@ -13,7 +13,7 @@ import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL
 } from '@/config/models'
-import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig, getDefaultBaseUrl } from '@/config/providers'
+import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig, getDefaultBaseUrl, normalizeProviderKey } from '@/config/providers'
 
 // 存储键名
 const STORAGE_KEYS = {
@@ -80,6 +80,17 @@ const setStoredJson = (key, value) => {
   }
 }
 
+const withProviderDefaultApiKeys = (storedApiKeys = {}) => {
+  const apiKeys = { ...storedApiKeys }
+  Object.entries(PROVIDERS).forEach(([provider, config]) => {
+    if (provider === 'default') return
+    if (!apiKeys[provider] && config.defaultApiKey) {
+      apiKeys[provider] = config.defaultApiKey
+    }
+  })
+  return apiKeys
+}
+
 /**
  * 检查模型是否支持指定渠道
  */
@@ -94,7 +105,7 @@ export const useModelStore = defineStore('model', () => {
   // ============ Provider 状态 | Provider State ============
 
   // 当前选中的渠道
-  const currentProvider = ref(getStored(STORAGE_KEYS.PROVIDER) || getDefaultProvider())
+  const currentProvider = ref(normalizeProviderKey(getStored(STORAGE_KEYS.PROVIDER) || getDefaultProvider()))
 
   // 渠道列表
   const providerList = computed(() => getProviderList())
@@ -107,9 +118,10 @@ export const useModelStore = defineStore('model', () => {
 
   // 设置当前渠道
   const setProvider = (provider) => {
-    if (PROVIDERS[provider]) {
-      currentProvider.value = provider
-      setStored(STORAGE_KEYS.PROVIDER, provider)
+    const normalizedProvider = normalizeProviderKey(provider)
+    if (PROVIDERS[normalizedProvider]) {
+      currentProvider.value = normalizedProvider
+      setStored(STORAGE_KEYS.PROVIDER, normalizedProvider)
     }
   }
 
@@ -155,12 +167,18 @@ export const useModelStore = defineStore('model', () => {
   const selectedVideoModel = ref(getStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, DEFAULT_VIDEO_MODEL))
 
   // 按渠道存储的 API 配置
-  const apiKeysByProvider = ref(getStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, {}))
+  const apiKeysByProvider = ref(withProviderDefaultApiKeys(getStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, {})))
   const baseUrlsByProvider = ref(getStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, {}))
 
   // 当前渠道的 API Key 和 Base URL
-  const currentApiKey = computed(() => apiKeysByProvider.value[currentProvider.value] || '')
+  const currentApiKey = computed(() =>
+    apiKeysByProvider.value[currentProvider.value] || providerConfig.value.defaultApiKey || ''
+  )
   const currentBaseUrl = computed(() => baseUrlsByProvider.value[currentProvider.value] || getDefaultBaseUrl(currentProvider.value))
+  const isCurrentProviderConfigured = computed(() => {
+    if (currentProvider.value === 'local-material') return true
+    return !!currentApiKey.value
+  })
 
   // 设置指定渠道的 API Key
   const setApiKeyByProvider = (provider, apiKey) => {
@@ -223,7 +241,7 @@ export const useModelStore = defineStore('model', () => {
       key: m.key,
       isCustom: true,
       ratios: ['16x9', '9:16', '1:1'],
-      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
+      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }, { label: '60 秒（自动拼接）', key: 60 }],
       defaultParams: { ratio: '16:9', duration: 5 }
     })),
     // 添加当前渠道的自定义模型
@@ -232,7 +250,7 @@ export const useModelStore = defineStore('model', () => {
       key: m.key,
       isCustom: true,
       ratios: ['16x9', '9:16', '1:1'],
-      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
+      durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }, { label: '60 秒（自动拼接）', key: 60 }],
       defaultParams: { ratio: '16:9', duration: 5 },
       provider: [currentProvider.value]
     }))
@@ -421,7 +439,7 @@ export const useModelStore = defineStore('model', () => {
         key: m.key,
         isCustom: true,
         ratios: ['16x9', '9:16', '1:1'],
-        durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }],
+        durs: [{ label: '5 秒', key: 5 }, { label: '10 秒', key: 10 }, { label: '60 秒（自动拼接）', key: 60 }],
         defaultParams: { ratio: '16:9', duration: 5 },
         provider: [provider]
       }))
@@ -604,6 +622,7 @@ export const useModelStore = defineStore('model', () => {
     // API Config by provider
     currentApiKey,
     currentBaseUrl,
+    isCurrentProviderConfigured,
     apiKeysByProvider,
     baseUrlsByProvider,
     setApiKeyByProvider,
