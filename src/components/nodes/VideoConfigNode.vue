@@ -1033,7 +1033,6 @@ const handleGenerate = async () => {
       label: '生成失败',
       updatedAt: Date.now()
     })
-    window.$message?.error(message || '视频生成失败')
   } finally {
     isGenerating.value = false
   }
