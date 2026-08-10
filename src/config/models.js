@@ -48,6 +48,24 @@ export const BANANA_SIZE_OPTIONS = [
 // Image generation models | 图片生成模型
 export const IMAGE_MODELS = [
     {
+        label: 'WAI Illustrious SDXL v17（本地 5090）',
+        key: 'wai-illustrious-sdxl-v17',
+        provider: ['local-material'],
+        tips: '本地 ComfyUI 文生图；英文标签提示词效果最佳，当前不支持参考图。',
+        sizes: ['1024x1024', '1344x1024', '1024x1344', '1280x720', '720x1280'],
+        defaultParams: {
+            size: '1024x1024',
+            quality: 'standard',
+            style: 'anime',
+            negativePrompt: 'bad quality,worst quality,worst detail,sketch,censor,',
+            steps: 30,
+            cfg: 7,
+            samplerName: 'euler_ancestral',
+            seed: -1,
+            clipSkip: 2
+        }
+    },
+    {
         label: 'FRW 千问作图',
         key: 'frw-qianwen',
         provider: ['local-material'],

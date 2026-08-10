@@ -190,6 +190,9 @@ export const useImageGeneration = () => {
       if (params.background_instruction) {
         requestData.background_instruction = params.background_instruction
       }
+      for (const key of ['negative_prompt', 'steps', 'cfg', 'sampler_name', 'seed']) {
+        if (params[key] !== undefined) requestData[key] = params[key]
+      }
 
       // 适配请求参数
       const adaptedParams = adaptRequest('image', requestData)
