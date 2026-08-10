@@ -24,5 +24,10 @@ assert.match(videoSource, /modelStore\.allVideoModels/, 'saved video models must
 assert.match(videoSource, /modelStore\.allVideoModelOptions/, 'mixed-provider workflows must keep every configured video model selectable')
 assert.match(videoSource, /activateModelProvider\(localModel\.value\)/, 'video generation must activate its own model provider')
 assert.match(imageSource, /activateModelProvider\(localModel\.value\)/, 'image generation must activate its own model provider')
+assert.match(imageSource, /class="image-config-node canvas-node-scroll-shell nowheel/, 'the image node shell must remain draggable')
+assert.match(imageSource, /data-testid="image-config-drag-handle"/, 'the image node must expose a clear drag area')
+assert.match(imageSource, /class="image-config-node__controls nodrag/, 'interactive controls must not start a node drag')
+assert.match(imageSource, /Handle type="target"[^>]+width: 12px; height: 12px;/, 'the image input handle must be easy to grab')
+assert.match(imageSource, /NodeHandleMenu[^>]+nodeType="imageConfig"/, 'the image node must keep its draggable output handle')
 
 console.log('canvasNativeSelectors.test.mjs passed')
