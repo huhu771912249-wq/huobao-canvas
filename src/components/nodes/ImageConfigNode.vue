@@ -3,14 +3,14 @@
   <div class="image-config-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Image config node | 文生图配置节点 -->
     <div
-      class="image-config-node canvas-node-scroll-shell nodrag nowheel bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
+      class="image-config-node canvas-node-scroll-shell nowheel relative bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
       <!-- Header | 头部 -->
-      <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
+      <div data-testid="image-config-drag-handle" class="flex cursor-grab items-center justify-between border-b border-[var(--border-color)] px-3 py-2 active:cursor-grabbing">
         <span
           v-if="!isEditingLabel"
           @dblclick="startEditLabel"
-          class="text-sm font-medium text-[var(--text-secondary)] cursor-text hover:bg-[var(--bg-tertiary)] px-1 rounded transition-colors"
+          class="text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] px-1 rounded transition-colors"
           title="双击编辑名称"
         >{{ data.label }}</span>
         <input
@@ -20,9 +20,9 @@
           @blur="finishEditLabel"
           @keydown.enter="finishEditLabel"
           @keydown.escape="cancelEditLabel"
-          class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
+          class="nodrag text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
         />
-        <div class="flex items-center gap-1">
+        <div class="nodrag flex items-center gap-1">
           <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
@@ -37,7 +37,7 @@
       </div>
 
       <!-- Config options | 配置选项 -->
-      <div class="p-3 space-y-3">
+      <div class="image-config-node__controls nodrag p-3 space-y-3">
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
@@ -249,7 +249,7 @@
       </div>
 
       <!-- Handles | 连接点 -->
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
+      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" style="width: 12px; height: 12px;" />
       <NodeHandleMenu :nodeId="id" nodeType="imageConfig" :visible="showHandleMenu" :operations="operations" @select="handleSelect" />
     </div>
 
