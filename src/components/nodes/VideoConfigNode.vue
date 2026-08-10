@@ -3,7 +3,8 @@
   <div class="video-config-node-wrapper relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Video config node | 视频配置节点 -->
     <div class="video-config-node canvas-node-scroll-shell nowheel bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
-      :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
+      :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
+      :style="isExpanded ? { maxHeight: 'none', overflowY: 'visible' } : undefined">
       <!-- Header | 头部 -->
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
         <span
@@ -21,7 +22,20 @@
           @keydown.escape="cancelEditLabel"
           class="text-sm font-medium bg-[var(--bg-tertiary)] text-[var(--text-secondary)] px-1 rounded outline-none border border-blue-500"
         />
-        <div class="flex items-center gap-1">
+        <div class="nodrag flex items-center gap-1">
+          <button
+            data-testid="video-node-expand-toggle"
+            type="button"
+            class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors"
+            :title="isExpanded ? '收起节点' : '展开全部设置'"
+            :aria-label="isExpanded ? '收起节点' : '展开全部设置'"
+            @click="toggleExpanded"
+          >
+            <n-icon :size="14">
+              <ContractOutline v-if="isExpanded" />
+              <ExpandOutline v-else />
+            </n-icon>
+          </button>
           <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14">
               <CopyOutline />
@@ -289,7 +303,7 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
-import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline } from '@vicons/ionicons5'
+import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline, ExpandOutline, ContractOutline } from '@vicons/ionicons5'
 import { useVideoGeneration } from '../../hooks'
 import { publishImageAsset } from '../../api/image'
 import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
@@ -332,6 +346,7 @@ const { loading, error, status, video: generatedVideo, progress, createVideoTask
 
 // Local state | 本地状态
 const showHandleMenu = ref(false)
+const isExpanded = ref(Boolean(props.data?.expanded))
 const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
@@ -670,6 +685,13 @@ const resolveAvailableVideoModel = () => {
     return modelStore.selectedVideoModel
   }
   return availableModels[0]?.key || DEFAULT_VIDEO_MODEL
+}
+
+const toggleExpanded = async () => {
+  isExpanded.value = !isExpanded.value
+  updateNode(props.id, { expanded: isExpanded.value })
+  await nextTick()
+  updateNodeInternals(props.id)
 }
 
 // Handle duplicate | 处理复制
