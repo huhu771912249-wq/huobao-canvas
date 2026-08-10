@@ -32,6 +32,11 @@ const routes = [
     component: () => import('../views/TestAssetGenerator.vue')
   },
   {
+    path: '/gif-editor',
+    name: 'GifAdEditor',
+    component: () => import('../views/GifAdEditor.vue')
+  },
+  {
     path: '/recent-generations',
     name: 'RecentGenerations',
     component: () => import('../views/RecentGenerations.vue')
