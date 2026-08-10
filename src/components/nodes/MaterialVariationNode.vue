@@ -1,6 +1,6 @@
 <template>
   <div class="relative nodrag" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
-    <div class="w-[600px] overflow-hidden rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
+    <div class="canvas-node-scroll-shell nowheel w-[600px] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
       <div class="flex items-center justify-between border-b border-[var(--border-color)] px-5 py-4">
         <div>
           <div class="text-base font-semibold text-[var(--text-primary)]">素材裂变</div>

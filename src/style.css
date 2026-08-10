@@ -76,6 +76,15 @@ body {
   backdrop-filter: blur(18px);
 }
 
+.canvas-node-scroll-shell {
+  max-height: calc(100vh - 120px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+
 @keyframes workspace-reveal {
   from {
     opacity: 0;

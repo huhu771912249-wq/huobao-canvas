@@ -1,5 +1,5 @@
 <template>
-  <div class="workspace-shell workspace-atmosphere">
+  <div class="workspace-shell workspace-atmosphere" @wheel="forwardWheelToStage">
     <aside class="workspace-sidebar workspace-panel" aria-label="主导航">
       <button type="button" class="workspace-brand" aria-label="冠希无限画布首页" @click="emitNavigate(navigation[0])">
         <img src="../../assets/logo.png" alt="" />
@@ -21,7 +21,7 @@
       </nav>
     </aside>
 
-    <section class="workspace-stage">
+    <section ref="stageRef" class="workspace-stage">
       <header class="workspace-topbar">
         <div class="workspace-topbar__title">
           <span class="workspace-topbar__product">冠希无限画布</span>
@@ -67,7 +67,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { NIcon } from 'naive-ui'
 import {
   AlbumsOutline,
@@ -118,7 +118,38 @@ const icons = {
 }
 
 const iconFor = (id) => icons[id] || HomeOutline
-const emitNavigate = (item) => emit('navigate', item)
+const stageRef = ref(null)
+const emitNavigate = (item) => {
+  if (item.id === 'home') stageRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+  emit('navigate', item)
+}
+
+const canScrollInDirection = (target, deltaY) => {
+  let element = target instanceof Element ? target : null
+  while (element && element !== stageRef.value) {
+    const style = window.getComputedStyle(element)
+    const scrollable = /auto|scroll/.test(style.overflowY) && element.scrollHeight > element.clientHeight
+    if (scrollable) {
+      const remaining = element.scrollHeight - element.clientHeight - element.scrollTop
+      if ((deltaY < 0 && element.scrollTop > 0) || (deltaY > 0 && remaining > 1)) return true
+    }
+    element = element.parentElement
+  }
+  return false
+}
+
+const forwardWheelToStage = (event) => {
+  if (event.defaultPrevented || !stageRef.value || event.target?.closest?.('.workspace-stage')) return
+  const multiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? window.innerHeight : 1
+  const deltaY = event.deltaY * multiplier
+  if (!deltaY || Math.abs(deltaY) < Math.abs(event.deltaX)) return
+  if (canScrollInDirection(event.target, deltaY)) return
+  const maxScrollTop = stageRef.value.scrollHeight - stageRef.value.clientHeight
+  const canMove = (deltaY < 0 && stageRef.value.scrollTop > 0) || (deltaY > 0 && stageRef.value.scrollTop < maxScrollTop)
+  if (!canMove) return
+  stageRef.value.scrollBy({ top: deltaY, behavior: 'auto' })
+  event.preventDefault()
+}
 </script>
 
 <style scoped>

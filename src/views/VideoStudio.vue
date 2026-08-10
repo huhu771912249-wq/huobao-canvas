@@ -1,5 +1,5 @@
 <template>
-  <main class="min-h-screen bg-[#07101e] text-slate-100">
+  <main class="h-screen overflow-y-auto overscroll-y-contain bg-[#07101e] text-slate-100">
     <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 px-6 py-4">
       <div><div class="text-xs tracking-[0.3em] text-cyan-400">冠希 VIDEO</div><h1 class="text-xl font-semibold">视频创作中心</h1></div>
       <nav class="flex items-center gap-2 text-sm"><ComputeStatusIndicator /><button class="studio-chip" @click="router.push('/')">首页</button><button class="studio-chip" @click="router.push('/canvas')">无限画布</button></nav>

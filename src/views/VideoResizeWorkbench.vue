@@ -1,5 +1,5 @@
 <template>
-  <main class="h-screen overflow-y-auto bg-[#050b16] text-slate-100">
+  <main class="h-screen overflow-y-auto overscroll-y-contain bg-[#050b16] text-slate-100">
     <header class="border-b border-cyan-950/80 bg-[#07101e]/95 px-6 py-4 backdrop-blur">
       <div class="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
         <div><div class="text-xs tracking-[.35em] text-cyan-400">冠希 VIDEO LAB</div><h1 class="text-2xl font-semibold">视频尺寸工作台</h1></div>
