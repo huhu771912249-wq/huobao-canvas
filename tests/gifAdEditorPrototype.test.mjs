@@ -24,7 +24,7 @@ const entries = readFileSync(new URL('../src/config/studioEntries.js', import.me
 const view = readFileSync(new URL('../src/views/GifAdEditor.vue', import.meta.url), 'utf8')
 
 assert.match(router, /path: '\/gif-editor'/)
-assert.match(entries, /GIF 广告编辑器/)
+assert.match(entries, /GIF 素材编辑/)
 for (const contract of [
   '直接导入 GIF',
   '添加文字',

@@ -85,7 +85,7 @@ const modelStore = useModelStore()
 const studioEntries = STUDIO_ENTRIES
 const openStudioEntry = (entry) => {
   if (entry.route) router.push(entry.route)
-  else if (entry.flow === 'dsp' || entry.flow === 'variation') createFlowProject(entry.flow)
+  else if (entry.flow === 'dsp' || entry.flow === 'variation' || entry.flow === 'gifEditor') createFlowProject(entry.flow)
   else if (entry.flow === 'video') createVideoProject(videoEntries.video)
 }
 
@@ -227,10 +227,11 @@ const createVideoProject = (entry, prompt = '') => {
 }
 
 const createFlowProject = (flow) => {
-  checkApiKeyAndNavigate(() => {
+  const create = () => {
     const names = {
       variation: '素材裂变',
-      dsp: '54DSP 优秀素材'
+      dsp: '54DSP 优秀素材',
+      gifEditor: '水印与 GIF 素材编辑'
     }
     const id = createProject(names[flow] || '创作项目')
     if (flow === 'dsp') {
@@ -269,10 +270,30 @@ const createFlowProject = (flow) => {
           viewport: { x: 100, y: 80, zoom: 0.8 }
         }
       })
+    } else if (flow === 'gifEditor') {
+      const nodeId = `watermark-editor-${id}`
+      updateProject(id, {
+        canvasData: {
+          nodes: [
+            {
+              id: nodeId,
+              type: 'watermarkEditor',
+              position: { x: 160, y: 100 },
+              data: { label: '水印与素材编辑', editorStatus: 'draft' }
+            }
+          ],
+          edges: [],
+          viewport: { x: 100, y: 80, zoom: 0.8 }
+        }
+      })
+      router.push({ path: '/gif-editor', query: { project: id, node: nodeId, from: 'home' } })
+      return
     }
     sessionStorage.setItem('ai-canvas-launch-flow', flow)
     router.push({ path: `/canvas/${id}`, query: { flow } })
-  })
+  }
+  if (flow === 'gifEditor') create()
+  else checkApiKeyAndNavigate(create)
 }
 
 const handleLaunch = (flow) => {
