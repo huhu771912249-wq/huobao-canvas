@@ -12,7 +12,7 @@
     </header>
 
     <div v-if="projects.length" class="project-grid">
-      <article v-for="project in projects" :key="project.id" class="project-card">
+      <article v-for="project in visibleProjects" :key="project.id" class="project-card">
         <button type="button" class="project-card__preview" @click="$emit('open', project)">
           <video
             v-if="isVideoUrl(project.thumbnail)"
@@ -20,8 +20,9 @@
             muted
             loop
             playsinline
+            preload="none"
           ></video>
-          <img v-else-if="project.thumbnail" :src="project.thumbnail" :alt="project.name" />
+          <img v-else-if="project.thumbnail" :src="project.thumbnail" :alt="project.name" loading="lazy" decoding="async" />
           <span v-else class="project-card__empty">
             <n-icon :size="30"><DocumentOutline /></n-icon>
           </span>
@@ -41,6 +42,10 @@
       </article>
     </div>
 
+    <button v-if="hasMoreProjects" type="button" class="load-more-projects" @click="showMoreProjects">
+      显示更多项目（剩余 {{ projects.length - visibleProjects.length }} 个）
+    </button>
+
     <div v-else class="project-empty workspace-panel">
       <n-icon :size="38"><FolderOpenOutline /></n-icon>
       <strong>还没有创作项目</strong>
@@ -51,6 +56,7 @@
 </template>
 
 <script setup>
+import { computed, ref, watch } from 'vue'
 import { NDropdown, NIcon } from 'naive-ui'
 import {
   AddOutline,
@@ -59,7 +65,7 @@ import {
   FolderOpenOutline
 } from '@vicons/ionicons5'
 
-defineProps({
+const props = defineProps({
   projects: {
     type: Array,
     default: () => []
@@ -78,6 +84,16 @@ const actions = [
   { type: 'divider' },
   { label: '删除', key: 'delete' }
 ]
+
+const INITIAL_VISIBLE_PROJECTS = 12
+const PROJECT_PAGE_SIZE = 12
+const visibleCount = ref(INITIAL_VISIBLE_PROJECTS)
+const visibleProjects = computed(() => props.projects.slice(0, visibleCount.value))
+const hasMoreProjects = computed(() => visibleProjects.value.length < props.projects.length)
+const showMoreProjects = () => { visibleCount.value += PROJECT_PAGE_SIZE }
+watch(() => props.projects.length, length => {
+  if (length < visibleCount.value) visibleCount.value = Math.max(INITIAL_VISIBLE_PROJECTS, length)
+})
 
 const isVideoUrl = (url) => {
   if (!url || typeof url !== 'string') return false
@@ -124,6 +140,22 @@ const isVideoUrl = (url) => {
   color: #07110d;
   background: var(--accent-color);
   font-weight: 700;
+}
+
+.load-more-projects {
+  min-height: 40px;
+  display: block;
+  margin: 22px auto 0;
+  padding: 0 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--text-secondary);
+  background: var(--panel-strong, var(--bg-secondary));
+}
+
+.load-more-projects:hover {
+  color: var(--text-primary);
+  border-color: rgba(101, 230, 189, 0.45);
 }
 
 .project-grid {

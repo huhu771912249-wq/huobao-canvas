@@ -2,7 +2,7 @@
  * Canvas store | 画布状态管理
  * Manages nodes, edges and canvas state
  */
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 import { updateProjectCanvas, getProjectCanvas } from './projects'
 import { IMAGE_MODELS, VIDEO_MODELS, CHAT_MODELS, DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, DEFAULT_CHAT_MODEL } from '../config/models'
 import {
@@ -193,6 +193,7 @@ export const addNode = (type, position = { x: 100, y: 100 }, data = {}) => {
   }
   nodes.value = [...nodes.value, newNode]
   saveToHistory() // Save after adding node | 添加节点后保存
+  scheduleCanvasSave()
   return id
 }
 
@@ -236,6 +237,8 @@ export const addNodes = (nodeSpecs, autoBatch = true) => {
   if (autoBatch) {
     endBatchOperation()
   }
+
+  scheduleCanvasSave()
 
   return ids
 }
@@ -310,6 +313,19 @@ const getDefaultNodeData = (type) => {
         mime: '',
         sourceJobId: ''
       }
+    case 'watermarkEditor': {
+      return {
+        label: '水印与素材编辑',
+        editorStatus: 'draft',
+        editorProject: null,
+        quickSettings: { watermarkId: 'image-1', position: 'top-right', size: 22, opacity: 92 },
+        sourceUrl: '',
+        sourceMime: '',
+        sourceLabel: '',
+        url: '',
+        mime: ''
+      }
+    }
     case 'materialVariation':
       return {
         label: '素材裂变',
@@ -397,6 +413,7 @@ export const updateNode = (id, data) => {
   nodes.value = nodes.value.map(node => 
     node.id === id ? { ...node, data: { ...node.data, ...data } } : node
   )
+  scheduleCanvasSave()
 }
 
 // Remove node | 删除节点
@@ -404,6 +421,7 @@ export const removeNode = (id) => {
   nodes.value = nodes.value.filter(node => node.id !== id)
   edges.value = edges.value.filter(edge => edge.source !== id && edge.target !== id)
   saveToHistory() // Save after removing node | 删除节点后保存
+  scheduleCanvasSave()
 }
 
 // Duplicate node | 复制节点
@@ -428,6 +446,7 @@ export const duplicateNode = (id) => {
   }
   nodes.value = [...nodes.value, newNode]
   saveToHistory() // Save after duplicating node | 复制节点后保存
+  scheduleCanvasSave()
   return newId
 }
 
@@ -439,6 +458,7 @@ export const addEdge = (params) => {
   }
   edges.value = [...edges.value, newEdge]
   saveToHistory() // Save after adding edge | 添加连线后保存
+  scheduleCanvasSave()
 }
 
 /**
@@ -472,6 +492,8 @@ export const addEdges = (edgeSpecs, autoBatch = true) => {
     endBatchOperation()
   }
 
+  scheduleCanvasSave()
+
   return ids
 }
 
@@ -481,12 +503,14 @@ export const updateEdge = (id, data) => {
     edge.id === id ? { ...edge, data: { ...edge.data, ...data } } : edge
   )
   saveToHistory() // Save after updating edge | 更新连线后保存
+  scheduleCanvasSave()
 }
 
 // Remove edge | 删除边
 export const removeEdge = (id) => {
   edges.value = edges.value.filter(edge => edge.id !== id)
   saveToHistory() // Save after removing edge | 删除连线后保存
+  scheduleCanvasSave()
 }
 
 // Clear canvas | 清空画布
@@ -589,7 +613,7 @@ export const saveProject = () => {
 /**
  * Debounced auto-save | 防抖动自动保存
  */
-const debouncedSave = () => {
+export const scheduleCanvasSave = () => {
   if (!autoSaveEnabled || !currentProjectId.value) return
   
   if (saveTimeout) {
@@ -606,7 +630,7 @@ const debouncedSave = () => {
  */
 export const updateViewport = (viewport) => {
   canvasViewport.value = viewport
-  debouncedSave()
+  scheduleCanvasSave()
 }
 
 /**
@@ -646,6 +670,7 @@ const restoreState = (state) => {
   edges.value = JSON.parse(JSON.stringify(state.edges))
   setTimeout(() => {
     isRestoring = false
+    scheduleCanvasSave()
   }, 100)
 }
 
@@ -665,9 +690,5 @@ export const canRedo = () => historyIndex.value < history.value.length - 1
  */
 export const manualSaveHistory = () => {
   saveToHistory()
+  scheduleCanvasSave()
 }
-
-// Watch for changes and auto-save (only save to project, not history) | 监听变化并自动保存（仅保存项目，不保存历史）
-watch([nodes, edges], () => {
-  debouncedSave()
-}, { deep: true })

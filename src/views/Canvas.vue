@@ -55,6 +55,7 @@
         :snap-grid="[20, 20]"
         @connect="onConnect"
         @node-click="onNodeClick"
+        @node-drag-stop="handleNodeDragStop"
         @pane-click="onPaneClick"
         @viewport-change="handleViewportChange"
         @edges-change="onEdgesChange"
@@ -360,7 +361,7 @@ import {
   AppsOutline,
   ChatbubbleOutline
 } from '@vicons/ionicons5'
-import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, startBatchOperation, endBatchOperation } from '../stores/canvas'
+import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, scheduleCanvasSave, startBatchOperation, endBatchOperation } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
@@ -436,6 +437,9 @@ const MaterialExportNode = defineAsyncComponent(
 const MaterialInputNode = defineAsyncComponent(
   () => import('../components/nodes/MaterialInputNode.vue')
 )
+const WatermarkEditorNode = defineAsyncComponent(
+  () => import('../components/nodes/WatermarkEditorNode.vue')
+)
 
 const router = useRouter()
 const route = useRoute()
@@ -458,6 +462,7 @@ const nodeTypes = {
   materialInput: markRaw(MaterialInputNode),
   textOverlay: markRaw(TextOverlayNode),
   videoGif: markRaw(VideoGifNode),
+  watermarkEditor: markRaw(WatermarkEditorNode),
   materialExport: markRaw(MaterialExportNode)
 }
 
@@ -538,6 +543,7 @@ const tools = [
   { id: 'materialInput', name: '素材导入', icon: DownloadOutline, action: () => addNewNode('materialInput') },
   { id: 'textOverlay', name: '文字叠加', icon: TextOutline, action: () => addNewNode('textOverlay') },
   { id: 'videoGif', name: '视频转 GIF', icon: VideocamOutline, action: () => addNewNode('videoGif') },
+  { id: 'watermarkEditor', name: '水印与素材编辑', icon: ImageOutline, action: () => addNewNode('watermarkEditor') },
   { id: 'materialExport', name: '素材导出', icon: DownloadOutline, action: () => addNewNode('materialExport') },
   { id: 'videoConfig', name: '视频生成', icon: VideocamOutline, action: () => addNewNode('videoConfig') },
   { id: 'undo', name: '撤销', icon: ArrowUndoOutline, action: () => undo(), disabled: () => !canUndo() },
@@ -555,6 +561,7 @@ const nodeTypeOptions = [
   { type: 'materialInput', name: '素材导入', icon: DownloadOutline, color: '#38bdf8' },
   { type: 'textOverlay', name: '文字叠加', icon: TextOutline, color: '#06b6d4' },
   { type: 'videoGif', name: '视频转 GIF', icon: VideocamOutline, color: '#f59e0b' },
+  { type: 'watermarkEditor', name: '水印与素材编辑', icon: ImageOutline, color: '#2dd4bf' },
   { type: 'materialExport', name: '素材导出', icon: DownloadOutline, color: '#10b981' },
   { type: 'videoConfig', name: '视频生成配置', icon: VideocamOutline, color: '#f59e0b' },
   { type: 'image', name: '图片节点', icon: ImageOutline, color: '#8b5cf6' },
@@ -797,6 +804,11 @@ const onNodeClick = (event) => {
   // if (clickedNode) {
   //   updateNode(event.node.id, { selected: true })
   // }
+}
+
+const handleNodeDragStop = () => {
+  manualSaveHistory()
+  scheduleCanvasSave()
 }
 
 // Handle viewport change | 处理视口变化

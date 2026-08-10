@@ -68,12 +68,11 @@ body {
 }
 
 .workspace-panel {
-  background: var(--panel-glass, var(--bg-secondary));
+  background: var(--panel-strong, var(--bg-secondary));
   border: 1px solid var(--border-color);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.025),
     0 20px 60px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(18px);
 }
 
 .canvas-node-scroll-shell {
