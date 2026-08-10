@@ -119,7 +119,7 @@ watch([plan, () => props.references], () => {
 </script>
 
 <template>
-  <section class="space-y-2 rounded-xl border border-violet-400/25 bg-violet-400/5 p-3">
+  <section class="min-w-0 space-y-2 rounded-xl border border-violet-400/25 bg-violet-400/5 p-3">
     <div class="flex items-start justify-between gap-2">
       <div><b class="text-xs text-[var(--text-primary)]">冠希 H3 极简导演</b><p class="text-[10px] text-[var(--text-secondary)]">按 MiniMax H3 官方 Prompt Writing Skill 编写 T2VA / I2VA 提示词。</p></div>
       <span class="shrink-0 rounded-full bg-violet-400/15 px-2 py-1 text-[9px] text-violet-300">{{ generationMode }}</span>
@@ -156,7 +156,7 @@ watch([plan, () => props.references], () => {
         <textarea v-model="plan.non_diegetic_music" rows="2" class="field" placeholder="non_diegetic_music：画外音乐" />
       </div>
     </details>
-    <div v-if="compiledPreview" class="rounded-lg bg-black/20 p-2"><b class="text-[9px] text-emerald-300">实际提交格式</b><pre class="mt-1 max-h-24 overflow-auto whitespace-pre-wrap text-[9px] text-[var(--text-secondary)]">{{ compiledPreview }}</pre></div>
+    <div v-if="compiledPreview" class="min-w-0 rounded-lg bg-black/20 p-2"><b class="text-[9px] text-emerald-300">实际提交格式</b><pre class="mt-1 max-h-24 min-w-0 overflow-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[9px] text-[var(--text-secondary)]">{{ compiledPreview }}</pre></div>
     <div v-if="error" role="alert" class="text-[10px] text-red-400">{{ error }}</div>
   </section>
 </template>
