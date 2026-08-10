@@ -32,6 +32,18 @@ assert.match(videoNodeSource, /taskStage/)
 assert.match(videoNodeSource, /data\.progress !== null/)
 assert.match(videoNodeSource, /progressLabel/)
 
+const useApiSource = readFileSync(new URL('../src/hooks/useApi.js', import.meta.url), 'utf8')
+assert.doesNotMatch(useApiSource, /const maxAttempts = 120/)
+assert.match(useApiSource, /while \(true\)/)
+
+const pollingStart = videoNodeSource.indexOf('const startPolling = async')
+const pollingCatch = videoNodeSource.indexOf('} catch (err) {', pollingStart)
+const pollingFinally = videoNodeSource.indexOf('} finally {', pollingCatch)
+const pollingCatchSource = videoNodeSource.slice(pollingCatch, pollingFinally)
+assert.doesNotMatch(pollingCatchSource, /taskId:\s*null/)
+assert.match(pollingCatchSource, /taskId/)
+assert.match(pollingCatchSource, /任务仍在后台运行/)
+
 const videoConfigSource = readFileSync(new URL('../src/components/nodes/VideoConfigNode.vue', import.meta.url), 'utf8')
 assert.match(videoConfigSource, /progress:\s*result\?\.progress\s*\?\?\s*null/)
 assert.doesNotMatch(videoConfigSource, /progress:\s*result\?\.progress\s*\|\|\s*0/)

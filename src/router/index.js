@@ -27,6 +27,11 @@ const routes = [
     component: () => import('../views/VideoResizeWorkbench.vue')
   },
   {
+    path: '/test-assets',
+    name: 'TestAssetGenerator',
+    component: () => import('../views/TestAssetGenerator.vue')
+  },
+  {
     path: '/recent-generations',
     name: 'RecentGenerations',
     component: () => import('../views/RecentGenerations.vue')

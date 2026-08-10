@@ -37,7 +37,7 @@ export const retryVideoBatch = (taskId, options = {}) => {
   })
 }
 // 轮询视频任务直到完成
-export const pollVideoTask = async (taskId, maxAttempts = 120, interval = 5000) => {
+export const pollVideoTask = async (taskId, maxAttempts = Number.POSITIVE_INFINITY, interval = 5000) => {
   for (let i = 0; i < maxAttempts; i++) {
     const result = await getVideoTaskStatus(taskId)
 
@@ -48,15 +48,24 @@ export const pollVideoTask = async (taskId, maxAttempts = 120, interval = 5000) 
     }
 
     if (taskState.state === 'missing_url') {
-      throw new Error('视频任务已完成但未返回视频 URL')
+      const taskError = new Error('视频任务已完成但未返回视频 URL')
+      taskError.videoTaskTerminal = true
+      taskError.videoTaskStatus = taskState.status || 'completed'
+      throw taskError
     }
 
     if (taskState.state === 'failed') {
-      throw new Error(result.error?.message || '视频生成失败')
+      const taskError = new Error(result.error?.message || '视频生成失败')
+      taskError.videoTaskTerminal = true
+      taskError.videoTaskStatus = taskState.status || 'failed'
+      throw taskError
     }
 
     await new Promise(resolve => setTimeout(resolve, interval))
   }
 
-  throw new Error('视频生成超时')
+  const pollingError = new Error('状态查询暂时停止，任务仍可能在后台运行')
+  pollingError.videoTaskTerminal = false
+  pollingError.taskId = taskId
+  throw pollingError
 }

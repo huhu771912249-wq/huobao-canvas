@@ -233,7 +233,6 @@ export const useVideoGeneration = () => {
   const taskId = ref(null)
   const progress = reactive({
     attempt: 0,
-    maxAttempts: 120,
     percentage: 0
   })
 
@@ -304,10 +303,11 @@ export const useVideoGeneration = () => {
    * Poll video task | 轮询视频任务
    */
   const pollVideoTask = async (pollTaskId, onProgress = () => {}) => {
-    const maxAttempts = 120
     const interval = 5000
+    let attempt = 0
 
-    for (let i = 0; i < maxAttempts; i++) {
+    while (true) {
+      attempt += 1
       // 获取任务查询端点，支持 {taskId} 占位符替换
       let taskEndpoint = modelStore.getVideoTaskEndpoint()
       if (taskEndpoint.includes('{taskId}')) {
@@ -330,7 +330,7 @@ export const useVideoGeneration = () => {
       // 适配轮询响应
       const adaptedResult = adaptResponse('video', result)
       const progressInfo = extractVideoTaskProgress(result, adaptedResult)
-      onProgress(i + 1, progressInfo.percent, progressInfo)
+      onProgress(attempt, progressInfo.percent, progressInfo)
 
       const taskState = getVideoTaskPollingState(result, adaptedResult)
 
@@ -344,19 +344,23 @@ export const useVideoGeneration = () => {
       }
 
       if (taskState.state === 'missing_url') {
-        throw new Error('视频任务已完成但未返回视频 URL')
+        const taskError = new Error('视频任务已完成但未返回视频 URL')
+        taskError.videoTaskTerminal = true
+        taskError.videoTaskStatus = taskState.status || 'completed'
+        throw taskError
       }
 
       // Check for failure | 检查是否失败
       if (taskState.state === 'failed') {
-        throw new Error(result.error?.message || result.message || '视频生成失败')
+        const taskError = new Error(result.error?.message || result.message || '视频生成失败')
+        taskError.videoTaskTerminal = true
+        taskError.videoTaskStatus = taskState.status || 'failed'
+        throw taskError
       }
 
       // Wait before next poll | 等待下次轮询
       await new Promise(resolve => setTimeout(resolve, interval))
     }
-
-    throw new Error('视频生成超时')
   }
 
   /**
