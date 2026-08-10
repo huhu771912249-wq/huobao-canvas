@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 const imageSource = readFileSync(new URL('../src/components/nodes/ImageConfigNode.vue', import.meta.url), 'utf8')
 const videoSource = readFileSync(new URL('../src/components/nodes/VideoConfigNode.vue', import.meta.url), 'utf8')
+const h3DirectorSource = readFileSync(new URL('../src/components/video/H3DirectorPromptEditor.vue', import.meta.url), 'utf8')
 
 for (const testId of ['image-model-select', 'image-quality-select', 'image-size-select']) {
   assert.match(imageSource, new RegExp(`data-testid="${testId}"`), `${testId} must be a directly clickable in-node control`)
@@ -27,6 +28,8 @@ assert.match(imageSource, /activateModelProvider\(localModel\.value\)/, 'image g
 assert.match(videoSource, /data-testid="video-node-expand-toggle"/, 'the video node must expose a one-click expand control')
 assert.match(videoSource, /maxHeight:\s*'none'/, 'expanded video nodes must show every setting without inner scrolling')
 assert.match(videoSource, /updateNodeInternals\(props\.id\)/, 'the video node must refresh its Vue Flow bounds after resizing')
+assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must not widen the video node')
+assert.match(h3DirectorSource, /overflow-wrap:anywhere/, 'compiled H3 prompts must wrap long tokens inside the node')
 assert.match(imageSource, /class="image-config-node canvas-node-scroll-shell nowheel/, 'the image node shell must remain draggable')
 assert.match(imageSource, /data-testid="image-config-drag-handle"/, 'the image node must expose a clear drag area')
 assert.match(imageSource, /class="image-config-node__controls nodrag/, 'interactive controls must not start a node drag')
