@@ -1,0 +1,9 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public model identifiers"
+regexTarget = "match"
+regexes = [
+  '''wai-illustrious-sdxl-v17''',
+]
