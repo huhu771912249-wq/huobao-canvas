@@ -1,6 +1,6 @@
 <template>
   <div class="relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
-    <div class="nodrag nowheel w-[410px] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
+    <div class="nowheel w-[410px] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
       <header class="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
         <div>
           <div class="text-sm font-semibold text-[var(--text-primary)]">水印与素材编辑</div>

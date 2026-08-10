@@ -1,6 +1,6 @@
 <template>
   <div class="relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
-    <div class="nodrag nowheel w-[380px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
+    <div class="nowheel w-[380px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
       <header class="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
         <div><div class="text-sm font-semibold text-[var(--text-primary)]">素材导出</div><div class="mt-0.5 text-[11px] text-[var(--text-secondary)]">连接图片、视频或 GIF 成品</div></div>
         <div class="flex gap-1"><button class="rounded p-1 hover:bg-[var(--bg-tertiary)]" @click="duplicateNode(id)"><n-icon :size="15"><CopyOutline /></n-icon></button><button class="rounded p-1 hover:bg-[var(--bg-tertiary)]" @click="removeNode(id)"><n-icon :size="15"><TrashOutline /></n-icon></button></div>

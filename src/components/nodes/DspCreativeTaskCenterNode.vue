@@ -1,7 +1,7 @@
 <template>
   <div class="dsp-task-center relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <section
-      class="dsp-task-center__shell canvas-node-scroll-shell nodrag nowheel w-[620px] rounded-2xl border bg-[var(--bg-secondary)] shadow-2xl"
+      class="dsp-task-center__shell canvas-node-scroll-shell nowheel w-[620px] rounded-2xl border bg-[var(--bg-secondary)] shadow-2xl"
       :class="data.selected ? 'border-amber-400' : 'border-[var(--border-color)]'"
     >
       <header class="dsp-task-center__header flex items-start justify-between border-b border-[var(--border-color)] px-5 py-4">

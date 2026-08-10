@@ -3,7 +3,7 @@
   <div class="llm-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- LLM Config node | LLM配置节点 -->
     <div
-      class="llm-node canvas-node-scroll-shell nodrag nowheel bg-[var(--bg-secondary)] rounded-xl border min-w-[320px] max-w-[400px] relative transition-all duration-200"
+      class="llm-node canvas-node-scroll-shell nowheel bg-[var(--bg-secondary)] rounded-xl border min-w-[320px] max-w-[400px] relative transition-all duration-200"
       :class="data.selected ? 'border-1 border-purple-500 shadow-lg shadow-purple-500/20' : 'border border-[var(--border-color)]'">
       <!-- Header | 头部 -->
       <div
