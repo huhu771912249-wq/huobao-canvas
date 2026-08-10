@@ -27,16 +27,25 @@
             <select v-model="selectedImageModel" data-testid="studio-image-model-select" class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-cyan-400">
               <option v-for="model in localImageModels" :key="model.key" :value="model.key">{{ model.label }}</option>
             </select>
-            <div v-if="selectedImageModel === 'wai-illustrious-sdxl-v17'" class="mt-2 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3 text-xs leading-5 text-cyan-100">
-              本机 RTX 5090 / ComfyUI。英文标签提示词效果最佳，生成后可直接连到视频节点。
+            <div v-if="selectedImageConfig?.tips" class="mt-2 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3 text-xs leading-5 text-cyan-100">
+              {{ selectedImageConfig.tips }}生成后可直接连到 H3 视频节点。
             </div>
             <div class="mb-2 mt-4 text-xs text-slate-400">图片尺寸</div>
             <select v-model="selectedSize" data-testid="studio-image-size-select" class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-cyan-400">
               <option v-for="size in selectedImageSizes" :key="size" :value="size">{{ size }}</option>
             </select>
           </div>
-          <div class="mt-4"><div class="mb-2 text-xs text-slate-400">清晰度</div><div class="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-sm text-emerald-200"><b>SeedVR2 AI 超分</b><div class="mt-1 text-xs text-slate-400">所有视频成品强制经过 AI 超分，失败时明确报错，不静默降级。</div></div></div>
+          <div v-if="selectedMode === 'image-to-video'" class="mt-4">
+            <div class="mb-2 text-xs text-slate-400">SeedVR2</div>
+            <div class="grid grid-cols-3 gap-2">
+              <button v-for="option in qualityOptions" :key="option.mode" class="rounded-xl border p-2 text-left text-xs" :class="qualityMode === option.mode ? 'border-emerald-400 bg-emerald-400/10 text-emerald-200' : 'border-slate-700 text-slate-400'" @click="qualityMode = option.mode"><b class="block">{{ option.label }}</b><span>{{ option.description }}</span></button>
+            </div>
+          </div>
           <div v-if="selectedMode === 'image-to-video'" class="mt-4"><div class="mb-2 text-xs text-slate-400">云端视频模型</div><button v-for="model in cloudVideoModels" :key="model.key" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedVideoModel === model.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedVideoModel = model.key"><b>{{ model.label }}</b><div class="mt-1 text-xs text-slate-400">{{ model.description }}</div></button></div>
+          <div v-if="selectedMode === 'image-to-video' && selectedVideoModel === 'minimax-h3'" class="mt-4">
+            <div class="mb-2 text-xs text-slate-400">H3 采样</div>
+            <button v-for="option in H3_SAMPLING_OPTIONS" :key="option.mode" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="samplingMode === option.mode ? 'border-amber-300 bg-amber-300/10' : 'border-slate-700'" @click="samplingMode = option.mode"><b>{{ option.label }}</b><div class="mt-1 text-xs text-slate-400">{{ option.description }}</div></button>
+          </div>
           <VideoOutputSizePicker v-if="selectedMode === 'image-to-video'" class="mt-4" v-model:output-width="outputWidth" v-model:output-height="outputHeight" />
         </aside>
       </div>
@@ -69,15 +78,17 @@ import { createProject, updateProject } from '../stores/projects'
 import NovelVideoWorkspace from '../components/studio/NovelVideoWorkspace.vue'
 import VideoOutputSizePicker from '../components/VideoOutputSizePicker.vue'
 import ComputeStatusIndicator from '../components/ComputeStatusIndicator.vue'
-import { IMAGE_MODELS } from '../config/models'
+import { DEFAULT_IMAGE_MODEL, IMAGE_MODELS } from '../config/models'
+import { H3_SAMPLING_OPTIONS } from '../utils/h3GenerationOptions'
 
 const route = useRoute(); const router = useRouter()
 const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
 const modes = [{ key: 'text-to-image', title: '文生图', description: '提示词生成图片变体' }, { key: 'image-to-video', title: '文生图＋视频', description: '先确认首帧，再生成动态镜头' }, { key: 'asset', title: '上传素材', description: '自动识别图片、视频和文档' }]
 const activeTab = ref(String(route.query.tab || 'quick')); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1024x1024'); const sizes = COMMON_VIDEO_SIZES
 const localImageModels = IMAGE_MODELS.filter(model => model.provider?.includes('local-material'))
-const selectedImageModel = ref('wai-illustrious-sdxl-v17')
-const selectedImageSizes = computed(() => IMAGE_MODELS.find(model => model.key === selectedImageModel.value)?.sizes || ['1024x1024'])
+const selectedImageModel = ref(DEFAULT_IMAGE_MODEL)
+const selectedImageConfig = computed(() => IMAGE_MODELS.find(model => model.key === selectedImageModel.value))
+const selectedImageSizes = computed(() => selectedImageConfig.value?.sizes || ['1024x1024'])
 watch(selectedImageModel, modelKey => {
   const model = IMAGE_MODELS.find(item => item.key === modelKey)
   if (!model?.sizes?.includes(selectedSize.value)) selectedSize.value = model?.defaultParams?.size || model?.sizes?.[0] || '1024x1024'
@@ -86,7 +97,13 @@ const cloudVideoModels = [{ key: 'minimax-h3', label: 'MiniMax H3', description:
 const selectedVideoModel = ref('minimax-h3')
 const outputWidth = ref(1280)
 const outputHeight = ref(720)
-const qualityMode = ref('quality')
+const qualityMode = ref('fast')
+const samplingMode = ref('standard20')
+const qualityOptions = [
+  { mode: 'fast', label: '原生快速', description: '不启用超分' },
+  { mode: 'auto', label: '智能判断', description: '仅需要时超分' },
+  { mode: 'quality', label: 'AI 高清', description: '强制超分' }
+]
 const parsedDocument = ref(null); const parsingDocument = ref(false); const documentError = ref('')
 const NOVEL_TEXT_LIMIT = 200000
 const novelText = ref('')
@@ -152,7 +169,7 @@ const startCreate = async () => {
   if (intent.value === 'asset') { window.$message?.warning('请上传图片或视频素材后再开始'); return }
   if (selectedSize.value === 'custom' && customSizeError.value) { window.$message?.error(customSizeError.value); return }
   const id = createProject(cleanPrompt.slice(0, 28) || intentLabel.value)
-  updateProject(id, { canvasData: buildStudioCanvas({ mode: selectedMode.value, prompt: cleanPrompt, size: resolvedSize.value, imageModel: selectedImageModel.value, videoModel: selectedVideoModel.value, qualityMode: qualityMode.value }) })
+  updateProject(id, { canvasData: buildStudioCanvas({ mode: selectedMode.value, prompt: cleanPrompt, size: resolvedSize.value, imageModel: selectedImageModel.value, videoModel: selectedVideoModel.value, qualityMode: qualityMode.value, samplingMode: samplingMode.value }) })
   router.push(`/canvas/${id}`)
 }
 const planStoryboard = async mode => {

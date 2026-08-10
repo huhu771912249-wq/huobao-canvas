@@ -53,7 +53,7 @@ const positiveDimension = value => {
 
 export const normalizeVideoQualityRequestProfile = (profile) => {
   if (!profile || typeof profile !== 'object' || Array.isArray(profile)) return null
-  const mode = profile.mode === 'fast' ? 'fast' : 'quality'
+  const mode = ['fast', 'auto', 'quality'].includes(profile.mode) ? profile.mode : 'quality'
   const width = positiveDimension(profile.width)
   const height = positiveDimension(profile.height)
   if (!width || !height) return null
@@ -61,8 +61,8 @@ export const normalizeVideoQualityRequestProfile = (profile) => {
     mode,
     width,
     height,
-    upscaler: mode === 'quality' && typeof profile.upscaler === 'string' ? profile.upscaler : null,
-    label: String(profile.label || (mode === 'quality' ? '高质量 1080p' : '快速导出'))
+    upscaler: mode !== 'fast' && typeof profile.upscaler === 'string' ? profile.upscaler : null,
+    label: String(profile.label || (mode === 'quality' ? '高质量 1080p' : mode === 'auto' ? '智能判断' : '快速导出'))
   }
 }
 
@@ -80,7 +80,7 @@ export const normalizeVideoImageAlignmentRequest = (alignment) => {
   }
 }
 
-export const buildStudioCanvas = ({ mode, prompt = '', size = '1280x720', imageModel = 'frw-qianwen', videoModel = 'minimax-h3', qualityMode = 'quality' }) => {
+export const buildStudioCanvas = ({ mode, prompt = '', size = '1280x720', imageModel = 'z-image', videoModel = 'minimax-h3', qualityMode = 'quality', samplingMode = 'standard20' }) => {
   const ratio = ratioForSize(size)
   const qualityProfile = getVideoQualityProfile(qualityMode, ratio)
   const imagePrompt = { id: 'studio_image_prompt', type: 'text', position: { x: 80, y: 140 }, data: { content: prompt, label: '画面提示词' } }
@@ -93,7 +93,7 @@ export const buildStudioCanvas = ({ mode, prompt = '', size = '1280x720', imageM
   if (mode === 'text-to-image') return { nodes: [imagePrompt, imageConfig, imageResult], edges: imageEdges, viewport: { x: 60, y: 80, zoom: 0.78 } }
 
   const motionPrompt = { id: 'studio_motion_prompt', type: 'text', position: { x: 800, y: 430 }, data: { content: prompt, label: '动态与运镜提示词' } }
-  const videoConfig = { id: 'studio_video_config', type: 'videoConfig', position: { x: 1160, y: 220 }, data: { label: '云端视频', mode: 'image_to_video', model: videoModel, ratio, dur: 5, targetResolution: '1080p', qualityMode: qualityProfile.mode, qualityProfile, imageAlignment: getImageAlignmentSpec(videoModel, ratio) } }
+  const videoConfig = { id: 'studio_video_config', type: 'videoConfig', position: { x: 1160, y: 220 }, data: { label: '云端视频', mode: 'image_to_video', model: videoModel, ratio, dur: 5, targetResolution: '1080p', samplingMode, qualityMode: qualityProfile.mode, qualityProfile, imageAlignment: getImageAlignmentSpec(videoModel, ratio) } }
   const videoResult = { id: 'studio_video_result', type: 'video', position: { x: 1540, y: 220 }, data: { url: '', label: '视频结果', targetResolution: '1080p', actualResolution: null, qualityProfile } }
   return {
     nodes: [imagePrompt, imageConfig, imageResult, motionPrompt, videoConfig, videoResult],

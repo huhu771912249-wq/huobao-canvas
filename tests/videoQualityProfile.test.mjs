@@ -17,6 +17,14 @@ assert.deepEqual(getVideoQualityProfile('fast', '9:16'), {
   label: '快速导出'
 })
 
+assert.deepEqual(getVideoQualityProfile('auto', '16:9'), {
+  mode: 'auto',
+  width: 1920,
+  height: 1080,
+  upscaler: 'seedvr2-3b-fp16',
+  label: '智能判断'
+})
+
 assert.deepEqual(
   getVideoQualityProfile(' QUALITY ', ' 9:16 '),
   {

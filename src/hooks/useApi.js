@@ -190,7 +190,7 @@ export const useImageGeneration = () => {
       if (params.background_instruction) {
         requestData.background_instruction = params.background_instruction
       }
-      for (const key of ['negative_prompt', 'steps', 'cfg', 'sampler_name', 'seed']) {
+      for (const key of ['negative_prompt', 'steps', 'cfg', 'sampler_name', 'scheduler', 'seed']) {
         if (params[key] !== undefined) requestData[key] = params[key]
       }
 
@@ -263,6 +263,10 @@ export const useVideoGeneration = () => {
     if (params.dur) requestData.seconds = params.dur
     if (params.sizes) requestData.sizes = params.sizes
     if (params.output_formats) requestData.output_formats = params.output_formats
+    if (params.output_width) requestData.output_width = params.output_width
+    if (params.output_height) requestData.output_height = params.output_height
+    if (params.sampling_mode) requestData.sampling_mode = params.sampling_mode
+    if (params.director_plan) requestData.director_plan = params.director_plan
     const qualityProfile = normalizeVideoQualityRequestProfile(params.quality_profile)
     const imageAlignment = normalizeVideoImageAlignmentRequest(params.image_alignment)
     if (qualityProfile) requestData.quality_profile = qualityProfile
