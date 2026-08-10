@@ -25,5 +25,7 @@ assert.match(overlayNode, /videoGif/)
 assert.match(exportNode, /startAssetDownload/)
 assert.match(exportNode, /Handle type="target"/)
 assert.match(exportNode, /Handle type="source"/)
+assert.match(canvas, /class="canvas-tool-rail__button/)
+assert.match(canvas, /class="canvas-tool-rail__tooltip"[^>]*>\{\{ tool\.name \}\}<\/span>/)
 
 console.log('canvasMediaNodes.test.mjs passed')

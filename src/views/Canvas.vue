@@ -73,17 +73,21 @@
       <aside class="canvas-tool-rail absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg z-10">
         <button 
           @click="showNodeMenu = !showNodeMenu"
-          class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors"
+          class="canvas-tool-rail__button w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--accent-color)] text-white hover:bg-[var(--accent-hover)] transition-colors"
           title="添加节点"
+          aria-label="添加节点"
         >
           <n-icon :size="20"><AddOutline /></n-icon>
+          <span class="canvas-tool-rail__tooltip" aria-hidden="true">添加节点</span>
         </button>
         <button 
           @click="showWorkflowPanel = true"
-          class="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
+          class="canvas-tool-rail__button w-10 h-10 flex items-center justify-center rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors"
           title="工作流模板"
+          aria-label="工作流模板"
         >
           <n-icon :size="20"><AppsOutline /></n-icon>
+          <span class="canvas-tool-rail__tooltip" aria-hidden="true">工作流模板</span>
         </button>
         <div class="w-full h-px bg-[var(--border-color)] my-1"></div>
         <button 
@@ -91,10 +95,12 @@
           :key="tool.id"
           @click="tool.action"
           :disabled="tool.disabled && tool.disabled()"
-          class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          class="canvas-tool-rail__button w-10 h-10 flex items-center justify-center rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
           :title="tool.name"
+          :aria-label="tool.name"
         >
           <n-icon :size="20"><component :is="tool.icon" /></n-icon>
+          <span class="canvas-tool-rail__tooltip" aria-hidden="true">{{ tool.name }}</span>
         </button>
       </aside>
 
@@ -1099,6 +1105,39 @@ onUnmounted(() => {
   border-radius: 13px;
 }
 
+.canvas-tool-rail__button {
+  position: relative;
+}
+
+.canvas-tool-rail__tooltip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 12px);
+  z-index: 40;
+  padding: 7px 10px;
+  transform: translate(5px, -50%);
+  visibility: hidden;
+  border: 1px solid rgba(159, 181, 215, 0.22);
+  border-radius: 9px;
+  background: rgba(8, 14, 24, 0.96);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.36);
+  color: #f6f8fc;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+}
+
+.canvas-tool-rail__button:hover > .canvas-tool-rail__tooltip,
+.canvas-tool-rail__button:focus-visible > .canvas-tool-rail__tooltip {
+  transform: translate(0, -50%);
+  visibility: visible;
+  opacity: 1;
+}
+
 .canvas-node-menu {
   min-width: 190px;
   padding: 8px !important;
@@ -1328,6 +1367,10 @@ onUnmounted(() => {
     flex-direction: row !important;
     transform: none !important;
     overflow-x: auto;
+  }
+
+  .canvas-tool-rail__tooltip {
+    display: none;
   }
 
   .canvas-node-menu {
