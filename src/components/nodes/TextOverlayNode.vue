@@ -1,7 +1,7 @@
 <template>
   <div class="text-overlay-node-wrapper relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <div
-      class="text-overlay-node canvas-node-scroll-shell nodrag nowheel w-[520px] bg-[var(--bg-secondary)] rounded-xl border transition-all duration-200"
+      class="text-overlay-node canvas-node-scroll-shell nowheel w-[520px] bg-[var(--bg-secondary)] rounded-xl border transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
     >
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">

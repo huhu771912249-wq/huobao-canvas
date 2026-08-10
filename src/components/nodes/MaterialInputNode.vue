@@ -1,6 +1,6 @@
 <template>
   <div class="relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
-    <div class="canvas-node-scroll-shell nodrag nowheel w-[420px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)]">
+    <div class="canvas-node-scroll-shell nowheel w-[420px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)]">
       <div class="flex items-center justify-between border-b border-[var(--border-color)] px-3 py-2">
         <span class="text-sm font-medium text-[var(--text-primary)]">素材导入</span>
         <div class="flex gap-1">
