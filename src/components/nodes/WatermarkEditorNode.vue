@@ -97,8 +97,11 @@ watch([watermarkId, position, size, opacity, sourceUrl, sourceMime], () => updat
   sourceUrl: sourceUrl.value,
   sourceMime: sourceMime.value,
   sourceLabel: sourceNode.value?.data?.label || props.data?.sourceLabel || '',
+  url: sourceUrl.value,
+  gifUrl: sourceMime.value === 'image/gif' || /\.gif(?:$|\?)/i.test(sourceUrl.value) ? sourceUrl.value : '',
+  mime: sourceMime.value || (/\.gif(?:$|\?)/i.test(sourceUrl.value) ? 'image/gif' : ''),
   updatedAt: Date.now()
-}))
+}), { immediate: true })
 
 </script>
 

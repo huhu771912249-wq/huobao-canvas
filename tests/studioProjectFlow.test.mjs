@@ -12,6 +12,6 @@ assert.equal(videoCanvas.nodes.find(node => node.type === 'imageConfig').data.si
 
 const imageCanvas = buildStudioCanvas({ mode: 'text-to-image', prompt: '商品海报', size: '720x1280' })
 assert.deepEqual(imageCanvas.nodes.map(node => node.type), ['text', 'imageConfig', 'image'])
-assert.equal(imageCanvas.nodes[1].data.model, 'frw-qianwen')
+assert.equal(imageCanvas.nodes[1].data.model, 'z-image')
 assert.equal(imageCanvas.nodes[1].data.size, '720x1280')
 console.log('studioProjectFlow.test.mjs passed')

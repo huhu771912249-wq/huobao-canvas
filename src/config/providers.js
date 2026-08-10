@@ -61,7 +61,7 @@ export const PROVIDERS = {
         if (params.background_instruction) {
           adapted.background_instruction = params.background_instruction
         }
-        for (const key of ['negative_prompt', 'steps', 'cfg', 'sampler_name', 'seed']) {
+        for (const key of ['negative_prompt', 'steps', 'cfg', 'sampler_name', 'scheduler', 'seed']) {
           if (params[key] !== undefined) adapted[key] = params[key]
         }
         return adapted

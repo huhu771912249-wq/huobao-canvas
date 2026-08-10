@@ -47,8 +47,18 @@
 
         <div class="space-y-2 rounded-lg border border-[var(--border-color)] p-2">
           <div class="text-xs text-[var(--text-secondary)]">清晰度</div>
-          <div class="rounded-lg border border-cyan-400 bg-cyan-400/10 px-2 py-2 text-left text-xs text-cyan-300">
-            <b class="block">SeedVR2 AI 超分（强制）</b><span class="text-[10px]">所有视频成品统一超分；失败时不降级发布</span>
+          <div class="grid grid-cols-3 gap-1">
+            <button
+              v-for="option in qualityOptions"
+              :key="option.mode"
+              type="button"
+              class="rounded-lg border px-2 py-2 text-left text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              :class="localQualityMode === option.mode ? 'border-cyan-400 bg-cyan-400/10 text-cyan-300' : 'border-[var(--border-color)] text-[var(--text-secondary)]'"
+              :disabled="option.mode !== 'fast' && Boolean(qualityUnavailableReason)"
+              @click="handleQualitySelect(option.mode)"
+            >
+              <b class="block text-xs">{{ option.label }}</b><span>{{ option.description }}</span>
+            </button>
           </div>
           <div v-if="qualityUnavailableReason" class="text-[10px] text-amber-400">高质量不可用：{{ qualityUnavailableReason }}</div>
           <div class="grid grid-cols-3 gap-1 text-[10px] text-[var(--text-secondary)]">
@@ -86,6 +96,22 @@
         </div>
 
         <template v-if="localModel === 'minimax-h3'">
+          <section class="space-y-2 rounded-xl border border-amber-400/25 bg-amber-400/5 p-3">
+            <div class="flex items-center justify-between"><b class="text-xs text-[var(--text-primary)]">H3 采样模式</b><span class="text-[9px] text-amber-300">可随时切换</span></div>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                v-for="option in H3_SAMPLING_OPTIONS"
+                :key="option.mode"
+                type="button"
+                class="rounded-lg border px-2 py-2 text-left text-[10px] transition-colors"
+                :class="localSamplingMode === option.mode ? 'border-amber-300 bg-amber-300/10 text-amber-200' : 'border-[var(--border-color)] text-[var(--text-secondary)]'"
+                @click="handleSamplingSelect(option.mode)"
+              >
+                <b class="block text-xs">{{ option.label }}</b><span>{{ option.description }}</span>
+              </button>
+            </div>
+            <p v-if="localSamplingMode === 'turbo4'" class="text-[10px] leading-4 text-amber-300">4 步 Turbo 需要服务器安装 Turbo LoRA 和采样器；快速运动建议改回 20 步。</p>
+          </section>
           <MultiViewReferencePanel :source-image="connectedFirstFrameSource" @confirmed="handleMultiViewConfirmed" />
           <H3DirectorPromptEditor
             :references="activeH3References"
@@ -285,6 +311,7 @@ import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 import { getImageAlignmentSpec, getModelNativeVideoSize } from '../../config/studioProjectFlow'
 import { isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
 import { bindH3ImagePrompt } from '../../utils/h3DirectorPrompt'
+import { H3_SAMPLING_OPTIONS, normalizeH3SamplingMode } from '../../utils/h3GenerationOptions'
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -311,7 +338,9 @@ const localRatio = ref(props.data?.ratio || '16:9')
 const outputWidth = ref(Number(props.data?.outputWidth || 1920))
 const outputHeight = ref(Number(props.data?.outputHeight || 1080))
 const localDuration = ref(props.data?.dur || 5)
-const localQualityMode = ref('quality')
+const allowedQualityModes = new Set(['fast', 'auto', 'quality'])
+const localQualityMode = ref(allowedQualityModes.has(props.data?.qualityMode) ? props.data.qualityMode : 'fast')
+const localSamplingMode = ref(normalizeH3SamplingMode(props.data?.samplingMode))
 const qualityResult = ref(props.data?.qualityResult || {})
 const localBatchSizes = ref(normalizeVideoBatchSizes(props.data?.batchSizes || []))
 const localGenerateGif = ref(props.data?.generateGif !== false)
@@ -339,6 +368,11 @@ const handleMultiViewConfirmed = (reference) => {
 }
 
 const qualityProfile = computed(() => getVideoQualityProfile(localQualityMode.value, localRatio.value))
+const qualityOptions = [
+  { mode: 'fast', label: '原生快速', description: '不跑 SeedVR2' },
+  { mode: 'auto', label: '智能判断', description: '小图才超分' },
+  { mode: 'quality', label: 'AI 高清', description: '强制 SeedVR2' }
+]
 const nativeVideoSize = computed(() => getModelNativeVideoSize(localModel.value, localRatio.value))
 const imageAlignment = computed(() => getImageAlignmentSpec(localModel.value, localRatio.value))
 const connectedQualityResult = computed(() => {
@@ -656,16 +690,21 @@ const handleRatioSelect = (key) => {
 }
 
 const handleQualitySelect = (mode) => {
-  if (mode === 'quality' && qualityUnavailableReason.value) {
+  if (mode !== 'fast' && qualityUnavailableReason.value) {
     window.$message?.warning(qualityUnavailableReason.value)
     return
   }
-  localQualityMode.value = 'quality'
+  localQualityMode.value = allowedQualityModes.has(mode) ? mode : 'fast'
   updateNode(props.id, {
     qualityMode: localQualityMode.value,
     qualityProfile: qualityProfile.value,
     imageAlignment: imageAlignment.value
   })
+}
+
+const handleSamplingSelect = (mode) => {
+  localSamplingMode.value = normalizeH3SamplingMode(mode)
+  updateNode(props.id, { samplingMode: localSamplingMode.value })
 }
 
 // Handle duration selection | 处理时长选择
@@ -930,6 +969,7 @@ const handleGenerate = async () => {
       output_width: outputWidth.value,
       output_height: outputHeight.value
     }
+    if (localModel.value === 'minimax-h3') params.sampling_mode = localSamplingMode.value
     if (localModel.value === 'minimax-h3' && directorPlan.value && compiledDirectorPrompt.value) {
       params.director_plan = directorPlan.value
     }
@@ -980,6 +1020,7 @@ const handleGenerate = async () => {
     const qualityMetadata = {
       qualityProfile: qualityProfile.value,
       qualityMode: localQualityMode.value,
+      samplingMode: localSamplingMode.value,
       upscale_status: result?.upscale_status || '',
       actual_width: result?.actual_width || null,
       actual_height: result?.actual_height || null

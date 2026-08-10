@@ -68,18 +68,19 @@
         <div v-if="currentModelConfig?.tips" class="text-xs text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] rounded px-2 py-1">
           💡 {{ currentModelConfig.tips }}
         </div>
-        <div v-if="isWaiIllustrious" class="space-y-2 rounded-lg border border-cyan-400/25 bg-cyan-400/5 p-2" data-testid="wai-native-settings">
+        <div v-if="nativeImageSettings" class="space-y-2 rounded-lg border border-cyan-400/25 bg-cyan-400/5 p-2" data-testid="local-image-native-settings">
           <div class="flex items-center justify-between text-xs">
-            <span class="font-semibold text-cyan-300">WAI v17 原生参数</span>
-            <span class="text-[var(--text-tertiary)]">CLIP Skip 2</span>
+            <span class="font-semibold text-cyan-300">{{ currentModelConfig?.label }} 原生参数</span>
+            <span class="text-[var(--text-tertiary)]">ComfyUI</span>
           </div>
-          <textarea v-model="waiNegativePrompt" rows="2" class="control w-full resize-none text-xs" placeholder="负面提示词" @blur="persistWaiSettings" />
+          <textarea v-if="currentModelConfig?.supportsNegativePrompt" v-model="imageNegativePrompt" rows="2" class="control w-full resize-none text-xs" placeholder="负面提示词" @blur="persistNativeImageSettings" />
+          <div v-else class="rounded-md bg-slate-950/40 px-2 py-1 text-[11px] text-[var(--text-tertiary)]">该蒸馏模型不使用负面提示词。</div>
           <div class="grid grid-cols-2 gap-2 text-xs">
-            <label class="space-y-1"><span class="text-[var(--text-secondary)]">步数</span><input v-model.number="waiSteps" class="control w-full" type="number" min="1" max="60" @change="persistWaiSettings" /></label>
-            <label class="space-y-1"><span class="text-[var(--text-secondary)]">CFG</span><input v-model.number="waiCfg" class="control w-full" type="number" min="0.1" max="20" step="0.5" @change="persistWaiSettings" /></label>
+            <label class="space-y-1"><span class="text-[var(--text-secondary)]">步数</span><input v-model.number="imageSteps" class="control w-full" type="number" :min="nativeDefaults.stepsMin || 1" :max="nativeDefaults.stepsMax || 60" :disabled="currentModelConfig?.fixedSteps" @change="persistNativeImageSettings" /></label>
+            <label class="space-y-1"><span class="text-[var(--text-secondary)]">CFG</span><input v-model.number="imageCfg" class="control w-full" type="number" :min="nativeDefaults.cfgMin || 0.1" :max="nativeDefaults.cfgMax || 20" step="0.5" :disabled="currentModelConfig?.fixedCfg" @change="persistNativeImageSettings" /></label>
           </div>
-          <label class="block space-y-1 text-xs"><span class="text-[var(--text-secondary)]">采样器</span><select v-model="waiSampler" class="control w-full" @change="persistWaiSettings"><option value="euler_ancestral">Euler a（推荐）</option><option value="dpmpp_2m_sde">DPM++ 2M SDE</option><option value="dpmpp_2m">DPM++ 2M</option><option value="euler">Euler</option></select></label>
-          <label class="block space-y-1 text-xs"><span class="text-[var(--text-secondary)]">随机种子（-1 每次随机）</span><input v-model.number="waiSeed" class="control w-full" type="number" min="-1" max="2147483647" @change="persistWaiSettings" /></label>
+          <label class="block space-y-1 text-xs"><span class="text-[var(--text-secondary)]">采样器</span><select v-model="imageSampler" class="control w-full" @change="persistNativeImageSettings"><option v-for="sampler in currentModelConfig?.samplers || []" :key="sampler.key" :value="sampler.key">{{ sampler.label }}</option></select></label>
+          <label class="block space-y-1 text-xs"><span class="text-[var(--text-secondary)]">随机种子（-1 每次随机）</span><input v-model.number="imageSeed" class="control w-full" type="number" min="-1" max="2147483647" @change="persistNativeImageSettings" /></label>
         </div>
         <div v-if="!isConfigured" class="rounded-lg bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
           当前模型所属 API 尚未配置，请先在右上角“API 设置”中补充密钥。
@@ -270,6 +271,7 @@ import { updateNode, addNode, addEdge, nodes, edges, duplicateNode, removeNode }
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { useModelStore } from '../../stores/pinia'
 import { getModelSizeOptions, getModelQualityOptions, getModelConfig, DEFAULT_IMAGE_MODEL } from '../../stores/models'
+import { normalizeImageModelKey } from '../../config/models'
 import { parseMentions } from '../../hooks/useNodeRef'
 import {
   DEFAULT_BACKGROUND_INSTRUCTION,
@@ -296,16 +298,18 @@ const { loading, error, images: generatedImages, generate } = useImageGeneration
 
 // Local state | 本地状态
 const showHandleMenu = ref(false)
-const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
+const localModel = ref(normalizeImageModelKey(props.data?.model))
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
-const waiDefaults = getModelConfig('wai-illustrious-sdxl-v17')?.defaultParams || {}
-const waiNegativePrompt = ref(props.data?.negativePrompt ?? waiDefaults.negativePrompt ?? '')
-const waiSteps = ref(props.data?.steps ?? waiDefaults.steps ?? 30)
-const waiCfg = ref(props.data?.cfg ?? waiDefaults.cfg ?? 7)
-const waiSampler = ref(props.data?.samplerName ?? waiDefaults.samplerName ?? 'euler_ancestral')
-const waiSeed = ref(props.data?.seed ?? waiDefaults.seed ?? -1)
-const isWaiIllustrious = computed(() => localModel.value === 'wai-illustrious-sdxl-v17')
+const currentModelConfig = computed(() => getModelConfig(localModel.value))
+const nativeDefaults = computed(() => currentModelConfig.value?.defaultParams || {})
+const nativeImageSettings = computed(() => currentModelConfig.value?.nativeParams === true)
+const imageNegativePrompt = ref(props.data?.negativePrompt ?? nativeDefaults.value.negativePrompt ?? '')
+const imageSteps = ref(props.data?.steps ?? nativeDefaults.value.steps ?? 30)
+const imageCfg = ref(props.data?.cfg ?? nativeDefaults.value.cfg ?? 4)
+const imageSampler = ref(props.data?.samplerName ?? nativeDefaults.value.samplerName ?? 'euler')
+const imageScheduler = ref(props.data?.scheduler ?? nativeDefaults.value.scheduler ?? 'simple')
+const imageSeed = ref(props.data?.seed ?? nativeDefaults.value.seed ?? -1)
 const isBackgroundReplaceMode = computed(() => props.data?.editMode === 'background_replace')
 const localSubjectImage = ref(props.data?.subjectImage || '')
 const localBackgroundReferenceImage = ref(props.data?.backgroundReferenceImage || '')
@@ -320,18 +324,33 @@ const backgroundReadiness = computed(() => getBackgroundReplaceReadiness({
   backgroundReferenceImage: localBackgroundReferenceImage.value
 }))
 
-const persistWaiSettings = () => {
-  waiSteps.value = Math.max(1, Math.min(60, Number(waiSteps.value) || 30))
-  waiCfg.value = Math.max(0.1, Math.min(20, Number(waiCfg.value) || 7))
-  const parsedSeed = Number.parseInt(waiSeed.value, 10)
-  waiSeed.value = Number.isFinite(parsedSeed) ? Math.max(-1, Math.min(2147483647, parsedSeed)) : -1
+const applyNativeDefaults = (config) => {
+  const defaults = config?.defaultParams || {}
+  imageNegativePrompt.value = defaults.negativePrompt || ''
+  imageSteps.value = defaults.steps ?? 30
+  imageCfg.value = defaults.cfg ?? 4
+  imageSampler.value = defaults.samplerName || 'euler'
+  imageScheduler.value = defaults.scheduler || 'simple'
+  imageSeed.value = defaults.seed ?? -1
+}
+
+const persistNativeImageSettings = () => {
+  const defaults = nativeDefaults.value
+  const minSteps = Number(defaults.stepsMin ?? 1)
+  const maxSteps = Number(defaults.stepsMax ?? 60)
+  const minCfg = Number(defaults.cfgMin ?? 0.1)
+  const maxCfg = Number(defaults.cfgMax ?? 20)
+  imageSteps.value = Math.max(minSteps, Math.min(maxSteps, Number(imageSteps.value) || Number(defaults.steps) || 30))
+  imageCfg.value = Math.max(minCfg, Math.min(maxCfg, Number(imageCfg.value) || Number(defaults.cfg) || 4))
+  const parsedSeed = Number.parseInt(imageSeed.value, 10)
+  imageSeed.value = Number.isFinite(parsedSeed) ? Math.max(-1, Math.min(2147483647, parsedSeed)) : -1
   updateNode(props.id, {
-    negativePrompt: waiNegativePrompt.value,
-    steps: waiSteps.value,
-    cfg: waiCfg.value,
-    samplerName: waiSampler.value,
-    seed: waiSeed.value,
-    clipSkip: 2
+    negativePrompt: currentModelConfig.value?.supportsNegativePrompt ? imageNegativePrompt.value : '',
+    steps: imageSteps.value,
+    cfg: imageCfg.value,
+    samplerName: imageSampler.value,
+    scheduler: imageScheduler.value,
+    seed: imageSeed.value
   })
 }
 
@@ -419,8 +438,6 @@ const handleSelect = (item) => {
   }
 }
 
-// Get current model config | 获取当前模型配置
-const currentModelConfig = computed(() => getModelConfig(localModel.value))
 const activateModelProvider = (modelKey) => {
   const config = getModelConfig(modelKey)
   const supportedProviders = Array.isArray(config?.provider) ? config.provider : []
@@ -483,8 +500,13 @@ onMounted(() => {
   const isModelAvailable = availableModels.some(m => m.key === localModel.value)
 
   if (!localModel.value || !isModelAvailable) {
-    // 使用 store 中的默认模型或第一个可用模型
-    localModel.value = modelStore.selectedImageModel || availableModels[0]?.key || DEFAULT_IMAGE_MODEL
+    const storedModel = normalizeImageModelKey(modelStore.selectedImageModel)
+    localModel.value = availableModels.some(model => model.key === storedModel)
+      ? storedModel
+      : DEFAULT_IMAGE_MODEL
+    applyNativeDefaults(getModelConfig(localModel.value))
+    updateNode(props.id, { model: localModel.value, ...nativeDefaults.value })
+  } else if (props.data?.model !== localModel.value) {
     updateNode(props.id, { model: localModel.value })
   }
 })
@@ -669,9 +691,11 @@ const getConnectedInputs = () => {
 
 // Handle model selection | 处理模型选择
 const handleModelSelect = (key) => {
-  localModel.value = key
-  const config = getModelConfig(key)
-  activateModelProvider(key)
+  const normalizedKey = normalizeImageModelKey(key)
+  localModel.value = normalizedKey
+  const config = getModelConfig(normalizedKey)
+  activateModelProvider(normalizedKey)
+  if (config?.nativeParams) applyNativeDefaults(config)
 
   // 同步 Quality 到模型默认值
   if (config?.defaultParams?.quality) {
@@ -679,7 +703,7 @@ const handleModelSelect = (key) => {
   }
 
   // 同步 Size 到模型默认值
-  const newSizeOptions = getModelSizeOptions(key, localQuality.value)
+  const newSizeOptions = getModelSizeOptions(normalizedKey, localQuality.value)
   let defaultSize = config?.defaultParams?.size
 
   if (!defaultSize && newSizeOptions.length > 0) {
@@ -693,16 +717,16 @@ const handleModelSelect = (key) => {
 
   // 更新节点数据
   updateNode(props.id, {
-    model: key,
+    model: normalizedKey,
     quality: localQuality.value,
     size: defaultSize,
-    ...(key === 'wai-illustrious-sdxl-v17' ? {
-      negativePrompt: waiNegativePrompt.value,
-      steps: waiSteps.value,
-      cfg: waiCfg.value,
-      samplerName: waiSampler.value,
-      seed: waiSeed.value,
-      clipSkip: 2
+    ...(config?.nativeParams ? {
+      negativePrompt: config.supportsNegativePrompt ? imageNegativePrompt.value : '',
+      steps: imageSteps.value,
+      cfg: imageCfg.value,
+      samplerName: imageSampler.value,
+      scheduler: imageScheduler.value,
+      seed: imageSeed.value
     } : {})
   })
 }
@@ -873,12 +897,13 @@ const handleGenerate = async (mode = 'auto') => {
           size: localSize.value,
           quality: localQuality.value,
           n: 1,
-          ...(isWaiIllustrious.value ? {
-            negative_prompt: waiNegativePrompt.value,
-            steps: waiSteps.value,
-            cfg: waiCfg.value,
-            sampler_name: waiSampler.value,
-            seed: waiSeed.value
+          ...(nativeImageSettings.value ? {
+            negative_prompt: currentModelConfig.value?.supportsNegativePrompt ? imageNegativePrompt.value : '',
+            steps: imageSteps.value,
+            cfg: imageCfg.value,
+            sampler_name: imageSampler.value,
+            scheduler: imageScheduler.value,
+            seed: imageSeed.value
           } : {}),
           ...(refImages.length > 0 ? { image: refImages } : {})
         }
@@ -954,9 +979,11 @@ const handleDelete = () => {
 
 // 监听模型变化，同步 Quality 和 Size
 watch(() => props.data?.model, (newModel) => {
-  if (newModel && newModel !== localModel.value) {
-    localModel.value = newModel
-    const config = getModelConfig(newModel)
+  const normalizedModel = normalizeImageModelKey(newModel)
+  if (normalizedModel && normalizedModel !== localModel.value) {
+    localModel.value = normalizedModel
+    const config = getModelConfig(normalizedModel)
+    if (config?.nativeParams) applyNativeDefaults(config)
 
     // 同步 Quality
     if (config?.defaultParams?.quality) {

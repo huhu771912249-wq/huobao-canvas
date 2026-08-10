@@ -6,7 +6,7 @@ const props = defineProps({
   outputWidth: { type: Number, default: 1920 },
   outputHeight: { type: Number, default: 1080 },
   compact: { type: Boolean, default: false },
-  qualityHint: { type: String, default: '全部经过 SeedVR2' }
+  qualityHint: { type: String, default: '按所选清晰度策略处理' }
 })
 const emit = defineEmits(['update:outputWidth', 'update:outputHeight'])
 

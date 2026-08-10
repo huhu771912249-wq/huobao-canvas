@@ -16,8 +16,9 @@ const materialNode = read('../src/components/nodes/MaterialVariationNode.vue')
 const videoApiHook = read('../src/hooks/useApi.js')
 
 for (const [name, source] of [['studio', studio], ['videoNode', videoNode]]) {
-  assert.doesNotMatch(source, /快速导出/, `${name} must not let video delivery bypass SeedVR2`)
-  assert.match(source, /SeedVR2 AI 超分/, `${name} must expose mandatory AI upscale`)
+  assert.match(source, /原生快速/, `${name} must expose the no-upscale mode`)
+  assert.match(source, /智能判断/, `${name} must expose conditional SeedVR2`)
+  assert.match(source, /AI 高清/, `${name} must expose forced SeedVR2`)
 }
 assert.match(materialNode, /快速导出/)
 assert.match(materialNode, /高质量 1080p/)
@@ -50,6 +51,9 @@ assert.deepEqual(normalizeVideoQualityRequestProfile({ mode: 'fast', width: '108
   mode: 'fast', width: 1080, height: 1920, upscaler: null, label: '快速导出'
 })
 assert.equal(normalizeVideoQualityRequestProfile({ mode: 'quality', width: 0, height: 1080 }), null)
+assert.deepEqual(normalizeVideoQualityRequestProfile({ mode: 'auto', width: 1280, height: 720, upscaler: 'seedvr2-3b-fp16', label: '智能判断' }), {
+  mode: 'auto', width: 1280, height: 720, upscaler: 'seedvr2-3b-fp16', label: '智能判断'
+})
 assert.deepEqual(normalizeVideoImageAlignmentRequest({ mode: 'stretch', width: 608, height: 352, allow_stretch: true, unknown: true }), {
   mode: 'crop_or_pad', width: 608, height: 352, preserve_aspect_ratio: true, allow_stretch: false
 })

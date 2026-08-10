@@ -8,6 +8,7 @@ import workflowCover2 from '@/assets/workflow02.jpeg'
 import scene01 from '@/assets/scene01.jpeg'
 import shot01 from '@/assets/shot01.jpeg'
 import { VIDEO_WORKFLOW_TEMPLATES } from './videoWorkflows'
+import { H3_AD_GIF_WORKFLOW_TEMPLATE } from './h3AdGifWorkflow'
 
 // Multi-angle prompts | 多角度提示词模板
 export const MULTI_ANGLE_PROMPTS = {
@@ -45,6 +46,7 @@ export const MULTI_ANGLE_PROMPTS = {
  * Workflow Templates | 工作流模板
  */
 export const WORKFLOW_TEMPLATES = [
+  H3_AD_GIF_WORKFLOW_TEMPLATE,
   ...VIDEO_WORKFLOW_TEMPLATES,
   {
     id: 'multi-angle-storyboard',

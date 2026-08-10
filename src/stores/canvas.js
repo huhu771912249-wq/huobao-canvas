@@ -259,6 +259,12 @@ const getDefaultNodeData = (type) => {
         model: DEFAULT_IMAGE_MODEL,
         size: imageModel?.defaultParams?.size || '1x1',
         quality: imageModel?.defaultParams?.quality || 'standard',
+        negativePrompt: imageModel?.defaultParams?.negativePrompt || '',
+        steps: imageModel?.defaultParams?.steps,
+        cfg: imageModel?.defaultParams?.cfg,
+        samplerName: imageModel?.defaultParams?.samplerName,
+        scheduler: imageModel?.defaultParams?.scheduler,
+        seed: imageModel?.defaultParams?.seed ?? -1,
         label: '文生图'
       }
     }
@@ -270,6 +276,8 @@ const getDefaultNodeData = (type) => {
         duration: videoModel?.defaultParams?.duration || 5,
         batchSizes: ['300x100', '300x250', '720x240', '200x200'],
         generateGif: true,
+        samplingMode: 'standard20',
+        qualityMode: 'fast',
         model: DEFAULT_VIDEO_MODEL,
         label: '图生视频'
       }

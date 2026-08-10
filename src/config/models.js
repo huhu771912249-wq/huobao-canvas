@@ -48,21 +48,58 @@ export const BANANA_SIZE_OPTIONS = [
 // Image generation models | 图片生成模型
 export const IMAGE_MODELS = [
     {
-        label: 'WAI Illustrious SDXL v17（本地 5090）',
-        key: 'wai-illustrious-sdxl-v17',
+        label: 'Z-Image Base（本地 5090｜人像/高多样性）',
+        key: 'z-image',
         provider: ['local-material'],
-        tips: '本地 ComfyUI 文生图；英文标签提示词效果最佳，当前不支持参考图。',
+        tips: '官方基础版，适合人像、广告构图和多样性；支持负面提示词，当前仅文生图。',
         sizes: ['1024x1024', '1344x1024', '1024x1344', '1280x720', '720x1280'],
+        nativeParams: true,
+        supportsNegativePrompt: true,
+        samplers: [
+            { label: 'Res Multistep（推荐）', key: 'res_multistep' },
+            { label: 'Euler', key: 'euler' }
+        ],
         defaultParams: {
             size: '1024x1024',
             quality: 'standard',
-            style: 'anime',
-            negativePrompt: 'bad quality,worst quality,worst detail,sketch,censor,',
-            steps: 30,
-            cfg: 7,
-            samplerName: 'euler_ancestral',
+            style: 'photographic',
+            negativePrompt: 'low quality, blurry, deformed, bad anatomy, extra fingers, watermark',
+            steps: 36,
+            cfg: 4,
+            samplerName: 'res_multistep',
+            scheduler: 'simple',
             seed: -1,
-            clipSkip: 2
+            stepsMin: 28,
+            stepsMax: 50,
+            cfgMin: 3,
+            cfgMax: 5
+        }
+    },
+    {
+        label: 'Krea 2 Turbo（本地 5090｜8 步快速）',
+        key: 'krea-2-turbo',
+        provider: ['local-material'],
+        tips: '官方 8 步蒸馏版，适合快速高质量广告图；不使用负面提示词和 CFG 引导。',
+        sizes: ['1024x1024', '1344x1024', '1024x1344', '1280x720', '720x1280', '2048x2048'],
+        nativeParams: true,
+        supportsNegativePrompt: false,
+        fixedSteps: true,
+        fixedCfg: true,
+        samplers: [{ label: 'Euler（官方）', key: 'euler' }],
+        defaultParams: {
+            size: '1024x1024',
+            quality: 'standard',
+            style: 'vivid',
+            negativePrompt: '',
+            steps: 8,
+            cfg: 1,
+            samplerName: 'euler',
+            scheduler: 'simple',
+            seed: -1,
+            stepsMin: 8,
+            stepsMax: 8,
+            cfgMin: 1,
+            cfgMax: 1
         }
     },
     {
@@ -313,7 +350,7 @@ export const VIDEO_DURATION_OPTIONS = [
 ]
 
 // Default values | 默认值
-export const DEFAULT_IMAGE_MODEL = 'frw-qianwen'
+export const DEFAULT_IMAGE_MODEL = 'z-image'
 export const DEFAULT_VIDEO_MODEL = 'minimax-h3'
 export const DEFAULT_CHAT_MODEL = 'gemma4-31b-heretic'
 export const DEFAULT_IMAGE_SIZE = '1024x1024'
@@ -324,4 +361,9 @@ export const DEFAULT_VIDEO_DURATION = 5
 export const getModelByName = (key) => {
     const allModels = [...IMAGE_MODELS, ...VIDEO_MODELS, ...CHAT_MODELS]
     return allModels.find(m => m.key === key)
+}
+
+export const normalizeImageModelKey = (key) => {
+    if (!key || key === 'wai-illustrious-sdxl-v17') return DEFAULT_IMAGE_MODEL
+    return key
 }
