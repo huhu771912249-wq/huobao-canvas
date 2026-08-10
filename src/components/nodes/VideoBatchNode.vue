@@ -181,9 +181,12 @@ const startPolling = async () => {
       window.$message?.success('四尺寸 MP4/GIF 已生成')
     }
   } catch (err) {
+    const terminalFailure = err?.videoTaskTerminal === true
     updateNode(props.id, {
-      status: 'failed',
-      error: err?.message || '批量视频生成失败',
+      status: terminalFailure ? (err.videoTaskStatus || 'failed') : props.data?.status,
+      error: terminalFailure
+        ? (err?.message || '批量视频生成失败')
+        : '状态查询暂时中断，任务 ID 已保留；刷新页面后会继续查询',
       updatedAt: Date.now()
     })
   } finally {

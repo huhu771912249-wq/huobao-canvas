@@ -48,7 +48,7 @@
     <div class="p-3">
       <!-- Loading state | 加载状态 -->
       <div 
-        v-if="(data.taskId && !data.url) || (data.loading && !data.taskId)"
+        v-if="!data.error && ((data.taskId && !data.url) || (data.loading && !data.taskId))"
         class="aspect-video rounded-lg bg-gradient-to-br from-cyan-400 via-blue-300 to-amber-200 flex flex-col items-center justify-center gap-3 relative overflow-hidden"
       >
         <!-- Animated gradient overlay | 动画渐变遮罩 -->
@@ -222,6 +222,7 @@ const startPolling = async (taskId) => {
   if (isPolling.value) return
 
   isPolling.value = true
+  updateNode(props.id, { error: null, pollingInterrupted: false })
 
   try {
     const result = await pollVideoTask(taskId, (attempt, percentage, progressInfo) => {
@@ -251,14 +252,26 @@ const startPolling = async (taskId) => {
     })
     window.$message?.success('视频生成成功')
   } catch (err) {
-    // 轮询失败
-    updateNode(props.id, {
-      loading: false,
-      error: err.message || '生成失败',
-      label: '生成失败',
-      taskId: null  // 清除 taskId
-    })
-    window.$message?.error(err.message || '视频生成失败')
+    if (err?.videoTaskTerminal) {
+      updateNode(props.id, {
+        loading: false,
+        error: err.message || '生成失败',
+        label: '生成失败',
+        status: err.videoTaskStatus || 'failed',
+        taskId
+      })
+      window.$message?.error(err.message || '视频生成失败')
+    } else {
+      updateNode(props.id, {
+        loading: true,
+        error: null,
+        label: '任务仍在后台运行',
+        currentStep: '状态查询暂时中断，任务 ID 已保留；刷新页面后会继续查询',
+        pollingInterrupted: true,
+        taskId
+      })
+      window.$message?.warning('状态查询暂时中断，后台任务不会被判定为失败')
+    }
   } finally {
     isPolling.value = false
   }
