@@ -34,6 +34,7 @@
 | `/v1/media/text-overlays` | 视频文字叠加 |
 | `/v1/material/variations` | 素材再创作 |
 | `/v1/video-resize/jobs` | 多尺寸视频任务 |
+| `/v1/test-assets/generate` | 精确尺寸生成 PNG、JPG、GIF、MP4 测试素材和批量 ZIP |
 | `/v1/studio/documents/parse` | 文档/小说解析 |
 | `/v1/studio/storyboards` | 故事板生成 |
 | `/v1/studio/novel-video/jobs` | 小说成片任务 |

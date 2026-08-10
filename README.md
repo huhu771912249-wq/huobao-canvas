@@ -12,6 +12,7 @@
 | `/huobao-canvas/canvas/:id?` | Vue Flow 无限画布 |
 | `/huobao-canvas/video-studio` | 视频创作中心 |
 | `/huobao-canvas/video-resize` | 多尺寸视频处理 |
+| `/huobao-canvas/test-assets` | 精确像素的测试素材生成与下载 |
 | `/huobao-canvas/login` | 会话登录 |
 
 ## 快速开始
