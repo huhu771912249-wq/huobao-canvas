@@ -1,7 +1,7 @@
 <template>
   <div class="dsp-library-node relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <section
-      class="dsp-library-node__shell w-[920px] overflow-hidden rounded-2xl border bg-[var(--bg-secondary)] shadow-2xl"
+      class="dsp-library-node__shell canvas-node-scroll-shell nodrag nowheel w-[920px] rounded-2xl border bg-[var(--bg-secondary)] shadow-2xl"
       :class="data.selected ? 'border-cyan-400' : 'border-[var(--border-color)]'"
     >
       <header class="dsp-library-node__header flex items-start justify-between border-b border-[var(--border-color)] px-5 py-4">

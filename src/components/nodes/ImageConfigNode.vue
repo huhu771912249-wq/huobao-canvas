@@ -3,7 +3,7 @@
   <div class="image-config-node-wrapper" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Image config node | 文生图配置节点 -->
     <div
-      class="image-config-node bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
+      class="image-config-node canvas-node-scroll-shell nodrag nowheel bg-[var(--bg-secondary)] rounded-xl border min-w-[300px] transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'">
       <!-- Header | 头部 -->
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
