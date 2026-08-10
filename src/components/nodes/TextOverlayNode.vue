@@ -224,8 +224,9 @@ const sourceImage = computed(() => {
   return incomingNodes.value.find(node => node.type === 'image' && node.data?.url)
 })
 
+const connectedMediaUrl = node => node?.data?.gifUrl || node?.data?.videoGifUrl || node?.data?.url || ''
 const connectedMedia = computed(() => incomingNodes.value.find(node => (
-  ['materialInput', 'video'].includes(node.type) && node.data?.url
+  ['materialInput', 'video', 'videoGif', 'materialExport'].includes(node.type) && connectedMediaUrl(node)
 )))
 
 const connectedText = computed(() => {
@@ -237,9 +238,9 @@ const connectedText = computed(() => {
 })
 
 const overlayText = computed(() => connectedText.value || localText.value)
-const videoPreviewUrl = computed(() => connectedMedia.value?.data?.url || uploadPreviewUrl.value)
-const videoSourceMime = computed(() => connectedMedia.value?.data?.mime || overlayVideoFile.value?.type || 'video/mp4')
-const overlayVideoReady = computed(() => Boolean(connectedMedia.value?.data?.url || overlayVideoFile.value))
+const videoPreviewUrl = computed(() => connectedMediaUrl(connectedMedia.value) || uploadPreviewUrl.value)
+const videoSourceMime = computed(() => connectedMedia.value?.data?.mime || (/\.gif(?:$|\?)/i.test(videoPreviewUrl.value) ? 'image/gif' : overlayVideoFile.value?.type || 'video/mp4'))
+const overlayVideoReady = computed(() => Boolean(connectedMediaUrl(connectedMedia.value) || overlayVideoFile.value))
 const videoStyle = computed(() => ({
   x: localX.value,
   y: localY.value,
@@ -388,8 +389,10 @@ const handleVideoRender = async () => {
       }
     }
     if (connectedMedia.value) {
-      payload.source_asset = connectedMedia.value.data?.assetName || publicAssetName(connectedMedia.value.data?.url)
-      if (!payload.source_asset) throw new Error('连接的视频不是已导入素材，请先经过“素材导入”节点')
+      const connectedUrl = connectedMediaUrl(connectedMedia.value)
+      payload.source_asset = connectedMedia.value.data?.assetName || publicAssetName(connectedUrl)
+      if (!payload.source_asset && /^https?:\/\//i.test(connectedUrl)) payload.source_url = connectedUrl
+      if (!payload.source_asset && !payload.source_url) throw new Error('连接的视频不是已导入素材，请先经过“素材导入”节点')
     } else {
       payload.source_name = overlayVideoFile.value.name
       payload.source_base64 = await toBase64(overlayVideoFile.value)

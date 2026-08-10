@@ -68,6 +68,19 @@
         <div v-if="currentModelConfig?.tips" class="text-xs text-[var(--text-tertiary)] bg-[var(--bg-tertiary)] rounded px-2 py-1">
           💡 {{ currentModelConfig.tips }}
         </div>
+        <div v-if="isWaiIllustrious" class="space-y-2 rounded-lg border border-cyan-400/25 bg-cyan-400/5 p-2" data-testid="wai-native-settings">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold text-cyan-300">WAI v17 原生参数</span>
+            <span class="text-[var(--text-tertiary)]">CLIP Skip 2</span>
+          </div>
+          <textarea v-model="waiNegativePrompt" rows="2" class="control w-full resize-none text-xs" placeholder="负面提示词" @blur="persistWaiSettings" />
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <label class="space-y-1"><span class="text-[var(--text-secondary)]">步数</span><input v-model.number="waiSteps" class="control w-full" type="number" min="1" max="60" @change="persistWaiSettings" /></label>
+            <label class="space-y-1"><span class="text-[var(--text-secondary)]">CFG</span><input v-model.number="waiCfg" class="control w-full" type="number" min="0.1" max="20" step="0.5" @change="persistWaiSettings" /></label>
+          </div>
+          <label class="block space-y-1 text-xs"><span class="text-[var(--text-secondary)]">采样器</span><select v-model="waiSampler" class="control w-full" @change="persistWaiSettings"><option value="euler_ancestral">Euler a（推荐）</option><option value="dpmpp_2m_sde">DPM++ 2M SDE</option><option value="dpmpp_2m">DPM++ 2M</option><option value="euler">Euler</option></select></label>
+          <label class="block space-y-1 text-xs"><span class="text-[var(--text-secondary)]">随机种子（-1 每次随机）</span><input v-model.number="waiSeed" class="control w-full" type="number" min="-1" max="2147483647" @change="persistWaiSettings" /></label>
+        </div>
         <div v-if="!isConfigured" class="rounded-lg bg-amber-500/10 px-2 py-1 text-xs text-amber-300">
           当前模型所属 API 尚未配置，请先在右上角“API 设置”中补充密钥。
         </div>
@@ -286,6 +299,13 @@ const showHandleMenu = ref(false)
 const localModel = ref(props.data?.model || DEFAULT_IMAGE_MODEL)
 const localSize = ref(props.data?.size || '2048x2048')
 const localQuality = ref(props.data?.quality || 'standard')
+const waiDefaults = getModelConfig('wai-illustrious-sdxl-v17')?.defaultParams || {}
+const waiNegativePrompt = ref(props.data?.negativePrompt ?? waiDefaults.negativePrompt ?? '')
+const waiSteps = ref(props.data?.steps ?? waiDefaults.steps ?? 30)
+const waiCfg = ref(props.data?.cfg ?? waiDefaults.cfg ?? 7)
+const waiSampler = ref(props.data?.samplerName ?? waiDefaults.samplerName ?? 'euler_ancestral')
+const waiSeed = ref(props.data?.seed ?? waiDefaults.seed ?? -1)
+const isWaiIllustrious = computed(() => localModel.value === 'wai-illustrious-sdxl-v17')
 const isBackgroundReplaceMode = computed(() => props.data?.editMode === 'background_replace')
 const localSubjectImage = ref(props.data?.subjectImage || '')
 const localBackgroundReferenceImage = ref(props.data?.backgroundReferenceImage || '')
@@ -299,6 +319,21 @@ const backgroundReadiness = computed(() => getBackgroundReplaceReadiness({
   subjectImage: localSubjectImage.value,
   backgroundReferenceImage: localBackgroundReferenceImage.value
 }))
+
+const persistWaiSettings = () => {
+  waiSteps.value = Math.max(1, Math.min(60, Number(waiSteps.value) || 30))
+  waiCfg.value = Math.max(0.1, Math.min(20, Number(waiCfg.value) || 7))
+  const parsedSeed = Number.parseInt(waiSeed.value, 10)
+  waiSeed.value = Number.isFinite(parsedSeed) ? Math.max(-1, Math.min(2147483647, parsedSeed)) : -1
+  updateNode(props.id, {
+    negativePrompt: waiNegativePrompt.value,
+    steps: waiSteps.value,
+    cfg: waiCfg.value,
+    samplerName: waiSampler.value,
+    seed: waiSeed.value,
+    clipSkip: 2
+  })
+}
 
 const fileToDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader()
@@ -660,7 +695,15 @@ const handleModelSelect = (key) => {
   updateNode(props.id, {
     model: key,
     quality: localQuality.value,
-    size: defaultSize
+    size: defaultSize,
+    ...(key === 'wai-illustrious-sdxl-v17' ? {
+      negativePrompt: waiNegativePrompt.value,
+      steps: waiSteps.value,
+      cfg: waiCfg.value,
+      samplerName: waiSampler.value,
+      seed: waiSeed.value,
+      clipSkip: 2
+    } : {})
   })
 }
 
@@ -830,6 +873,13 @@ const handleGenerate = async (mode = 'auto') => {
           size: localSize.value,
           quality: localQuality.value,
           n: 1,
+          ...(isWaiIllustrious.value ? {
+            negative_prompt: waiNegativePrompt.value,
+            steps: waiSteps.value,
+            cfg: waiCfg.value,
+            sampler_name: waiSampler.value,
+            seed: waiSeed.value
+          } : {}),
           ...(refImages.length > 0 ? { image: refImages } : {})
         }
 
@@ -953,5 +1003,13 @@ watch(
 .image-config-node {
   cursor: default;
   position: relative;
+}
+
+.control {
+  border: 1px solid var(--border-color);
+  border-radius: .5rem;
+  background: var(--bg-tertiary);
+  padding: .45rem .55rem;
+  color: var(--text-primary);
 }
 </style>

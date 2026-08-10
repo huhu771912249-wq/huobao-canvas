@@ -288,6 +288,28 @@ const getDefaultNodeData = (type) => {
         outputFormats: ['mp4', 'gif'],
         label: '批量视频结果'
       }
+    case 'videoGif':
+      return {
+        label: '视频转 GIF',
+        outputWidth: 720,
+        outputHeight: 1280,
+        fitMode: 'blur',
+        fps: 12,
+        colors: 256,
+        jobId: '',
+        jobStatus: '',
+        url: '',
+        gifUrl: '',
+        mime: 'image/gif'
+      }
+    case 'materialExport':
+      return {
+        label: '素材导出',
+        url: '',
+        gifUrl: '',
+        mime: '',
+        sourceJobId: ''
+      }
     case 'materialVariation':
       return {
         label: '素材裂变',

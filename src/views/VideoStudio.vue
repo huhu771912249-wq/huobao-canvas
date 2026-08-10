@@ -20,7 +20,25 @@
           </div>
           <div class="rounded-2xl border border-slate-700 bg-slate-900/50 p-4"><h2 class="font-semibold">生成结果与历史</h2><p class="mt-2 text-sm text-slate-400">结果将在这里预览、下载、重试、保存到素材库或送入无限画布。</p></div>
         </div>
-        <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4"><h2 class="font-semibold">智能设置</h2><div class="mt-4"><div class="mb-2 text-xs text-slate-400">清晰度</div><div class="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-sm text-emerald-200"><b>SeedVR2 AI 超分</b><div class="mt-1 text-xs text-slate-400">所有视频成品强制经过 AI 超分，失败时明确报错，不静默降级。</div></div></div><div v-if="selectedMode === 'image-to-video'" class="mt-4"><div class="mb-2 text-xs text-slate-400">云端视频模型</div><button v-for="model in cloudVideoModels" :key="model.key" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedVideoModel === model.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedVideoModel = model.key"><b>{{ model.label }}</b><div class="mt-1 text-xs text-slate-400">{{ model.description }}</div></button></div><VideoOutputSizePicker class="mt-4" v-model:output-width="outputWidth" v-model:output-height="outputHeight" /></aside>
+        <aside class="rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
+          <h2 class="font-semibold">智能设置</h2>
+          <div v-if="selectedMode !== 'asset'" class="mt-4">
+            <div class="mb-2 text-xs text-slate-400">文生图模型</div>
+            <select v-model="selectedImageModel" data-testid="studio-image-model-select" class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-cyan-400">
+              <option v-for="model in localImageModels" :key="model.key" :value="model.key">{{ model.label }}</option>
+            </select>
+            <div v-if="selectedImageModel === 'wai-illustrious-sdxl-v17'" class="mt-2 rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-3 text-xs leading-5 text-cyan-100">
+              本机 RTX 5090 / ComfyUI。英文标签提示词效果最佳，生成后可直接连到视频节点。
+            </div>
+            <div class="mb-2 mt-4 text-xs text-slate-400">图片尺寸</div>
+            <select v-model="selectedSize" data-testid="studio-image-size-select" class="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-sm outline-none focus:border-cyan-400">
+              <option v-for="size in selectedImageSizes" :key="size" :value="size">{{ size }}</option>
+            </select>
+          </div>
+          <div class="mt-4"><div class="mb-2 text-xs text-slate-400">清晰度</div><div class="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3 text-sm text-emerald-200"><b>SeedVR2 AI 超分</b><div class="mt-1 text-xs text-slate-400">所有视频成品强制经过 AI 超分，失败时明确报错，不静默降级。</div></div></div>
+          <div v-if="selectedMode === 'image-to-video'" class="mt-4"><div class="mb-2 text-xs text-slate-400">云端视频模型</div><button v-for="model in cloudVideoModels" :key="model.key" class="mb-2 w-full rounded-xl border px-3 py-3 text-left text-sm" :class="selectedVideoModel === model.key ? 'border-cyan-400 bg-cyan-400/10' : 'border-slate-700'" @click="selectedVideoModel = model.key"><b>{{ model.label }}</b><div class="mt-1 text-xs text-slate-400">{{ model.description }}</div></button></div>
+          <VideoOutputSizePicker v-if="selectedMode === 'image-to-video'" class="mt-4" v-model:output-width="outputWidth" v-model:output-height="outputHeight" />
+        </aside>
       </div>
       <div v-else-if="activeTab === 'novel'" class="space-y-5">
         <div class="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
@@ -40,7 +58,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { COMMON_VIDEO_SIZES, normalizeVideoSize } from '../config/videoSizes'
 import { detectStudioIntent } from '../utils/studioIntent'
@@ -51,11 +69,19 @@ import { createProject, updateProject } from '../stores/projects'
 import NovelVideoWorkspace from '../components/studio/NovelVideoWorkspace.vue'
 import VideoOutputSizePicker from '../components/VideoOutputSizePicker.vue'
 import ComputeStatusIndicator from '../components/ComputeStatusIndicator.vue'
+import { IMAGE_MODELS } from '../config/models'
 
 const route = useRoute(); const router = useRouter()
 const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
 const modes = [{ key: 'text-to-image', title: '文生图', description: '提示词生成图片变体' }, { key: 'image-to-video', title: '文生图＋视频', description: '先确认首帧，再生成动态镜头' }, { key: 'asset', title: '上传素材', description: '自动识别图片、视频和文档' }]
-const activeTab = ref(String(route.query.tab || 'quick')); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1280x720'); const sizes = COMMON_VIDEO_SIZES
+const activeTab = ref(String(route.query.tab || 'quick')); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1024x1024'); const sizes = COMMON_VIDEO_SIZES
+const localImageModels = IMAGE_MODELS.filter(model => model.provider?.includes('local-material'))
+const selectedImageModel = ref('wai-illustrious-sdxl-v17')
+const selectedImageSizes = computed(() => IMAGE_MODELS.find(model => model.key === selectedImageModel.value)?.sizes || ['1024x1024'])
+watch(selectedImageModel, modelKey => {
+  const model = IMAGE_MODELS.find(item => item.key === modelKey)
+  if (!model?.sizes?.includes(selectedSize.value)) selectedSize.value = model?.defaultParams?.size || model?.sizes?.[0] || '1024x1024'
+})
 const cloudVideoModels = [{ key: 'minimax-h3', label: 'MiniMax H3', description: '默认｜人物与原生音频视频' }, { key: 'ltx-2.3', label: 'LTX 2.3', description: '开放版｜内置 2× 空间放大' }]
 const selectedVideoModel = ref('minimax-h3')
 const outputWidth = ref(1280)
@@ -126,7 +152,7 @@ const startCreate = async () => {
   if (intent.value === 'asset') { window.$message?.warning('请上传图片或视频素材后再开始'); return }
   if (selectedSize.value === 'custom' && customSizeError.value) { window.$message?.error(customSizeError.value); return }
   const id = createProject(cleanPrompt.slice(0, 28) || intentLabel.value)
-  updateProject(id, { canvasData: buildStudioCanvas({ mode: selectedMode.value, prompt: cleanPrompt, size: resolvedSize.value, videoModel: selectedVideoModel.value, qualityMode: qualityMode.value }) })
+  updateProject(id, { canvasData: buildStudioCanvas({ mode: selectedMode.value, prompt: cleanPrompt, size: resolvedSize.value, imageModel: selectedImageModel.value, videoModel: selectedVideoModel.value, qualityMode: qualityMode.value }) })
   router.push(`/canvas/${id}`)
 }
 const planStoryboard = async mode => {

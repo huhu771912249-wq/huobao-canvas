@@ -80,11 +80,11 @@ export const normalizeVideoImageAlignmentRequest = (alignment) => {
   }
 }
 
-export const buildStudioCanvas = ({ mode, prompt = '', size = '1280x720', videoModel = 'minimax-h3', qualityMode = 'quality' }) => {
+export const buildStudioCanvas = ({ mode, prompt = '', size = '1280x720', imageModel = 'frw-qianwen', videoModel = 'minimax-h3', qualityMode = 'quality' }) => {
   const ratio = ratioForSize(size)
   const qualityProfile = getVideoQualityProfile(qualityMode, ratio)
   const imagePrompt = { id: 'studio_image_prompt', type: 'text', position: { x: 80, y: 140 }, data: { content: prompt, label: '画面提示词' } }
-  const imageConfig = { id: 'studio_image_config', type: 'imageConfig', position: { x: 440, y: 140 }, data: { label: '文生图', model: 'frw-qianwen', size, qualityMode: qualityProfile.mode, qualityProfile } }
+  const imageConfig = { id: 'studio_image_config', type: 'imageConfig', position: { x: 440, y: 140 }, data: { label: '文生图', model: imageModel, size, qualityMode: qualityProfile.mode, qualityProfile } }
   const imageResult = { id: 'studio_image_result', type: 'image', position: { x: 800, y: 140 }, data: { url: '', label: '首帧结果' } }
   const imageEdges = [
     edge(imagePrompt.id, imageConfig.id, { type: 'promptOrder', data: { promptOrder: 1 } }),
