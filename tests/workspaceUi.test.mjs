@@ -9,6 +9,7 @@ import {
   normalizeTaskTone,
   resolvePromptDockExpanded
 } from '../src/utils/workspaceUi.js'
+import { STUDIO_ENTRIES } from '../src/config/studioEntries.js'
 
 assert.deepEqual(buildWorkspaceNavigation().map((item) => item.id), [
   'home',
@@ -20,6 +21,15 @@ assert.deepEqual(buildWorkspaceNavigation().map((item) => item.id), [
   'tasks',
   'projects'
 ])
+
+assert.equal(
+  buildWorkspaceNavigation().find((item) => item.id === 'tasks')?.to,
+  '/tasks',
+  '任务中心不应通过新画布打开'
+)
+const taskStudioEntry = STUDIO_ENTRIES.find((entry) => entry.key === 'tasks')
+assert.equal(taskStudioEntry?.route, '/tasks')
+assert.equal(taskStudioEntry?.flow, undefined, '任务中心不应创建 DSP 项目')
 
 assert.deepEqual(
   normalizeServiceIncident(

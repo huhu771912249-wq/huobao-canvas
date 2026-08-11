@@ -5,7 +5,7 @@ const NAV_ITEMS = [
   ['variation', '素材裂变', '/canvas/new?flow=variation'],
   ['dsp', '54DSP 素材', '/canvas/new?flow=dsp'],
   ['recent', '最近生成', '/recent-generations'],
-  ['tasks', '任务中心', '/canvas/new?panel=tasks'],
+  ['tasks', '任务中心', '/tasks'],
   ['projects', '我的项目', '/#projects']
 ]
 

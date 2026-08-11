@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import {
   buildTaskCategoryTabs,
   filterTaskCenterTasks
@@ -25,5 +26,17 @@ assert.deepEqual(
   buildTaskSummary({ status: 'failed', actions: ['details'] }).actions,
   ['details']
 )
+
+const routerSource = readFileSync(new URL('../src/router/index.js', import.meta.url), 'utf8')
+const taskCenterSource = readFileSync(new URL('../src/views/TaskCenter.vue', import.meta.url), 'utf8')
+const taskRailSource = readFileSync(
+  new URL('../src/components/workspace/TaskRail.vue', import.meta.url),
+  'utf8'
+)
+assert.match(routerSource, /path:\s*['"]\/tasks['"]/)
+assert.match(routerSource, /views\/TaskCenter\.vue/)
+assert.match(taskCenterSource, /listTaskCenterTasks/)
+assert.match(taskCenterSource, /variant="page"/)
+assert.match(taskRailSource, /task-rail--page/)
 
 console.log('taskCenter.test.mjs passed')
