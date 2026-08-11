@@ -321,7 +321,7 @@ const handleWorkspaceNavigate = (item) => {
     return
   }
   if (item.id === 'tasks') {
-    openTaskCenter()
+    router.push(item.to)
     return
   }
   if (item.id === 'recent') {

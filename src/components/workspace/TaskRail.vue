@@ -1,12 +1,17 @@
 <template>
   <Transition name="rail">
-    <aside v-if="open" class="task-rail workspace-panel" aria-label="任务中心">
+    <aside
+      v-if="open"
+      class="task-rail workspace-panel"
+      :class="{ 'task-rail--page': variant === 'page' }"
+      aria-label="任务中心"
+    >
       <header class="task-rail__header">
         <div>
           <p class="task-rail__eyebrow">实时进度</p>
           <h2>任务中心</h2>
         </div>
-        <button type="button" class="icon-button" aria-label="关闭任务中心" @click="$emit('close')">
+        <button v-if="variant === 'drawer'" type="button" class="icon-button" aria-label="关闭任务中心" @click="$emit('close')">
           <n-icon :size="20"><CloseOutline /></n-icon>
         </button>
       </header>
@@ -82,6 +87,11 @@ const props = defineProps({
   error: {
     type: String,
     default: ''
+  },
+  variant: {
+    type: String,
+    default: 'drawer',
+    validator: value => ['drawer', 'page'].includes(value)
   }
 })
 
@@ -129,6 +139,21 @@ const actionLabel = (action) => ({
   padding: 18px;
   border-radius: 24px;
   overflow: auto;
+}
+
+.task-rail--page {
+  position: relative;
+  z-index: 1;
+  inset: auto;
+  width: 100%;
+  max-width: 1500px;
+  min-height: 420px;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.task-rail--page .task-rail__list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
 }
 
 .task-rail__header,

@@ -40,6 +40,11 @@ const routes = [
     path: '/recent-generations',
     name: 'RecentGenerations',
     component: () => import('../views/RecentGenerations.vue')
+  },
+  {
+    path: '/tasks',
+    name: 'TaskCenter',
+    component: () => import('../views/TaskCenter.vue')
   }
 ]
 
