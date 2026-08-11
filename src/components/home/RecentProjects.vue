@@ -5,7 +5,7 @@
         <span>WORKSPACE</span>
         <h2>最近项目</h2>
       </div>
-      <button type="button" @click="$emit('create')">
+      <button type="button" :disabled="busy" @click="$emit('create')">
         <n-icon :size="18"><AddOutline /></n-icon>
         新建项目
       </button>
@@ -13,7 +13,7 @@
 
     <div v-if="projects.length" class="project-grid">
       <article v-for="project in visibleProjects" :key="project.id" class="project-card">
-        <button type="button" class="project-card__preview" @click="$emit('open', project)">
+        <button type="button" class="project-card__preview" :disabled="busy" @click="$emit('open', project)">
           <video
             v-if="isVideoUrl(project.thumbnail)"
             :src="project.thumbnail"
@@ -73,6 +73,10 @@ const props = defineProps({
   formatDate: {
     type: Function,
     required: true
+  },
+  busy: {
+    type: Boolean,
+    default: false
   }
 })
 

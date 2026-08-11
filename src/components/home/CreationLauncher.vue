@@ -1,5 +1,5 @@
 <template>
-  <section class="creation-launcher workspace-reveal">
+  <section class="creation-launcher workspace-reveal" :aria-busy="busy">
     <div class="creation-launcher__copy">
       <span class="creation-launcher__eyebrow">AI CREATIVE STUDIO</span>
       <h1>从灵感到投放素材，<br />在一个画布里完成</h1>
@@ -15,8 +15,8 @@
       ></textarea>
       <div class="prompt-composer__footer">
         <span>Ctrl + Enter 快速创建</span>
-        <button type="submit">
-          开始创作
+        <button type="submit" :disabled="busy">
+          {{ busy ? '正在打开…' : '开始创作' }}
           <n-icon :size="18"><ArrowForwardOutline /></n-icon>
         </button>
       </div>
@@ -27,6 +27,7 @@
         v-for="entry in entries"
         :key="entry.id"
         type="button"
+        :disabled="busy"
         class="creation-card workspace-panel"
         :class="`creation-card--${entry.accent}`"
         @click="$emit('launch', entry.id)"
@@ -70,6 +71,10 @@ defineProps({
   suggestions: {
     type: Array,
     default: () => []
+  },
+  busy: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -114,6 +119,11 @@ const entries = [
   color: var(--text-secondary);
   font-size: 15px;
   line-height: 1.8;
+}
+
+.creation-launcher button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .prompt-composer {

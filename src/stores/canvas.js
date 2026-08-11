@@ -37,6 +37,7 @@ export const selectedNode = ref(null)
 // Auto-save flag | 自动保存标志
 let autoSaveEnabled = false
 let saveTimeout = null
+let autoSaveEnableTimeout = null
 
 // History for undo/redo | 撤销/重做历史
 const history = ref([])
@@ -560,7 +561,7 @@ export const initSampleData = () => {
  * @param {string} projectId - Project ID | 项目ID
  */
 export const loadProject = (projectId) => {
-  autoSaveEnabled = false
+  suspendCanvasSave()
   isRestoring = true
   currentProjectId.value = projectId
   
@@ -597,10 +598,19 @@ export const loadProject = (projectId) => {
   historyIndex.value = 0
   
   // Enable auto-save after loading | 加载后启用自动保存
-  setTimeout(() => {
+  autoSaveEnableTimeout = setTimeout(() => {
     autoSaveEnabled = true
     isRestoring = false
+    autoSaveEnableTimeout = null
   }, 100)
+}
+
+export const suspendCanvasSave = () => {
+  autoSaveEnabled = false
+  if (saveTimeout) clearTimeout(saveTimeout)
+  if (autoSaveEnableTimeout) clearTimeout(autoSaveEnableTimeout)
+  saveTimeout = null
+  autoSaveEnableTimeout = null
 }
 
 /**
