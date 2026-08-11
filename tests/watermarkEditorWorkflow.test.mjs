@@ -28,6 +28,8 @@ const entries = readFileSync(new URL('../src/config/studioEntries.js', import.me
 assert.match(canvas, /watermarkEditor:\s*markRaw\(WatermarkEditorNode\)/)
 assert.match(node, /水印与素材编辑/)
 assert.match(node, /进入详情编辑/)
+assert.match(node, /尚未实际合成到素材/)
+assert.match(node, /compositionReady:\s*false/)
 assert.match(node, /Position\.Left/)
 assert.match(node, /Position\.Right/)
 assert.match(editor, /保存到水印库/)

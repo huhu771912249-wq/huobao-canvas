@@ -35,6 +35,10 @@ assert.equal(graph.nodes.find(node => node.type === 'textOverlay').data.videoOut
 assert.equal(graph.nodes.at(-1).type, 'materialExport')
 
 const videoNodeSource = readFileSync(new URL('../src/components/nodes/VideoConfigNode.vue', import.meta.url), 'utf8')
+const gifNodeSource = readFileSync(new URL('../src/components/nodes/VideoGifNode.vue', import.meta.url), 'utf8')
+const overlayNodeSource = readFileSync(new URL('../src/components/nodes/TextOverlayNode.vue', import.meta.url), 'utf8')
+const watermarkNodeSource = readFileSync(new URL('../src/components/nodes/WatermarkEditorNode.vue', import.meta.url), 'utf8')
+const exportNodeSource = readFileSync(new URL('../src/components/nodes/MaterialExportNode.vue', import.meta.url), 'utf8')
 const videoApiSource = readFileSync(new URL('../src/hooks/useApi.js', import.meta.url), 'utf8')
 assert.match(videoNodeSource, /H3_SAMPLING_OPTIONS/)
 assert.match(videoNodeSource, /原生快速/)
@@ -42,5 +46,14 @@ assert.match(videoNodeSource, /智能判断/)
 assert.match(videoNodeSource, /AI 高清/)
 assert.match(videoNodeSource, /sampling_mode/)
 assert.match(videoApiSource, /requestData\.sampling_mode\s*=\s*params\.sampling_mode/)
+
+for (const source of [gifNodeSource, overlayNodeSource, watermarkNodeSource, exportNodeSource]) {
+  assert.match(source, /data\?\.label|data\.label/)
+}
+assert.match(overlayNodeSource, /素材输入/)
+assert.match(overlayNodeSource, /hasVideoMedia/)
+assert.match(watermarkNodeSource, /compositionReady:\s*false/)
+assert.match(exportNodeSource, /水印尚未合成/)
+assert.doesNotMatch(exportNodeSource, /label:\s*'素材导出'/)
 
 console.log('h3SpeedQualityWorkflow.test.mjs passed')

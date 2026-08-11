@@ -2,7 +2,7 @@
   <div class="relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <div class="nowheel w-[380px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
       <header class="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
-        <div><div class="text-sm font-semibold text-[var(--text-primary)]">素材导出</div><div class="mt-0.5 text-[11px] text-[var(--text-secondary)]">连接图片、视频或 GIF 成品</div></div>
+        <div><div class="text-sm font-semibold text-[var(--text-primary)]">{{ data?.label || '素材导出' }}</div><div class="mt-0.5 text-[11px] text-[var(--text-secondary)]">连接图片、视频或 GIF 成品</div></div>
         <div class="flex gap-1"><button class="rounded p-1 hover:bg-[var(--bg-tertiary)]" @click="duplicateNode(id)"><n-icon :size="15"><CopyOutline /></n-icon></button><button class="rounded p-1 hover:bg-[var(--bg-tertiary)]" @click="removeNode(id)"><n-icon :size="15"><TrashOutline /></n-icon></button></div>
       </header>
       <div class="space-y-3 p-4">
@@ -10,8 +10,9 @@
         <img v-else-if="isImage" :src="sourceUrl" class="max-h-64 w-full rounded-lg bg-black object-contain" alt="导出素材" />
         <video v-else :src="sourceUrl" controls class="max-h-64 w-full rounded-lg bg-black object-contain" />
         <div v-if="sourceUrl" class="truncate text-xs text-emerald-300">{{ sourceLabel }}</div>
-        <button class="w-full rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40" :disabled="!sourceUrl || downloading" @click="downloadAsset">{{ downloading ? '正在准备下载…' : '下载导出' }}</button>
-        <button v-if="sourceJobId" class="w-full rounded-lg border border-cyan-400/30 py-2 text-xs text-cyan-300 disabled:opacity-40" :disabled="saving" @click="saveToLibrary">{{ saving ? '正在保存…' : '保存到服务器素材库' }}</button>
+        <div v-if="isUnrenderedWatermarkDraft" class="rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-[10px] leading-5 text-amber-200">水印尚未合成：当前下载的是进入水印节点前的上游素材。</div>
+        <button class="w-full rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40" :disabled="!sourceUrl || downloading" @click="downloadAsset">{{ downloading ? '正在准备下载…' : isUnrenderedWatermarkDraft ? '下载上游素材（未合成水印）' : '下载导出' }}</button>
+        <button v-if="sourceJobId && !isUnrenderedWatermarkDraft" class="w-full rounded-lg border border-cyan-400/30 py-2 text-xs text-cyan-300 disabled:opacity-40" :disabled="saving" @click="saveToLibrary">{{ saving ? '正在保存…' : '保存到服务器素材库' }}</button>
         <div v-if="error" class="text-xs text-red-400">{{ error }}</div>
       </div>
       <Handle type="target" :position="Position.Left" id="left" class="!bg-emerald-400" />
@@ -42,6 +43,7 @@ const sourceUrl = computed(() => sourceNode.value?.data?.gifUrl || sourceNode.va
 const sourceMime = computed(() => sourceNode.value?.data?.mime || (/\.gif(?:$|\?)/i.test(sourceUrl.value) ? 'image/gif' : sourceNode.value?.type === 'image' ? 'image/png' : 'video/mp4'))
 const sourceLabel = computed(() => sourceNode.value?.data?.label || '可导出素材')
 const sourceJobId = computed(() => sourceNode.value?.data?.jobId || sourceNode.value?.data?.videoJobId || '')
+const isUnrenderedWatermarkDraft = computed(() => sourceNode.value?.type === 'watermarkEditor' && sourceNode.value?.data?.compositionReady !== true)
 const isImage = computed(() => sourceMime.value.startsWith('image/'))
 const extension = computed(() => sourceMime.value === 'image/gif' ? 'gif' : sourceMime.value.startsWith('image/') ? 'png' : 'mp4')
 
@@ -50,7 +52,6 @@ watch([sourceUrl, sourceMime, sourceJobId], () => updateNode(props.id, {
   gifUrl: sourceMime.value === 'image/gif' ? sourceUrl.value : '',
   mime: sourceMime.value,
   sourceJobId: sourceJobId.value,
-  label: '素材导出',
   updatedAt: Date.now()
 }), { immediate: true })
 
