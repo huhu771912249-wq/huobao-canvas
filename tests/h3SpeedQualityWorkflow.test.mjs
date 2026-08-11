@@ -51,9 +51,10 @@ for (const source of [gifNodeSource, overlayNodeSource, watermarkNodeSource, exp
   assert.match(source, /data\?\.label|data\.label/)
 }
 assert.match(overlayNodeSource, /素材输入/)
-assert.match(overlayNodeSource, /hasVideoMedia/)
+assert.match(overlayNodeSource, /hasVideoPath/)
 assert.match(watermarkNodeSource, /compositionReady:\s*false/)
 assert.match(exportNodeSource, /水印尚未合成/)
+assert.match(exportNodeSource, /11 GIF 导出/)
 assert.doesNotMatch(exportNodeSource, /label:\s*'素材导出'/)
 
 console.log('h3SpeedQualityWorkflow.test.mjs passed')
