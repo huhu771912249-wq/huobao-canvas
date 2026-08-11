@@ -3,7 +3,7 @@
     <div class="nowheel w-[410px] overflow-hidden rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
       <header class="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
         <div>
-          <div class="text-sm font-semibold text-[var(--text-primary)]">水印与素材编辑</div>
+          <div class="text-sm font-semibold text-[var(--text-primary)]">{{ data?.label || '水印与素材编辑' }}</div>
           <div class="mt-0.5 text-[11px] text-[var(--text-secondary)]">快速设置水印，详情页编辑时间轴</div>
         </div>
         <div class="flex gap-1">
@@ -32,7 +32,7 @@
           <b class="text-cyan-300">已保存 {{ savedWatermarkCount }} 个水印</b>
         </div>
         <a :href="editorHref" class="block w-full rounded-lg bg-cyan-400 px-3 py-2.5 text-center text-sm font-semibold text-slate-950">进入详情编辑</a>
-        <p class="text-[10px] leading-5 text-[var(--text-secondary)]">详情页支持视频/GIF 拼接、文字、图片水印、字体、转场、圆角和导出设置。当前先保存编辑工程，真实合成接口下一阶段接入。</p>
+        <p class="rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-[10px] leading-5 text-amber-200">当前节点只保存水印和时间轴编辑工程，水印尚未实际合成到素材；进入详情页可以继续调整。</p>
       </div>
 
       <Handle type="target" :position="Position.Left" id="left" class="!bg-cyan-400" />
@@ -100,6 +100,7 @@ watch([watermarkId, position, size, opacity, sourceUrl, sourceMime], () => updat
   url: sourceUrl.value,
   gifUrl: sourceMime.value === 'image/gif' || /\.gif(?:$|\?)/i.test(sourceUrl.value) ? sourceUrl.value : '',
   mime: sourceMime.value || (/\.gif(?:$|\?)/i.test(sourceUrl.value) ? 'image/gif' : ''),
+  compositionReady: false,
   updatedAt: Date.now()
 }), { immediate: true })
 

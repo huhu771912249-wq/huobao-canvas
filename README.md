@@ -48,6 +48,7 @@ pnpm build
 - [贡献规范](./CONTRIBUTING.md)
 - [变更记录](./CHANGELOG.md)
 - [Agent 规则](./AGENTS.md)
+- [后续产品方向：统一创作入口与个人工作空间](./docs/product-direction.md)
 
 ## 仓库边界
 

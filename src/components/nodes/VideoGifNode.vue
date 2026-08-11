@@ -2,7 +2,7 @@
   <div class="relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <div class="canvas-node-scroll-shell nowheel w-[460px] rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] shadow-xl">
       <header class="flex items-center justify-between border-b border-[var(--border-color)] px-4 py-3">
-        <div><div class="text-sm font-semibold text-[var(--text-primary)]">视频转 GIF</div><div class="mt-0.5 text-[11px] text-[var(--text-secondary)]">可连接 H3 视频，也可直接上传</div></div>
+        <div><div class="text-sm font-semibold text-[var(--text-primary)]">{{ data?.label || '视频转 GIF' }}</div><div class="mt-0.5 text-[11px] text-[var(--text-secondary)]">可连接 H3 视频，也可直接上传</div></div>
         <div class="flex gap-1">
           <button class="rounded p-1 hover:bg-[var(--bg-tertiary)]" title="复制节点" @click="duplicateNode(id)"><n-icon :size="15"><CopyOutline /></n-icon></button>
           <button class="rounded p-1 hover:bg-[var(--bg-tertiary)]" title="删除节点" @click="handleDelete"><n-icon :size="15"><TrashOutline /></n-icon></button>
@@ -31,11 +31,12 @@
           <div class="h-1.5 overflow-hidden rounded-full bg-slate-800"><div class="h-full bg-cyan-400" :style="{ width: `${job.progress || 0}%` }" /></div>
         </div>
         <button class="w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-40" :disabled="isWorking || !sourceReady" @click="generateGif">
-          {{ isWorking ? '正在转换…' : '生成 GIF' }}
+          {{ isWorking ? '正在转换…' : gifUrl ? '重新生成 GIF' : '生成 GIF' }}
         </button>
         <button v-if="isWorking && job?.job_id" class="w-full rounded-lg border border-red-400/40 px-3 py-2 text-xs text-red-300" @click="cancelJob">取消任务</button>
         <div v-if="error" class="text-xs text-red-400">{{ error }}</div>
 
+        <div v-if="gifUrl" class="rounded-lg bg-emerald-400/10 px-3 py-2 text-[10px] text-emerald-300">已生成 · {{ outputWidth }}×{{ outputHeight }} · {{ fps }} FPS · {{ colors }} 色</div>
         <img v-if="gifUrl" :src="gifUrl" class="max-h-72 w-full rounded-lg bg-black object-contain" alt="GIF 输出" />
         <a v-if="gifUrl" :href="gifUrl" download class="block w-full rounded-lg border border-amber-400/30 py-2 text-center text-xs text-amber-300 hover:bg-amber-400/10">下载 GIF</a>
       </div>

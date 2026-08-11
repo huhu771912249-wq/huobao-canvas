@@ -5,7 +5,7 @@
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
     >
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
-        <span class="text-sm font-medium text-[var(--text-primary)]">文字叠加</span>
+        <span class="text-sm font-medium text-[var(--text-primary)]">{{ data?.label || '文字叠加' }}</span>
         <div class="flex items-center gap-1">
           <button @click="handleDuplicate" class="p-1 hover:bg-[var(--bg-tertiary)] rounded transition-colors" title="复制节点">
             <n-icon :size="14"><CopyOutline /></n-icon>
@@ -17,16 +17,16 @@
       </div>
 
       <div class="p-3 space-y-3">
-        <section class="space-y-3 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3 nodrag nowheel">
+        <section v-if="hasVideoMedia || !sourceImage" class="space-y-3 rounded-xl border border-cyan-400/25 bg-cyan-400/5 p-3 nodrag nowheel">
           <div>
             <div class="text-xs font-semibold text-[var(--text-primary)]">视频 / GIF 可视化加字</div>
-            <div class="mt-1 text-[10px] text-[var(--text-secondary)]">连接左侧“素材导入”节点，或直接上传；在预览画面里拖动文字定位。</div>
+            <div class="mt-1 text-[10px] text-[var(--text-secondary)]">连接左侧图片、视频或 GIF 节点，或直接上传；在预览画面里拖动文字定位。</div>
           </div>
           <label class="block cursor-pointer rounded-lg border border-dashed border-cyan-300/40 p-3 text-center text-xs text-cyan-300">
             也可直接上传 MP4 / MOV / WebM / GIF
             <input class="hidden" type="file" accept="video/mp4,video/quicktime,video/webm,image/gif,.mp4,.mov,.webm,.gif" @change="handleVideoUpload" />
           </label>
-          <div v-if="connectedMedia" class="truncate text-[10px] text-emerald-300">已连接：{{ connectedMedia.data?.label || '素材导入节点' }}</div>
+          <div v-if="connectedMedia" class="truncate text-[10px] text-emerald-300">已连接：{{ connectedMedia.data?.label || '上游素材' }}</div>
           <div v-else-if="overlayVideoFile" class="truncate text-[10px] text-[var(--text-secondary)]">已选：{{ overlayVideoFile.name }}</div>
           <VisualTextOverlayEditor
             v-if="videoPreviewUrl"
@@ -59,8 +59,8 @@
 
         <div class="border-t border-[var(--border-color)] pt-3 text-xs font-semibold text-[var(--text-primary)]">文案与样式（视频 / GIF / 图片共用）</div>
         <div class="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
-          <span class="px-2 py-0.5 rounded-full" :class="sourceImage ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
-            图片输入 {{ sourceImage ? '✓' : '○' }}
+          <span class="px-2 py-0.5 rounded-full" :class="inputReady ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
+            素材输入 {{ inputReady ? `✓ · ${inputTypeLabel}` : '○' }}
           </span>
           <span class="px-2 py-0.5 rounded-full" :class="overlayText ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800'">
             文案 {{ overlayText ? '✓' : '○' }}
@@ -128,28 +128,30 @@
           <label class="space-y-1"><span class="text-[var(--text-secondary)]">背景颜色</span><input v-model="localBackgroundColor" type="color" class="h-8 w-full rounded border border-[var(--border-color)] bg-transparent" /></label>
         </div>
 
-        <div v-if="lastError" class="text-xs text-red-500 leading-relaxed">{{ lastError }}</div>
+        <template v-if="!hasVideoMedia">
+          <div v-if="lastError" class="text-xs text-red-500 leading-relaxed">{{ lastError }}</div>
 
-        <button
-          @click="handleRender"
-          :disabled="isRendering || !sourceImage || !overlayText"
-          class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <n-spin v-if="isRendering" :size="14" />
-          <template v-else>
-            <n-icon :size="16"><TextOutline /></n-icon>
-            生成加字图
-          </template>
-        </button>
+          <button
+            @click="handleRender"
+            :disabled="isRendering || !sourceImage || !overlayText"
+            class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <n-spin v-if="isRendering" :size="14" />
+            <template v-else>
+              <n-icon :size="16"><TextOutline /></n-icon>
+              生成加字图
+            </template>
+          </button>
 
-        <button
-          @click="handleCreateFusion"
-          :disabled="!outputNodeId"
-          class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <n-icon :size="16"><ImageOutline /></n-icon>
-          可选图生图融合
-        </button>
+          <button
+            @click="handleCreateFusion"
+            :disabled="!outputNodeId"
+            class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg border border-[var(--border-color)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <n-icon :size="16"><ImageOutline /></n-icon>
+            可选图生图融合
+          </button>
+        </template>
       </div>
 
       <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
@@ -241,6 +243,13 @@ const overlayText = computed(() => connectedText.value || localText.value)
 const videoPreviewUrl = computed(() => connectedMediaUrl(connectedMedia.value) || uploadPreviewUrl.value)
 const videoSourceMime = computed(() => connectedMedia.value?.data?.mime || (/\.gif(?:$|\?)/i.test(videoPreviewUrl.value) ? 'image/gif' : overlayVideoFile.value?.type || 'video/mp4'))
 const overlayVideoReady = computed(() => Boolean(connectedMediaUrl(connectedMedia.value) || overlayVideoFile.value))
+const hasVideoMedia = computed(() => Boolean(connectedMedia.value || overlayVideoFile.value))
+const inputReady = computed(() => Boolean(sourceImage.value || hasVideoMedia.value))
+const inputTypeLabel = computed(() => {
+  if (hasVideoMedia.value) return videoSourceMime.value === 'image/gif' ? 'GIF' : '视频'
+  if (sourceImage.value) return '图片'
+  return ''
+})
 const videoStyle = computed(() => ({
   x: localX.value,
   y: localY.value,
