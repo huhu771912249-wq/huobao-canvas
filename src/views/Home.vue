@@ -10,16 +10,18 @@
   >
     <template #main>
       <section class="mb-6 rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5 p-5">
-        <div class="flex flex-wrap items-end justify-between gap-4"><div><div class="text-xs tracking-[0.25em] text-cyan-400">冠希 VIDEO</div><h2 class="mt-1 text-2xl font-semibold">视频创作中心</h2><p class="mt-2 text-sm text-[var(--text-secondary)]">文生图、文生图＋视频、小说成片和素材再创作。</p></div><n-button type="primary" @click="router.push('/video-studio')">进入视频中心</n-button></div>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><button v-for="entry in studioEntries" :key="entry.key" class="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 text-left hover:border-cyan-400" @click="openStudioEntry(entry)"><b>{{ entry.title }}</b><div class="mt-1 text-xs text-[var(--text-secondary)]">{{ entry.description }}</div></button></div>
+        <div class="flex flex-wrap items-end justify-between gap-4"><div><div class="text-xs tracking-[0.25em] text-cyan-400">冠希 VIDEO</div><h2 class="mt-1 text-2xl font-semibold">视频创作中心</h2><p class="mt-2 text-sm text-[var(--text-secondary)]">文生图、文生图＋视频、小说成片和素材再创作。</p></div><n-button type="primary" :disabled="navigationPending" @click="openVideoCenter">{{ navigationPending ? '正在打开…' : '进入视频中心' }}</n-button></div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><button v-for="entry in studioEntries" :key="entry.key" :disabled="navigationPending" :aria-busy="navigationPending" class="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 text-left hover:border-cyan-400 disabled:cursor-wait disabled:opacity-50" @click="openStudioEntry(entry)"><b>{{ entry.title }}</b><div class="mt-1 text-xs text-[var(--text-secondary)]">{{ entry.description }}</div></button></div>
       </section>
       <CreationLauncher
+        :busy="navigationPending"
         :suggestions="suggestions"
         @launch="handleLaunch"
         @submit="handlePromptSubmit"
         @refresh-suggestions="refreshSuggestions"
       />
       <RecentProjects
+        :busy="navigationPending"
         :projects="projects"
         :format-date="formatDate"
         @create="createNewProject"
@@ -60,7 +62,6 @@ import {
   projects,
   initProjectsStore,
   createProject,
-  updateProject,
   deleteProject,
   duplicateProject,
   renameProject
@@ -81,12 +82,23 @@ const route = useRoute()
 const dialog = useDialog()
 const modelStore = useModelStore()
 const studioEntries = STUDIO_ENTRIES
-const openStudioEntry = (entry) => {
-  if (entry.route) router.push(entry.route)
-  else if (entry.flow === 'dsp' || entry.flow === 'variation' || entry.flow === 'gifEditor') createFlowProject(entry.flow)
-  else if (entry.flow === 'video') createVideoProject(videoEntries.video)
-  else if (entry.action === 'tasks') openTaskCenter()
+const navigationPending = ref(false)
+const runNavigation = async action => {
+  if (navigationPending.value) return false
+  navigationPending.value = true
+  try {
+    return await action()
+  } finally {
+    navigationPending.value = false
+  }
 }
+const openVideoCenter = () => runNavigation(() => router.push('/video-studio'))
+const openStudioEntry = entry => runNavigation(() => {
+  if (entry.route) return router.push(entry.route)
+  if (entry.flow === 'dsp' || entry.flow === 'variation' || entry.flow === 'gifEditor') return createFlowProject(entry.flow)
+  if (entry.flow === 'video') return createVideoProject(videoEntries.video)
+  return false
+})
 
 const showApiSettings = ref(false)
 const taskRailOpen = ref(false)
@@ -177,23 +189,23 @@ const checkApiKeyAndNavigate = (callback) => {
     })
     return false
   }
-  callback()
-  return true
+  return callback()
 }
 
-const createNewProject = () => {
+const createNewProject = () => runNavigation(() => (
   checkApiKeyAndNavigate(() => {
     const id = createProject('未命名项目')
-    router.push(`/canvas/${id}`)
+    return router.push(`/canvas/${id}`)
   })
-}
+))
 
 const createPromptProject = (prompt = '') => {
-  checkApiKeyAndNavigate(() => {
+  return checkApiKeyAndNavigate(() => {
     const cleanPrompt = String(prompt || '').trim()
-    const id = createProject(cleanPrompt || WORKSPACE_LAUNCH_LABELS.image)
-    updateProject(id, { canvasData: buildCanvasLaunch('image', { prompt: cleanPrompt }) })
-    router.push(`/canvas/${id}`)
+    const id = createProject(cleanPrompt || WORKSPACE_LAUNCH_LABELS.image, {
+      canvasData: buildCanvasLaunch('image', { prompt: cleanPrompt })
+    })
+    return router.push(`/canvas/${id}`)
   })
 }
 
@@ -203,51 +215,95 @@ const videoEntries = {
 }
 
 const createVideoProject = (entry, prompt = '') => {
-  checkApiKeyAndNavigate(() => {
+  return checkApiKeyAndNavigate(() => {
     const cleanPrompt = String(prompt || '').trim()
-    const id = createProject(cleanPrompt || entry.title)
     const flow = entry.id === 'image-to-video' ? 'image-to-video' : 'video'
-    updateProject(id, { canvasData: buildCanvasLaunch(flow, { prompt: cleanPrompt }) })
-    router.push(`/canvas/${id}`)
+    const id = createProject(cleanPrompt || entry.title, {
+      canvasData: buildCanvasLaunch(flow, { prompt: cleanPrompt })
+    })
+    return router.push(`/canvas/${id}`)
   })
+}
+
+const buildFlowProjectCanvas = flow => {
+  if (flow === 'dsp') {
+    return {
+      nodes: [
+        {
+          id: 'dsp-library',
+          type: 'dspCreativeLibrary',
+          position: { x: 120, y: 100 },
+          data: { label: '54DSP 优秀素材' }
+        },
+        {
+          id: 'dsp-tasks',
+          type: 'dspCreativeTaskCenter',
+          position: { x: 1120, y: 100 },
+          data: { label: '素材任务中心', jobIds: [] }
+        }
+      ],
+      edges: [],
+      viewport: { x: 40, y: 50, zoom: 0.68 }
+    }
+  }
+  if (flow === 'variation') {
+    return {
+      nodes: [
+        {
+          id: 'variation-main',
+          type: 'materialVariation',
+          position: { x: 160, y: 100 },
+          data: { label: '素材裂变' }
+        }
+      ],
+      edges: [],
+      viewport: { x: 100, y: 80, zoom: 0.8 }
+    }
+  }
+  if (flow === 'gifEditor') {
+    return {
+      nodes: [
+        {
+          id: 'watermark-editor',
+          type: 'watermarkEditor',
+          position: { x: 160, y: 100 },
+          data: { label: '水印与素材编辑', editorStatus: 'draft' }
+        }
+      ],
+      edges: [],
+      viewport: { x: 100, y: 80, zoom: 0.8 }
+    }
+  }
+  return { nodes: [], edges: [], viewport: { x: 100, y: 50, zoom: 0.8 } }
 }
 
 const createFlowProject = (flow) => {
   const create = () => {
-    if (flow === 'gifEditor') {
-      const id = createProject('水印与 GIF 素材编辑')
-      const nodeId = `watermark-editor-${id}`
-      updateProject(id, {
-        canvasData: {
-          nodes: [
-            {
-              id: nodeId,
-              type: 'watermarkEditor',
-              position: { x: 160, y: 100 },
-              data: { label: '水印与素材编辑', editorStatus: 'draft' }
-            }
-          ],
-          edges: [],
-          viewport: { x: 100, y: 80, zoom: 0.8 }
-        }
-      })
-      router.push({ path: '/gif-editor', query: { project: id, node: nodeId, from: 'home' } })
-      return
+    const names = {
+      variation: '素材裂变',
+      dsp: '54DSP 优秀素材',
+      gifEditor: '水印与 GIF 素材编辑'
     }
-    const id = createProject(WORKSPACE_LAUNCH_LABELS[flow] || '创作项目')
-    updateProject(id, { canvasData: buildCanvasLaunch(flow) })
-    sessionStorage.setItem('ai-canvas-launch-flow', flow)
-    router.push({ path: `/canvas/${id}`, query: { flow } })
+    const canvasData = flow === 'gifEditor'
+      ? buildFlowProjectCanvas(flow)
+      : buildCanvasLaunch(flow)
+    const id = createProject(names[flow] || '创作项目', { canvasData })
+    if (flow === 'gifEditor') {
+      return router.push({ path: '/gif-editor', query: { project: id, node: 'watermark-editor', from: 'home' } })
+    }
+    return router.push({ path: `/canvas/${id}`, query: { flow } })
   }
-  if (flow === 'gifEditor') create()
-  else checkApiKeyAndNavigate(create)
+  if (flow === 'gifEditor') return create()
+  return checkApiKeyAndNavigate(create)
 }
 
 const handleLaunch = (flow) => {
-  if (flow === 'image') return createPromptProject()
-  if (flow === 'video') return createVideoProject(videoEntries.video)
-  if (flow === 'image-to-video') return createVideoProject(videoEntries['image-to-video'])
-  createFlowProject(flow)
+  return runNavigation(() => {
+    if (flow === 'image') return createPromptProject()
+    if (flow === 'video') return createVideoProject(videoEntries.video)
+    if (flow === 'image-to-video') return createVideoProject(videoEntries['image-to-video'])
+    return createFlowProject(flow)
+  })
 }
 
 const handlePromptSubmit = (prompt) => {
@@ -255,7 +311,7 @@ const handlePromptSubmit = (prompt) => {
     window.$message?.warning('先写一句创意描述')
     return
   }
-  createPromptProject(prompt)
+  return runNavigation(() => createPromptProject(prompt))
 }
 
 const handleWorkspaceNavigate = (item) => {
@@ -272,14 +328,14 @@ const handleWorkspaceNavigate = (item) => {
     return
   }
   if (item.id === 'recent') {
-    router.push('/recent-generations')
+    runNavigation(() => router.push('/recent-generations'))
     return
   }
   handleLaunch(item.id)
 }
 
 const openProject = (project) => {
-  checkApiKeyAndNavigate(() => router.push(`/canvas/${project.id}`))
+  return runNavigation(() => checkApiKeyAndNavigate(() => router.push(`/canvas/${project.id}`)))
 }
 
 const handleProjectAction = (key, project) => {

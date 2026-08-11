@@ -5,7 +5,7 @@ const source = readFileSync(new URL('../src/views/VideoStudio.vue', import.meta.
 
 assert.match(source, /const storyboardKey = ref\(0\)/)
 assert.match(source, /const planningMode = ref\(''\)/)
-assert.match(source, /:key="storyboardKey"/)
+assert.match(source, /:key="`\$\{storyboardKey\}:\$\{activeNovelJobId\}`"/)
 assert.match(source, /storyboardKey\.value \+= 1/)
 assert.match(source, /planningMode\.value = mode/)
 assert.match(source, /planningMode\.value = ''/)
