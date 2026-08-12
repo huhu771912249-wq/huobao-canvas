@@ -27,14 +27,14 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { login } from '@/api/auth'
-import { currentUser } from '@/stores/auth'
+import { markSessionAuthenticated } from '@/stores/auth'
 import logoUrl from '@/assets/logo.png'
 const route = useRoute(); const router = useRouter()
 const username = ref(''); const password = ref(''); const loading = ref(false); const error = ref('')
 const submit = async () => {
   if (!username.value || !password.value) { error.value = '请输入账号和密码'; return }
   loading.value = true; error.value = ''
-  try { const result = await login(username.value, password.value); currentUser.value = result.user; await router.replace(String(route.query.redirect || '/')) }
+  try { const result = await login(username.value, password.value); markSessionAuthenticated(result.user); await router.replace(String(route.query.redirect || '/')) }
   catch (err) { error.value = err?.response?.data?.error?.message || '登录失败，请重试' }
   finally { loading.value = false }
 }

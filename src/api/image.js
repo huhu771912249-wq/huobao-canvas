@@ -28,3 +28,14 @@ export const publishImageAsset = (data, options = {}) => {
     headers: { 'Content-Type': 'application/json' }
   })
 }
+
+export const importImageAsset = (data, options = {}) => {
+  const { endpoint = buildMaterialApiUrl('/v1/assets/import') } = options
+
+  return request({
+    url: endpoint,
+    method: 'post',
+    data,
+    headers: { 'Content-Type': 'application/json' }
+  })
+}

@@ -70,6 +70,12 @@
         />
       </VueFlow>
 
+      <section v-if="isProjectLoading" class="canvas-project-loading" role="status" aria-live="polite">
+        <span class="canvas-project-loading__pulse"></span>
+        <strong>正在打开项目</strong>
+        <p>{{ projectName }}</p>
+      </section>
+
       <!-- Left toolbar | 左侧工具栏 -->
       <aside class="canvas-tool-rail absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-1 p-2 bg-[var(--bg-secondary)] rounded-xl border border-[var(--border-color)] shadow-lg z-10">
         <button 
@@ -121,7 +127,7 @@
         </button>
       </div>
 
-      <section v-if="nodes.length === 0" class="canvas-starter-panel">
+      <section v-if="!isProjectLoading && nodes.length === 0" class="canvas-starter-panel">
         <div class="canvas-starter-panel__heading">
           <span>从业务目标开始</span>
           <h2>今天要做什么素材？</h2>
@@ -361,12 +367,13 @@ import {
   AppsOutline,
   ChatbubbleOutline
 } from '@vicons/ionicons5'
-import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, scheduleCanvasSave, startBatchOperation, endBatchOperation } from '../stores/canvas'
+import { nodes, edges, addNode, addNodes, addEdge, addEdges, updateNode, initSampleData, loadProject, saveProject, clearCanvas, canvasViewport, updateViewport, undo, redo, canUndo, canRedo, manualSaveHistory, scheduleCanvasSave, startBatchOperation, endBatchOperation, suspendCanvasSave } from '../stores/canvas'
 import { loadAllModels } from '../stores/models'
 import { useWorkflowOrchestrator } from '../hooks'
 import { useModelStore } from '../stores/pinia'
-import { projects, initProjectsStore, ensureProjectLoaded, updateProject, renameProject, currentProject, deleteProject, duplicateProject } from '../stores/projects'
+import { projects, initProjectsStore, ensureProjectLoaded, activateProject, updateProject, renameProject, currentProject, currentProjectId, deleteProject, duplicateProject } from '../stores/projects'
 import { nextSuggestionSetIndex } from '../utils/suggestions'
+import { createLatestRequestGate } from '../utils/navigationState'
 import {
   buildCanvasStarterActions,
   resolvePromptDockExpanded
@@ -505,6 +512,9 @@ const setPromptDockExpanded = (expanded) => {
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
 const flowKey = ref(Date.now())
+const isProjectLoading = ref(Boolean(route.params.id && route.params.id !== 'new'))
+const loadedProjectId = ref(null)
+const projectLoadGate = createLatestRequestGate()
 
 // Modal state | 弹窗状态
 const showRenameModal = ref(false)
@@ -982,30 +992,39 @@ const checkMobile = () => {
 
 // Load project by ID | 根据ID加载项目
 const loadProjectById = async (projectId) => {
+  const requestToken = projectLoadGate.begin()
   // Update flow key to force VueFlow re-render | 更新 key 强制 VueFlow 重新渲染
-  flowKey.value = Date.now()
+  flowKey.value = requestToken
+  isProjectLoading.value = Boolean(projectId && projectId !== 'new')
+  loadedProjectId.value = null
+  suspendCanvasSave()
+  clearCanvas()
+  await nextTick()
+  if (!projectLoadGate.isCurrent(requestToken)) return
   
   if (projectId && projectId !== 'new') {
     try {
-      await ensureProjectLoaded(projectId)
+      await ensureProjectLoaded(projectId, { activate: false })
+      if (!projectLoadGate.isCurrent(requestToken) || route.params.id !== projectId) return
+      activateProject(projectId)
       loadProject(projectId)
+      loadedProjectId.value = projectId
     } catch (error) {
-      clearCanvas()
+      if (!projectLoadGate.isCurrent(requestToken)) return
       window.$message?.error(error?.response?.status === 404 ? '项目不存在或已被删除' : '项目读取失败，请稍后重试')
+    } finally {
+      if (projectLoadGate.isCurrent(requestToken)) isProjectLoading.value = false
     }
-  } else {
-    // New project - clear canvas | 新项目 - 清空画布
-    clearCanvas()
-  }
+  } else if (projectLoadGate.isCurrent(requestToken)) isProjectLoading.value = false
 }
 
 // Watch for route changes | 监听路由变化
 watch(
   () => route.params.id,
   async (newId, oldId) => {
-    if (newId && newId !== oldId) {
+    if (newId !== oldId) {
       // Save current project before switching | 切换前保存当前项目
-      if (oldId) {
+      if (oldId && loadedProjectId.value === oldId && !isProjectLoading.value && currentProjectId.value === oldId) {
         saveProject()
       }
       // Load new project | 加载新项目
@@ -1040,8 +1059,9 @@ onMounted(async () => {
 // Cleanup on unmount | 卸载时清理
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
+  projectLoadGate.invalidate()
   // Save project before leaving | 离开前保存项目
-  saveProject()
+  if (loadedProjectId.value && currentProjectId.value === loadedProjectId.value) saveProject()
 })
 </script>
 
@@ -1096,6 +1116,41 @@ onUnmounted(() => {
   border-radius: 14px;
   background: rgba(12, 17, 27, 0.86);
   backdrop-filter: blur(18px);
+}
+
+.canvas-project-loading {
+  position: absolute;
+  z-index: 35;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  color: var(--text-primary);
+  background: #0b1019;
+  text-align: center;
+}
+
+.canvas-project-loading p {
+  max-width: min(520px, 76vw);
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-project-loading__pulse {
+  width: 30px;
+  height: 30px;
+  border: 3px solid rgba(101, 230, 189, 0.16);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: canvas-project-loading-spin 700ms linear infinite;
+}
+
+@keyframes canvas-project-loading-spin {
+  to { transform: rotate(360deg); }
 }
 
 .canvas-tool-rail,

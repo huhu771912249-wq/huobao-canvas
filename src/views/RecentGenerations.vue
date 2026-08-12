@@ -4,6 +4,7 @@
     project-title="最近生成"
     :service-status="serviceStatus"
     @navigate="handleWorkspaceNavigate"
+    @open-tasks="router.push(resolveWorkspaceNavigationTarget('tasks'))"
   >
     <template #main>
       <section class="recent-page">
@@ -87,8 +88,9 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { listRecentGenerations } from '../api/recentGenerations.js'
-import { createProject, initProjectsStore, updateProject } from '../stores/projects.js'
+import { createProject, initProjectsStore } from '../stores/projects.js'
 import { buildRecentImageCanvas, formatRecentAssetSize } from '../utils/recentGenerations.js'
+import { resolveWorkspaceNavigationTarget } from '../config/workspaceLaunch.js'
 
 const router = useRouter()
 const filters = [
@@ -136,12 +138,12 @@ const formatDate = value => {
 
 const openImageInCanvas = async asset => {
   await initProjectsStore()
-  const id = createProject('图片处理')
-  updateProject(id, {
+  const nodeId = `recent-image-${Date.now()}`
+  const id = createProject(`图片处理 · ${asset.name}`, {
     name: `图片处理 · ${asset.name}`,
     thumbnail: asset.url,
     canvasData: buildRecentImageCanvas(asset, {
-      nodeId: `recent-image-${id}`,
+      nodeId,
       now: Date.now()
     })
   })
@@ -150,7 +152,7 @@ const openImageInCanvas = async asset => {
 
 const handleWorkspaceNavigate = item => {
   if (item.id === 'recent') return
-  router.push(item.to)
+  router.push(resolveWorkspaceNavigationTarget(item.id))
 }
 
 onMounted(() => {

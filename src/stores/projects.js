@@ -135,22 +135,23 @@ export const saveProjects = () => {
  * @param {string} name - Project name | 项目名称
  * @returns {string} - New project ID | 新项目ID
  */
-export const createProject = (name = '未命名项目') => {
+export const createProject = (name = '未命名项目', initialData = {}) => {
   const id = generateId()
   const now = new Date()
+  const initialCanvasData = initialData?.canvasData || {
+    nodes: [],
+    edges: [],
+    viewport: { x: 100, y: 50, zoom: 0.8 }
+  }
   
   const newProject = {
+    ...initialData,
     id,
     name,
-    thumbnail: '',
+    thumbnail: initialData?.thumbnail || '',
     createdAt: now,
     updatedAt: now,
-    // Canvas data | 画布数据
-    canvasData: {
-      nodes: [],
-      edges: [],
-      viewport: { x: 100, y: 50, zoom: 0.8 }
-    }
+    canvasData: initialCanvasData
   }
   
   projects.value = [newProject, ...projects.value]
@@ -234,19 +235,23 @@ export const getProjectCanvas = (id) => {
   return project?.canvasData || null
 }
 
-export const ensureProjectLoaded = async id => {
+export const activateProject = id => {
+  currentProjectId.value = id
+  persistClientState()
+}
+
+export const ensureProjectLoaded = async (id, { activate = true } = {}) => {
   const existing = projects.value.find(project => project.id === id)
   if (existing?.canvasData) {
-    currentProjectId.value = id
-    persistClientState()
+    if (activate) activateProject(id)
     return existing
   }
   const loaded = hydrateProject(await getCanvasProject(id))
   const index = projects.value.findIndex(project => project.id === id)
   if (index === -1) projects.value = [loaded, ...projects.value]
   else projects.value[index] = loaded
-  currentProjectId.value = id
-  persistClientState(new Date().toISOString())
+  if (activate) activateProject(id)
+  else persistClientState(new Date().toISOString())
   return loaded
 }
 
