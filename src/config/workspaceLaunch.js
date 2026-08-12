@@ -104,7 +104,7 @@ export const buildCanvasLaunch = (flow, { prompt = '' } = {}) => {
 export const resolveWorkspaceNavigationTarget = (id) => {
   const key = String(id || '').trim()
   if (key === 'recent') return { path: '/recent-generations' }
-  if (key === 'tasks') return { path: '/', query: { panel: 'tasks' } }
+  if (key === 'tasks') return { path: '/tasks' }
   if (key === 'projects') return { path: '/', query: { section: 'projects' } }
   if (key === 'home') return { path: '/' }
   return { path: '/', query: { launch: key } }
@@ -112,7 +112,7 @@ export const resolveWorkspaceNavigationTarget = (id) => {
 
 export const resolveLegacyCanvasRoute = ({ id, flow, panel } = {}) => {
   if (String(id || '') !== 'new') return null
-  if (String(panel || '') === 'tasks') return { path: '/', query: { panel: 'tasks' } }
+  if (String(panel || '') === 'tasks') return { path: '/tasks' }
   const launch = String(flow || '').trim()
   return WORKSPACE_LAUNCH_LABELS[launch]
     ? { path: '/', query: { launch } }

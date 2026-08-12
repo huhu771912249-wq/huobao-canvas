@@ -8,22 +8,29 @@ import {
 } from '../src/config/workspaceLaunch.js'
 
 assert.deepEqual(STUDIO_ENTRIES.map((entry) => entry.key), [
+  'test-assets',
+  'gif-editor',
   'quick',
   'novel',
   'assets',
+  'dsp',
   'tasks',
-  'resize'
+  'batch',
+  'resize',
+  'background',
+  'variation'
 ])
-assert.ok(STUDIO_ENTRIES.every((entry) => entry.route || entry.action === 'tasks'))
-assert.equal(STUDIO_ENTRIES.find((entry) => entry.key === 'tasks').action, 'tasks')
+assert.ok(STUDIO_ENTRIES.every((entry) => entry.route || entry.flow))
+assert.equal(STUDIO_ENTRIES.find((entry) => entry.key === 'tasks').route, '/tasks')
+assert.equal(STUDIO_ENTRIES.find((entry) => entry.key === 'batch').flow, 'batch')
+assert.equal(STUDIO_ENTRIES.find((entry) => entry.key === 'background').flow, 'background')
 
 assert.deepEqual(resolveWorkspaceNavigationTarget('video'), {
   path: '/',
   query: { launch: 'video' }
 })
 assert.deepEqual(resolveWorkspaceNavigationTarget('tasks'), {
-  path: '/',
-  query: { panel: 'tasks' }
+  path: '/tasks'
 })
 assert.deepEqual(resolveWorkspaceNavigationTarget('recent'), { path: '/recent-generations' })
 assert.deepEqual(resolveWorkspaceNavigationTarget('projects'), {
@@ -35,8 +42,7 @@ assert.deepEqual(resolveLegacyCanvasRoute({ id: 'new', flow: 'background' }), {
   query: { launch: 'background' }
 })
 assert.deepEqual(resolveLegacyCanvasRoute({ id: 'new', panel: 'tasks' }), {
-  path: '/',
-  query: { panel: 'tasks' }
+  path: '/tasks'
 })
 assert.equal(resolveLegacyCanvasRoute({ id: 'existing', flow: 'video' }), null)
 assert.equal(normalizeStudioTab('novel'), 'novel')

@@ -95,8 +95,8 @@ const runNavigation = async action => {
 const openVideoCenter = () => runNavigation(() => router.push('/video-studio'))
 const openStudioEntry = entry => runNavigation(() => {
   if (entry.route) return router.push(entry.route)
-  if (entry.flow === 'dsp' || entry.flow === 'variation' || entry.flow === 'gifEditor') return createFlowProject(entry.flow)
   if (entry.flow === 'video') return createVideoProject(videoEntries.video)
+  if (entry.flow) return createFlowProject(entry.flow)
   return false
 })
 
@@ -282,6 +282,8 @@ const createFlowProject = (flow) => {
     const names = {
       variation: '素材裂变',
       dsp: '54DSP 优秀素材',
+      batch: '批量广告尺寸',
+      background: '背景替换',
       gifEditor: '水印与 GIF 素材编辑'
     }
     const canvasData = flow === 'gifEditor'
