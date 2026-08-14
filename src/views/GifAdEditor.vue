@@ -348,6 +348,22 @@ const editorSnapshot = () => sanitizeWatermarkEditorProject({
   }
 })
 
+const reconcileLinkedEditorSource = (savedProject, sourceProject) => {
+  const savedSourceUrl = String(savedProject?.clips?.[0]?.url || '')
+  const currentSourceUrl = String(sourceProject?.clips?.[0]?.url || '')
+  const sourceChanged = Boolean(savedSourceUrl && currentSourceUrl && savedSourceUrl !== currentSourceUrl)
+  return {
+    sourceChanged,
+    project: {
+      ...savedProject,
+      clips: sourceChanged || !savedProject.clips.length ? sourceProject.clips : savedProject.clips,
+      result: sourceChanged
+        ? { jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {} }
+        : savedProject.result
+    }
+  }
+}
+
 const applyEditorProject = value => {
   const project = sanitizeWatermarkEditorProject(value)
   projectName.value = project.title
@@ -674,18 +690,19 @@ onMounted(async () => {
       width: node.data?.width,
       height: node.data?.height
     })
-    const storedResult = node.data?.editorStatus === 'draft'
-      ? { jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {} }
-      : sanitizedBase.result
+    const { project: sourceAlignedProject, sourceChanged } = reconcileLinkedEditorSource(sanitizedBase, sourceProject)
+    const canRestoreResult = !sourceChanged && node.data?.editorStatus !== 'draft'
+    const storedResult = canRestoreResult
+      ? sourceAlignedProject.result
+      : { jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {} }
     const baseProject = {
-      ...sanitizedBase,
-      clips: sanitizedBase.clips.length ? sanitizedBase.clips : sourceProject.clips,
+      ...sourceAlignedProject,
       result: {
         ...storedResult,
-        jobId: node.data?.outputJobId || storedResult.jobId,
-        status: node.data?.editorStatus || storedResult.status,
-        outputUrl: node.data?.compositionReady ? node.data?.outputUrl || storedResult.outputUrl : '',
-        metadata: node.data?.compositionReady ? node.data?.outputMetadata || storedResult.metadata : {}
+        jobId: canRestoreResult ? node.data?.outputJobId || storedResult.jobId : '',
+        status: canRestoreResult ? node.data?.editorStatus || storedResult.status : '',
+        outputUrl: canRestoreResult && node.data?.compositionReady ? node.data?.outputUrl || storedResult.outputUrl : '',
+        metadata: canRestoreResult && node.data?.compositionReady ? node.data?.outputMetadata || storedResult.metadata : {}
       }
     }
     applyEditorProject({
@@ -694,6 +711,7 @@ onMounted(async () => {
     })
     linkedReady.value = true
     saveState.value = 'saved'
+    if (sourceChanged) persistLinkedProject()
     if (outputJobId.value && !isWatermarkEditorJobTerminal(exportStatus.value)) {
       exporting.value = true
       const generation = ++exportPollGeneration

@@ -42,6 +42,45 @@ const editor = readFileSync(new URL('../src/views/GifAdEditor.vue', import.meta.
 const home = readFileSync(new URL('../src/views/Home.vue', import.meta.url), 'utf8')
 const entries = readFileSync(new URL('../src/config/studioEntries.js', import.meta.url), 'utf8')
 
+const reconcileSource = editor.match(
+  /const reconcileLinkedEditorSource = ([\s\S]*?)\n\nconst applyEditorProject/
+)?.[1] || ''
+assert.ok(reconcileSource, '详情页必须对齐当前画板上游与持久化 clip')
+const { default: reconcileLinkedEditorSource } = await import(
+  `data:text/javascript,${encodeURIComponent(`export default ${reconcileSource}`)}`
+)
+const upstreamA = createWatermarkEditorProjectForSource({
+  title: 'A 工程',
+  url: '/public-assets/upstream-a.gif',
+  mime: 'image/gif',
+  label: '上游 A'
+})
+upstreamA.result = {
+  jobId: 'job-a',
+  status: 'completed',
+  progress: 100,
+  outputUrl: '/public-assets/output-a.gif',
+  error: '',
+  metadata: { watermarkApplied: true }
+}
+const upstreamB = createWatermarkEditorProjectForSource({
+  title: 'A 工程',
+  url: '/public-assets/upstream-b.gif',
+  mime: 'image/gif',
+  label: '上游 B'
+})
+const reconciled = reconcileLinkedEditorSource(upstreamA, upstreamB)
+assert.equal(reconciled.sourceChanged, true)
+assert.equal(reconciled.project.clips[0].url, '/public-assets/upstream-b.gif')
+assert.deepEqual(reconciled.project.result, {
+  jobId: '',
+  status: '',
+  progress: 0,
+  outputUrl: '',
+  error: '',
+  metadata: {}
+})
+
 assert.match(canvas, /watermarkEditor:\s*markRaw\(WatermarkEditorNode\)/)
 assert.match(node, /水印与素材编辑/)
 assert.match(node, /进入详情编辑/)
@@ -63,6 +102,8 @@ assert.match(editor, /outputUrl/)
 assert.match(editor, /outputMetadata/)
 assert.match(editor, /uploadGifEditorAsset/)
 assert.match(editor, /实时进度/)
+assert.match(editor, /reconcileLinkedEditorSource\(sanitizedBase, sourceProject\)/)
+assert.match(editor, /if \(sourceChanged\) persistLinkedProject\(\)/)
 assert.match(exportNode, /compositionReady/)
 assert.match(exportNode, /outputJobId/)
 assert.match(exportNode, /outputUrl/)
@@ -79,12 +120,12 @@ globalThis.__gifEditorRequestSpy = config => {
 const gifEditorApi = await import(`data:text/javascript,${encodeURIComponent(apiSource)}#${Date.now()}`)
 await gifEditorApi.uploadGifEditorAsset('data:image/png;base64,AAAA')
 await gifEditorApi.uploadGifEditorMedia({ source_name: 'source.gif', source_base64: 'AAAA' })
-await gifEditorApi.createGifEditorJob({ source_url: '/public-assets/source.gif' })
+await gifEditorApi.createGifEditorJob({ source_url: reconciled.project.clips[0].url })
 await gifEditorApi.getGifEditorJob('job /1')
 assert.deepEqual(apiCalls, [
   { url: '/v1/assets/images', method: 'post', data: { image: 'data:image/png;base64,AAAA' } },
   { url: '/v1/material-inputs', method: 'post', data: { source_name: 'source.gif', source_base64: 'AAAA' }, timeout: 15 * 60 * 1000 },
-  { url: '/v1/media/gif-watermarks', method: 'post', data: { source_url: '/public-assets/source.gif' } },
+  { url: '/v1/media/gif-watermarks', method: 'post', data: { source_url: '/public-assets/upstream-b.gif' } },
   { url: '/v1/video-resize/jobs/job%20%2F1', method: 'get' }
 ])
 assert.throws(() => gifEditorApi.getGifEditorJob(''), /jobId is required/)
