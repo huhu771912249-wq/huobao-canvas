@@ -96,27 +96,89 @@ const editorRoute = computed(() => {
 })
 const editorHref = computed(() => router.resolve(editorRoute.value).href)
 
-const quickSettings = () => ({ watermarkId: watermarkId.value, position: position.value, size: size.value, opacity: opacity.value })
+const resolveWatermarkNodeSync = ({ data = {}, current = {}, previous = null } = {}) => {
+  const currentQuickSettings = current.quickSettings || data.quickSettings || {}
+  const settingsChanged = Boolean(previous) && ['watermarkId', 'position', 'size', 'opacity'].some(
+    key => currentQuickSettings[key] !== previous.quickSettings?.[key]
+  )
+  const sourceUrl = String(current.sourceUrl || data.sourceUrl || '')
+  const sourceMime = String(current.sourceMime || data.sourceMime || '')
+  const sourceLabel = String(current.sourceLabel || data.sourceLabel || '')
+  const previousSourceUrl = String(previous?.sourceUrl || '')
+  const storedSourceUrl = String(data.editorProject?.clips?.[0]?.url || '')
+  const sourceReplaced = Boolean(previousSourceUrl && sourceUrl && previousSourceUrl !== sourceUrl)
+  const storedSourceMismatch = Boolean(storedSourceUrl && sourceUrl && storedSourceUrl !== sourceUrl)
+  const shouldInvalidate = settingsChanged || sourceReplaced || storedSourceMismatch
+  const emptyResult = { jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {} }
+
+  if (shouldInvalidate) {
+    return {
+      quickSettings: currentQuickSettings,
+      sourceUrl,
+      sourceMime,
+      sourceLabel,
+      ...(data.editorProject
+        ? { editorProject: { ...data.editorProject, result: emptyResult } }
+        : {}),
+      outputUrl: '',
+      outputJobId: '',
+      outputMetadata: {},
+      url: '',
+      gifUrl: '',
+      compositionReady: false,
+      editorStatus: 'draft',
+      mime: sourceMime
+    }
+  }
+
+  const storedResult = data.editorProject?.result || {}
+  const recoverableResult = Boolean(
+    storedSourceUrl
+    && sourceUrl
+    && storedSourceUrl === sourceUrl
+    && storedResult.status === 'completed'
+    && storedResult.jobId
+    && storedResult.outputUrl
+  )
+  const outputUrl = String(data.outputUrl || (recoverableResult ? storedResult.outputUrl : '') || '')
+  const outputJobId = String(data.outputJobId || (recoverableResult ? storedResult.jobId : '') || '')
+  const compositionReady = Boolean(
+    outputUrl
+    && outputJobId
+    && (data.compositionReady === true || recoverableResult)
+  )
+  return {
+    quickSettings: currentQuickSettings,
+    sourceUrl,
+    sourceMime,
+    sourceLabel,
+    outputUrl,
+    outputJobId,
+    outputMetadata: data.outputMetadata || (recoverableResult ? storedResult.metadata || {} : {}),
+    url: compositionReady ? outputUrl : '',
+    gifUrl: compositionReady ? outputUrl : '',
+    compositionReady,
+    editorStatus: compositionReady ? 'completed' : data.editorStatus || 'draft',
+    mime: compositionReady ? 'image/gif' : sourceMime
+  }
+}
+
 watch([watermarkId, position, size, opacity, upstreamSourceUrl, upstreamSourceMime], (values, previousValues) => {
-  const shouldInvalidate = Boolean(previousValues) && values.some((value, index) => value !== previousValues[index])
-  const outputState = shouldInvalidate
-    ? { outputUrl: '', outputJobId: '', outputMetadata: {}, url: '', gifUrl: '', compositionReady: false, editorStatus: 'draft' }
-    : {
-        outputUrl: props.data?.outputUrl || '',
-        outputJobId: props.data?.outputJobId || '',
-        outputMetadata: props.data?.outputMetadata || {},
-        url: props.data?.outputUrl || '',
-        gifUrl: props.data?.outputUrl || '',
-        compositionReady: props.data?.compositionReady === true,
-        editorStatus: props.data?.editorStatus || 'draft'
+  const current = {
+    quickSettings: { watermarkId: values[0], position: values[1], size: values[2], opacity: values[3] },
+    sourceUrl: values[4],
+    sourceMime: values[5],
+    sourceLabel: sourceNode.value?.data?.label || props.data?.sourceLabel || ''
+  }
+  const previous = previousValues?.length === values.length
+    ? {
+        quickSettings: { watermarkId: previousValues[0], position: previousValues[1], size: previousValues[2], opacity: previousValues[3] },
+        sourceUrl: previousValues[4],
+        sourceMime: previousValues[5]
       }
+    : null
   updateNode(props.id, {
-    quickSettings: quickSettings(),
-    sourceUrl: upstreamSourceUrl.value,
-    sourceMime: upstreamSourceMime.value,
-    sourceLabel: sourceNode.value?.data?.label || props.data?.sourceLabel || '',
-    ...outputState,
-    mime: shouldInvalidate ? upstreamSourceMime.value : props.data?.outputUrl ? 'image/gif' : upstreamSourceMime.value,
+    ...resolveWatermarkNodeSync({ data: props.data, current, previous }),
     updatedAt: Date.now()
   })
 }, { immediate: true })

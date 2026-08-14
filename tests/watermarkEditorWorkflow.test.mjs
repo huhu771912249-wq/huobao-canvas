@@ -44,6 +44,100 @@ const editor = readFileSync(new URL('../src/views/GifAdEditor.vue', import.meta.
 const home = readFileSync(new URL('../src/views/Home.vue', import.meta.url), 'utf8')
 const entries = readFileSync(new URL('../src/config/studioEntries.js', import.meta.url), 'utf8')
 
+const nodeSyncSource = node.match(
+  /const resolveWatermarkNodeSync = ([\s\S]*?)\n\nwatch\(/
+)?.[1] || ''
+assert.ok(nodeSyncSource, '水印节点必须区分挂载同步和用户真实修改')
+const { default: resolveWatermarkNodeSync } = await import(
+  `data:text/javascript,${encodeURIComponent(`export default ${nodeSyncSource}`)}`
+)
+const completedNodeData = {
+  sourceUrl: '/public-assets/source-b.gif',
+  sourceMime: 'image/gif',
+  editorProject: {
+    clips: [{ url: '/public-assets/source-b.gif' }],
+    result: {
+      jobId: 'resize-completed',
+      status: 'completed',
+      progress: 100,
+      outputUrl: '/public-assets/completed.gif',
+      error: '',
+      metadata: { watermarkApplied: true }
+    }
+  },
+  editorStatus: 'completed',
+  compositionReady: true,
+  outputJobId: 'resize-completed',
+  outputUrl: '/public-assets/completed.gif',
+  outputMetadata: { watermarkApplied: true },
+  url: '/public-assets/completed.gif',
+  gifUrl: '/public-assets/completed.gif'
+}
+const currentNodeState = {
+  quickSettings: { watermarkId: 'logo', position: 'custom', size: 22, opacity: 92 },
+  sourceUrl: '/public-assets/source-b.gif',
+  sourceMime: 'image/gif',
+  sourceLabel: '上游 B'
+}
+const mountedCompleted = resolveWatermarkNodeSync({
+  data: completedNodeData,
+  current: currentNodeState,
+  previous: null
+})
+const afterUnrelatedSave = resolveWatermarkNodeSync({
+  data: { ...completedNodeData, ...mountedCompleted },
+  current: currentNodeState,
+  previous: { ...currentNodeState, sourceMime: '' }
+})
+for (const state of [mountedCompleted, afterUnrelatedSave]) {
+  assert.equal(state.editorStatus, 'completed')
+  assert.equal(state.compositionReady, true)
+  assert.equal(state.outputJobId, 'resize-completed')
+  assert.equal(state.outputUrl, '/public-assets/completed.gif')
+  assert.equal(state.url, '/public-assets/completed.gif')
+  assert.equal(state.gifUrl, '/public-assets/completed.gif')
+}
+
+const recoveredFromProjectResult = resolveWatermarkNodeSync({
+  data: {
+    ...completedNodeData,
+    editorStatus: 'draft',
+    compositionReady: false,
+    outputJobId: '',
+    outputUrl: '',
+    outputMetadata: {},
+    url: '',
+    gifUrl: ''
+  },
+  current: currentNodeState,
+  previous: null
+})
+assert.equal(recoveredFromProjectResult.compositionReady, true)
+assert.equal(recoveredFromProjectResult.outputJobId, 'resize-completed')
+assert.equal(recoveredFromProjectResult.outputUrl, '/public-assets/completed.gif')
+
+const replacedUpstream = resolveWatermarkNodeSync({
+  data: completedNodeData,
+  current: { ...currentNodeState, sourceUrl: '/public-assets/source-c.gif' },
+  previous: currentNodeState
+})
+assert.equal(replacedUpstream.compositionReady, false)
+assert.equal(replacedUpstream.outputJobId, '')
+assert.equal(replacedUpstream.outputUrl, '')
+assert.equal(replacedUpstream.editorProject.result.status, '')
+
+const changedWatermarkSettings = resolveWatermarkNodeSync({
+  data: completedNodeData,
+  current: {
+    ...currentNodeState,
+    quickSettings: { ...currentNodeState.quickSettings, position: 'center' }
+  },
+  previous: currentNodeState
+})
+assert.equal(changedWatermarkSettings.compositionReady, false)
+assert.equal(changedWatermarkSettings.outputJobId, '')
+assert.equal(changedWatermarkSettings.editorProject.result.status, '')
+
 const upstreamA = createWatermarkEditorProjectForSource({
   title: 'A 工程',
   url: '/public-assets/upstream-a.gif',
@@ -133,6 +227,7 @@ assert.match(node, /水印与素材编辑/)
 assert.match(node, /进入详情编辑/)
 assert.match(node, /compositionReady/)
 assert.match(node, /outputUrl/)
+assert.match(node, /previousValues\?\.length === values\.length/)
 assert.match(node, /Position\.Left/)
 assert.match(node, /Position\.Right/)
 assert.match(editor, /保存到水印库/)
