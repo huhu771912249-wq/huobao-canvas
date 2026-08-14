@@ -101,6 +101,84 @@ export const sanitizeWatermarkEditorProject = value => {
   }
 }
 
+const emptyEditorResult = () => ({
+  jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {}
+})
+
+const quickSettingPositions = {
+  'top-left': [18, 12],
+  'top-right': [82, 12],
+  'bottom-left': [18, 88],
+  'bottom-right': [82, 88],
+  center: [50, 50]
+}
+
+const mergeNodeQuickSettings = (project, nodeQuickSettings) => {
+  const incoming = nodeQuickSettings && typeof nodeQuickSettings === 'object' ? nodeQuickSettings : {}
+  const quickSettings = { ...project.quickSettings, ...incoming }
+  const changedKeys = new Set(['watermarkId', 'position', 'size', 'opacity'].filter(key => (
+    Object.prototype.hasOwnProperty.call(incoming, key)
+    && incoming[key] !== project.quickSettings[key]
+  )))
+  if (!changedKeys.size) return { ...project, quickSettings }
+
+  const coordinates = quickSettingPositions[quickSettings.position]
+  return {
+    ...project,
+    quickSettings,
+    imageTracks: project.imageTracks.map(item => item.id === quickSettings.watermarkId
+      ? {
+          ...item,
+          ...(coordinates && (changedKeys.has('position') || changedKeys.has('watermarkId'))
+            ? { x: coordinates[0], y: coordinates[1] }
+            : {}),
+          ...(changedKeys.has('size') || changedKeys.has('watermarkId')
+            ? { size: Number(quickSettings.size || item.size || 22) }
+            : {}),
+          ...(changedKeys.has('opacity') || changedKeys.has('watermarkId')
+            ? { opacity: Number(quickSettings.opacity ?? item.opacity ?? 92) }
+            : {})
+        }
+      : item)
+  }
+}
+
+export const restoreWatermarkEditorProject = ({ savedProject, sourceProject, nodeData = {} } = {}) => {
+  const saved = sanitizeWatermarkEditorProject(savedProject)
+  const currentSource = sanitizeWatermarkEditorProject(sourceProject)
+  const savedSourceUrl = String(saved.clips[0]?.url || '')
+  const currentSourceUrl = String(currentSource.clips[0]?.url || '')
+  const sourceChanged = Boolean(savedSourceUrl && currentSourceUrl && savedSourceUrl !== currentSourceUrl)
+  const sourceAligned = mergeNodeQuickSettings({
+    ...saved,
+    clips: sourceChanged || !saved.clips.length ? currentSource.clips : saved.clips,
+    result: sourceChanged ? emptyEditorResult() : saved.result
+  }, nodeData.quickSettings)
+  const canRestoreResult = !sourceChanged && nodeData.editorStatus !== 'draft'
+  const storedResult = canRestoreResult ? sourceAligned.result : emptyEditorResult()
+  const result = {
+    ...storedResult,
+    jobId: canRestoreResult ? String(nodeData.outputJobId || storedResult.jobId || '') : '',
+    status: canRestoreResult ? String(nodeData.editorStatus || storedResult.status || '') : '',
+    outputUrl: canRestoreResult && nodeData.compositionReady
+      ? String(nodeData.outputUrl || storedResult.outputUrl || '')
+      : '',
+    metadata: canRestoreResult && nodeData.compositionReady
+      ? { ...(nodeData.outputMetadata || storedResult.metadata || {}) }
+      : {}
+  }
+  const project = sanitizeWatermarkEditorProject({ ...sourceAligned, result })
+  return {
+    project,
+    sourceChanged,
+    compositionReady: Boolean(
+      project.result.status === 'completed'
+      && project.result.jobId
+      && project.result.outputUrl
+    )
+  }
+}
+
 export const getWatermarkEditorSource = project => sanitizeWatermarkEditorProject(project).clips[0] || null
 
 export const isWatermarkEditorJobTerminal = status => ['completed', 'failed', 'cancelled'].includes(String(status || '').toLowerCase())

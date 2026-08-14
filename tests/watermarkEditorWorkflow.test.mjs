@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs'
 import {
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
+  isWatermarkEditorJobTerminal,
+  restoreWatermarkEditorProject,
   sanitizeWatermarkEditorProject
 } from '../src/utils/watermarkEditorProject.js'
 
@@ -42,13 +44,6 @@ const editor = readFileSync(new URL('../src/views/GifAdEditor.vue', import.meta.
 const home = readFileSync(new URL('../src/views/Home.vue', import.meta.url), 'utf8')
 const entries = readFileSync(new URL('../src/config/studioEntries.js', import.meta.url), 'utf8')
 
-const reconcileSource = editor.match(
-  /const reconcileLinkedEditorSource = ([\s\S]*?)\n\nconst applyEditorProject/
-)?.[1] || ''
-assert.ok(reconcileSource, '详情页必须对齐当前画板上游与持久化 clip')
-const { default: reconcileLinkedEditorSource } = await import(
-  `data:text/javascript,${encodeURIComponent(`export default ${reconcileSource}`)}`
-)
 const upstreamA = createWatermarkEditorProjectForSource({
   title: 'A 工程',
   url: '/public-assets/upstream-a.gif',
@@ -69,7 +64,11 @@ const upstreamB = createWatermarkEditorProjectForSource({
   mime: 'image/gif',
   label: '上游 B'
 })
-const reconciled = reconcileLinkedEditorSource(upstreamA, upstreamB)
+const reconciled = restoreWatermarkEditorProject({
+  savedProject: upstreamA,
+  sourceProject: upstreamB,
+  nodeData: { sourceUrl: '/public-assets/upstream-b.gif', editorStatus: 'completed', compositionReady: true }
+})
 assert.equal(reconciled.sourceChanged, true)
 assert.equal(reconciled.project.clips[0].url, '/public-assets/upstream-b.gif')
 assert.deepEqual(reconciled.project.result, {
@@ -80,6 +79,54 @@ assert.deepEqual(reconciled.project.result, {
   error: '',
   metadata: {}
 })
+
+const completedProject = sanitizeWatermarkEditorProject({
+  ...upstreamB,
+  imageTracks: [{
+    id: 'custom-watermark',
+    name: 'logo.png',
+    url: '/public-assets/logo.png',
+    saved: true,
+    start: 0,
+    end: 3,
+    x: 25,
+    y: 75,
+    size: 22,
+    opacity: 92
+  }],
+  quickSettings: { watermarkId: 'custom-watermark', position: 'top-right', size: 22, opacity: 92 },
+  result: {
+    jobId: 'resize-completed',
+    status: 'completed',
+    progress: 100,
+    outputUrl: '/public-assets/completed.gif',
+    error: '',
+    metadata: { watermarkApplied: true }
+  }
+})
+const restoredCompleted = restoreWatermarkEditorProject({
+  savedProject: completedProject,
+  sourceProject: upstreamB,
+  nodeData: {
+    sourceUrl: '/public-assets/upstream-b.gif',
+    quickSettings: completedProject.quickSettings,
+    editorStatus: 'completed',
+    compositionReady: true,
+    outputJobId: 'resize-completed',
+    outputUrl: '/public-assets/completed.gif',
+    outputMetadata: { watermarkApplied: true }
+  }
+})
+assert.equal(restoredCompleted.sourceChanged, false)
+assert.equal(restoredCompleted.compositionReady, true)
+assert.equal(restoredCompleted.project.result.jobId, 'resize-completed')
+assert.equal(restoredCompleted.project.result.outputUrl, '/public-assets/completed.gif')
+assert.equal(restoredCompleted.project.result.status, 'completed')
+assert.equal(isWatermarkEditorJobTerminal(restoredCompleted.project.result.status), true)
+assert.deepEqual(
+  { x: restoredCompleted.project.imageTracks[0].x, y: restoredCompleted.project.imageTracks[0].y },
+  { x: 25, y: 75 }
+)
 
 assert.match(canvas, /watermarkEditor:\s*markRaw\(WatermarkEditorNode\)/)
 assert.match(node, /水印与素材编辑/)
@@ -102,8 +149,13 @@ assert.match(editor, /outputUrl/)
 assert.match(editor, /outputMetadata/)
 assert.match(editor, /uploadGifEditorAsset/)
 assert.match(editor, /实时进度/)
-assert.match(editor, /reconcileLinkedEditorSource\(sanitizedBase, sourceProject\)/)
+assert.match(editor, /restoreWatermarkEditorProject\(/)
 assert.match(editor, /if \(sourceChanged\) persistLinkedProject\(\)/)
+assert.match(editor, /await nextTick\(\)[\s\S]*linkedReady\.value = true/)
+const mountedStart = editor.indexOf('onMounted(async')
+const mountedEnd = editor.indexOf('\nonBeforeUnmount(', mountedStart)
+assert.ok(mountedStart >= 0 && mountedEnd > mountedStart)
+assert.doesNotMatch(editor.slice(mountedStart, mountedEnd), /createGifEditorJob/)
 assert.match(exportNode, /compositionReady/)
 assert.match(exportNode, /outputJobId/)
 assert.match(exportNode, /outputUrl/)

@@ -218,7 +218,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createGifEditorJob, getGifEditorJob, uploadGifEditorAsset, uploadGifEditorMedia } from '../api/gifEditor.js'
 import {
@@ -233,6 +233,7 @@ import {
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
   isWatermarkEditorJobTerminal,
+  restoreWatermarkEditorProject,
   sanitizeWatermarkEditorProject
 } from '../utils/watermarkEditorProject.js'
 import {
@@ -348,22 +349,6 @@ const editorSnapshot = () => sanitizeWatermarkEditorProject({
   }
 })
 
-const reconcileLinkedEditorSource = (savedProject, sourceProject) => {
-  const savedSourceUrl = String(savedProject?.clips?.[0]?.url || '')
-  const currentSourceUrl = String(sourceProject?.clips?.[0]?.url || '')
-  const sourceChanged = Boolean(savedSourceUrl && currentSourceUrl && savedSourceUrl !== currentSourceUrl)
-  return {
-    sourceChanged,
-    project: {
-      ...savedProject,
-      clips: sourceChanged || !savedProject.clips.length ? sourceProject.clips : savedProject.clips,
-      result: sourceChanged
-        ? { jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {} }
-        : savedProject.result
-    }
-  }
-}
-
 const applyEditorProject = value => {
   const project = sanitizeWatermarkEditorProject(value)
   projectName.value = project.title
@@ -371,23 +356,6 @@ const applyEditorProject = value => {
   textTracks.value = project.textTracks
   imageTracks.value = project.imageTracks
   quickSettings.value = { ...project.quickSettings }
-  const quickWatermark = imageTracks.value.find(item => item.id === quickSettings.value.watermarkId)
-  const positions = {
-    'top-left': [18, 12],
-    'top-right': [82, 12],
-    'bottom-left': [18, 88],
-    'bottom-right': [82, 88],
-    center: [50, 50]
-  }
-  if (quickWatermark && positions[quickSettings.value.position]) {
-    const [x, y] = positions[quickSettings.value.position]
-    Object.assign(quickWatermark, {
-      x,
-      y,
-      size: Number(quickSettings.value.size || quickWatermark.size || 22),
-      opacity: Number(quickSettings.value.opacity ?? quickWatermark.opacity ?? 92)
-    })
-  }
   presetKey.value = project.output.presetKey
   cornerRadius.value = Number(project.output.cornerRadius)
   fps.value = Number(project.output.fps)
@@ -690,25 +658,13 @@ onMounted(async () => {
       width: node.data?.width,
       height: node.data?.height
     })
-    const { project: sourceAlignedProject, sourceChanged } = reconcileLinkedEditorSource(sanitizedBase, sourceProject)
-    const canRestoreResult = !sourceChanged && node.data?.editorStatus !== 'draft'
-    const storedResult = canRestoreResult
-      ? sourceAlignedProject.result
-      : { jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {} }
-    const baseProject = {
-      ...sourceAlignedProject,
-      result: {
-        ...storedResult,
-        jobId: canRestoreResult ? node.data?.outputJobId || storedResult.jobId : '',
-        status: canRestoreResult ? node.data?.editorStatus || storedResult.status : '',
-        outputUrl: canRestoreResult && node.data?.compositionReady ? node.data?.outputUrl || storedResult.outputUrl : '',
-        metadata: canRestoreResult && node.data?.compositionReady ? node.data?.outputMetadata || storedResult.metadata : {}
-      }
-    }
-    applyEditorProject({
-      ...baseProject,
-      quickSettings: { ...baseProject.quickSettings, ...(node?.data?.quickSettings || {}) }
+    const { project: restoredProject, sourceChanged } = restoreWatermarkEditorProject({
+      savedProject: sanitizedBase,
+      sourceProject,
+      nodeData: node.data
     })
+    applyEditorProject(restoredProject)
+    await nextTick()
     linkedReady.value = true
     saveState.value = 'saved'
     if (sourceChanged) persistLinkedProject()
