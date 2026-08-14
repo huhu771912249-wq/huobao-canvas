@@ -39,6 +39,54 @@ assert.equal(explicit.quality_mode, 'fast')
 assert.match(explicit.character.identity, /黑人/)
 assert.match(explicit.environment.location, /纽约/)
 
+const englishLeak = normalizeH3DirectorPlan({
+  title: 'Fashion walk through a luxury hotel',
+  summary: 'A woman walks through a hotel corridor under warm cinematic lighting',
+  character: {
+    identity: 'An elegant adult woman working as a fashion designer',
+    appearance: 'Elegant woman with long black hair and a black dress',
+    wardrobe: 'A fitted black evening dress with elegant high heels'
+  },
+  environment: {
+    location: 'Luxury hotel corridor with polished marble floors',
+    set_dressing: 'Warm wall lights and polished marble create a premium atmosphere'
+  },
+  cinematography: {
+    shot_size: 'Full body cinematic portrait shot',
+    lens: '24mm',
+    camera_movement: 'Smooth tracking shot following the subject from behind'
+  },
+  lighting: {
+    key_light: 'Warm cinematic key light from the corridor wall lamps'
+  },
+  action_timeline: ['The woman walks forward and looks back toward the camera'],
+  audio_direction: 'Soft footsteps and quiet hotel ambience with gentle music',
+  image_prompt: 'Full body fashion portrait in a luxury hotel corridor with cinematic light',
+  negative_prompt: 'blurry face and distorted hands with unstable character identity'
+}, '一位穿黑色礼服的成年女性走过酒店走廊，使用 H3，24mm，16:9')
+for (const leakedText of [
+  'A woman walks',
+  'Elegant woman',
+  'Luxury hotel corridor',
+  'Smooth tracking shot',
+  'Full body fashion portrait',
+  'blurry face'
+]) {
+  assert.doesNotMatch(JSON.stringify(englishLeak), new RegExp(leakedText))
+}
+assert.match(englishLeak.video_prompt, /酒店走廊/)
+assert.match(englishLeak.video_prompt, /24mm/)
+assert.match(englishLeak.image_prompt, /H3|酒店走廊/)
+
+const chineseWithTerms = normalizeH3DirectorPlan({
+  summary: '成年女性在酒店走廊中自然前行，使用 H3 生成电影感画面',
+  cinematography: { lens: '24mm 广角电影镜头' },
+  image_prompt: '酒店走廊中的成年女性全身入镜，H3 电影感，16:9 构图'
+}, '酒店走廊中的成年女性')
+assert.match(chineseWithTerms.summary, /H3/)
+assert.match(chineseWithTerms.cinematography.lens, /24mm/)
+assert.match(chineseWithTerms.image_prompt, /16:9/)
+
 const fenced = parseDirectorResponse('```json\n{"title":"雨夜回家","duration_seconds":2,"cinematography":{"shot_size":"远景"}}\n```', '雨夜回家')
 assert.equal(fenced.title, '雨夜回家')
 assert.equal(fenced.duration_seconds, 2)
