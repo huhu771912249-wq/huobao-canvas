@@ -34,13 +34,13 @@ export const buildH3AdGifWorkflow = (startPosition = { x: 0, y: 0 }) => {
     { id: ids.imageConfig, type: 'imageConfig', position: { x: x + 430, y }, data: { label: '02 Z-Image 人像文生图', model: 'z-image', size: '1280x720', negativePrompt: 'low quality, blurry, deformed, bad anatomy, extra fingers, watermark', steps: 36, cfg: 4, samplerName: 'res_multistep', scheduler: 'simple', seed: -1 } },
     { id: ids.imageResult, type: 'image', position: { x: x + 956, y }, data: { label: '03 H3 首帧结果', url: '' } },
     { id: ids.motionPrompt, type: 'text', position: { x: x + 956, y: y + 367 }, data: { label: '04 H3 动作与声音', content: '描述 5 秒内的主体动作、运镜、口播、环境音与音乐' } },
-    { id: ids.videoConfig, type: 'videoConfig', position: { x: x + 1404, y: y + 80 }, data: { label: '05 MiniMax H3', mode: 'image_to_video', model: 'minimax-h3', ratio: '16:9', dur: 5, outputWidth: 1280, outputHeight: 720, samplingMode: 'standard20', qualityMode: 'fast', qualityProfile, imageAlignment: getImageAlignmentSpec('minimax-h3', '16:9') } },
-    { id: ids.videoResult, type: 'video', position: { x: x + 2044, y: y + 80 }, data: { label: '06 H3 视频结果', url: '' } },
-    { id: ids.gif, type: 'videoGif', position: { x: x + 2524, y: y + 80 }, data: { label: '07 视频转 GIF', outputWidth: 720, outputHeight: 1280, fitMode: 'blur', fps: 12, colors: 256, gifUrl: '', mime: 'image/gif' } },
-    { id: ids.copy, type: 'text', position: { x: x + 2524, y: y + 680 }, data: { label: '08 广告文案', content: '在这里输入 GIF 广告文案' } },
-    { id: ids.overlay, type: 'textOverlay', position: { x: x + 3064, y: y + 80 }, data: { label: '09 GIF 可视化加字', outputWidth: 720, outputHeight: 1280, videoFitMode: 'blur', videoOutputFormat: 'both', x: 50, y: 78, fontSize: 48, boxWidth: 76, color: '#ffffff', strokeColor: '#111111', strokeWidth: 4, align: 'center', shadow: true } },
-    { id: ids.watermark, type: 'watermarkEditor', position: { x: x + 3664, y: y + 80 }, data: { label: '10 水印与细节编辑', quickSettings: { watermarkId: 'image-1', position: 'top-right', size: 22, opacity: 92 } } },
-    { id: ids.export, type: 'materialExport', position: { x: x + 4164, y: y + 80 }, data: { label: '11 GIF 导出', url: '', gifUrl: '', mime: 'image/gif' } }
+    { id: ids.videoConfig, type: 'videoConfig', position: { x: x + 1424, y: y + 80 }, data: { label: '05 MiniMax H3', mode: 'image_to_video', model: 'minimax-h3', ratio: '16:9', dur: 5, outputWidth: 1280, outputHeight: 720, samplingMode: 'standard20', qualityMode: 'fast', qualityProfile, imageAlignment: getImageAlignmentSpec('minimax-h3', '16:9') } },
+    { id: ids.videoResult, type: 'video', position: { x: x + 2064, y: y + 80 }, data: { label: '06 H3 视频结果', url: '' } },
+    { id: ids.gif, type: 'videoGif', position: { x: x + 2544, y: y + 80 }, data: { label: '07 视频转 GIF', outputWidth: 720, outputHeight: 1280, fitMode: 'blur', fps: 12, colors: 256, gifUrl: '', mime: 'image/gif' } },
+    { id: ids.copy, type: 'text', position: { x: x + 2544, y: y + 680 }, data: { label: '08 广告文案', content: '在这里输入 GIF 广告文案' } },
+    { id: ids.overlay, type: 'textOverlay', position: { x: x + 3084, y: y + 80 }, data: { label: '09 GIF 可视化加字', outputWidth: 720, outputHeight: 1280, videoFitMode: 'blur', videoOutputFormat: 'both', x: 50, y: 78, fontSize: 48, boxWidth: 76, color: '#ffffff', strokeColor: '#111111', strokeWidth: 4, align: 'center', shadow: true } },
+    { id: ids.watermark, type: 'watermarkEditor', position: { x: x + 3684, y: y + 80 }, data: { label: '10 水印与细节编辑', quickSettings: { watermarkId: 'image-1', position: 'top-right', size: 22, opacity: 92 } } },
+    { id: ids.export, type: 'materialExport', position: { x: x + 4184, y: y + 80 }, data: { label: '11 GIF 导出', url: '', gifUrl: '', mime: 'image/gif' } }
   ]
   const edges = [
     edge(ids.imagePrompt, ids.imageConfig, { type: 'promptOrder', data: { promptOrder: 1 } }),

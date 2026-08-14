@@ -53,6 +53,18 @@ for (let firstIndex = 0; firstIndex < h3ObservedFootprints.length; firstIndex +=
 }
 assert.deepEqual(insufficientH3Gaps, [], 'H3 template nodes must preserve a 48px gap using their observed DOM footprints')
 
+const qaZoom = 0.8
+const observedMotionPromptWidth = 408
+const motionPrompt = template.nodes[3]
+const videoConfig = template.nodes[4]
+const visibleMotionToVideoGap = (
+  videoConfig.position.x - motionPrompt.position.x - observedMotionPromptWidth
+) * qaZoom
+assert.ok(
+  visibleMotionToVideoGap >= 48,
+  `node_5↔node_6 need a 48px visible gap at ${qaZoom} zoom; received ${visibleMotionToVideoGap}px`
+)
+
 const shifted = placeWorkflowWithoutOverlap(
   [{ id: 'wide-existing', type: 'dspCreativeLibrary', position: { x: 200, y: 100 } }],
   template.nodes
