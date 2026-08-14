@@ -20,7 +20,11 @@
         @submit="handlePromptSubmit"
         @refresh-suggestions="refreshSuggestions"
       />
+      <section v-if="projectsLoading" id="projects" class="mx-auto max-w-[1180px] px-7 py-12" role="status" aria-live="polite">
+        <div class="workspace-panel grid min-h-[240px] place-content-center rounded-[22px] text-center text-[var(--text-secondary)]">正在读取最近项目…</div>
+      </section>
       <RecentProjects
+        v-else
         :busy="navigationPending"
         :projects="projects"
         :format-date="formatDate"
@@ -83,6 +87,7 @@ const dialog = useDialog()
 const modelStore = useModelStore()
 const studioEntries = STUDIO_ENTRIES
 const navigationPending = ref(false)
+const projectsLoading = ref(true)
 const runNavigation = async action => {
   if (navigationPending.value) return false
   navigationPending.value = true
@@ -144,7 +149,7 @@ const openTask = task => {
     return
   }
   taskRailOpen.value = false
-  if (task?.source === 'resize') router.push('/video-resize')
+  if (task?.source === 'resize') router.push({ path: '/video-resize', query: { job: task.source_id } })
   else if (task?.source === 'dsp') createFlowProject('dsp')
   else if (task?.category === 'variation') createFlowProject('variation')
   else router.push('/video-studio')
@@ -377,6 +382,7 @@ const confirmRename = () => {
 
 onMounted(async () => {
   await initProjectsStore()
+  projectsLoading.value = false
   loadTaskCenter()
   const launch = String(route.query.launch || '')
   const panel = String(route.query.panel || '')

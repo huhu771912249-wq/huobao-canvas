@@ -37,6 +37,7 @@ assert.match(routerSource, /path:\s*['"]\/tasks['"]/)
 assert.match(routerSource, /views\/TaskCenter\.vue/)
 assert.match(taskCenterSource, /listTaskCenterTasks/)
 assert.match(taskCenterSource, /variant="page"/)
+assert.match(taskCenterSource, /query:\s*\{\s*job:\s*task\.source_id\s*\}/, '尺寸任务详情必须携带真实 job id')
 assert.match(taskRailSource, /task-rail--page/)
 
 console.log('taskCenter.test.mjs passed')

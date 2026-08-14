@@ -123,7 +123,7 @@ const monitorRef = ref(null)
 const loading = ref(false)
 const error = ref('')
 const status = ref(null)
-const collapsed = ref(false)
+const collapsed = ref(true)
 const detailsOpen = ref(false)
 const tasksOpen = ref(false)
 const position = ref(null)
@@ -132,7 +132,7 @@ const queueDetails = computed(() => status.value?.queues || {})
 const currentTask = computed(() => summary.value.tasks.find(task => task.status === 'running') || null)
 const monitorStyle = computed(() => position.value
   ? { left: `${position.value.left}px`, top: `${position.value.top}px` }
-  : { right: '18px', bottom: '150px' })
+  : { right: '18px', top: '84px' })
 const statusLabel = computed(() => ({ online: 'GPU在线', degraded: '服务异常', offline: 'GPU离线', loading: '检测中' }[summary.value.state]))
 const powerLabel = computed(() => {
   if (summary.value.powerDraw === null) return '功耗未知'
@@ -149,9 +149,10 @@ const taskElapsedLabel = task => formatElapsedSeconds(task?.elapsed_seconds)
 
 const readStoredState = () => {
   try {
-    collapsed.value = localStorage.getItem(COLLAPSED_KEY) === '1'
+    const stored = localStorage.getItem(COLLAPSED_KEY)
+    collapsed.value = stored === null ? true : stored === '1'
   } catch {
-    collapsed.value = false
+    collapsed.value = true
   }
 }
 const toggleCollapsed = () => {

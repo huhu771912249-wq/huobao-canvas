@@ -281,6 +281,13 @@ const canDelete = (item) => (
   !busyJobId.value && isDspCreativeJobTerminal(item.status)
 )
 
+const hasTaskCenterPersistenceChanged = (current, next) => {
+  const currentJobIds = Array.isArray(current?.jobIds) ? current.jobIds : []
+  const currentFilters = current?.uiPrefs || {}
+  return JSON.stringify(currentJobIds) !== JSON.stringify(next.jobIds)
+    || JSON.stringify(currentFilters) !== JSON.stringify(next.filters)
+}
+
 const unwrapJob = (result) => (
   result?.data?.job || result?.data || result?.job || result
 )
@@ -366,10 +373,12 @@ const persistPrefs = () => {
     filters
   })
   persistTaskCenterState(window.localStorage, safe, STORAGE_KEY)
-  updateNode(props.id, {
-    jobIds: safe.jobIds,
-    uiPrefs: { ...safe.filters }
-  })
+  if (hasTaskCenterPersistenceChanged(props.data, safe)) {
+    updateNode(props.id, {
+      jobIds: safe.jobIds,
+      uiPrefs: { ...safe.filters }
+    })
+  }
 }
 
 const loadJobs = async ({ abortExisting = false } = {}) => {
@@ -495,12 +504,18 @@ onMounted(async () => {
   visibilityPolling.start()
   const persisted = readPersistedTaskCenterState(window.localStorage, STORAGE_KEY)
   Object.assign(filters, resolveTaskCenterPreferences(props.data?.uiPrefs, persisted.filters))
-  updateNode(props.id, {
+  const initialPersistence = sanitizeTaskCenterPersistence({
     jobIds: Array.isArray(props.data?.jobIds) && props.data.jobIds.length
       ? props.data.jobIds
       : persisted.jobIds,
-    uiPrefs: { ...filters }
+    filters
   })
+  if (hasTaskCenterPersistenceChanged(props.data, initialPersistence)) {
+    updateNode(props.id, {
+      jobIds: initialPersistence.jobIds,
+      uiPrefs: { ...initialPersistence.filters }
+    })
+  }
   await loadJobs()
   if (mounted) startPolling()
 })

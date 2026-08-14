@@ -4,7 +4,7 @@
     <!-- Video config node | 视频配置节点 -->
     <div class="video-config-node canvas-node-scroll-shell nowheel w-[560px] max-w-[560px] bg-[var(--bg-secondary)] rounded-xl border transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
-      :style="isExpanded ? { maxHeight: 'none', overflowY: 'visible' } : undefined">
+      :style="isExpanded ? { maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' } : undefined">
       <!-- Header | 头部 -->
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
         <span

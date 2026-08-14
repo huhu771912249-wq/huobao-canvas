@@ -42,5 +42,8 @@ for (const progressContract of [
 ]) assert.match(view, new RegExp(progressContract))
 assert.match(view, /job\?\.error/)
 assert.match(view, /后端错误/)
+assert.match(view, /useRoute/)
+assert.match(view, /route\.query\.job/)
+assert.match(view, /getVideoResizeJob\(requestedJobId\)/, '工作台必须恢复任务中心选中的任务')
 
 console.log('videoResizeWorkbench.test.mjs passed')

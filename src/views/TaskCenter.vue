@@ -75,7 +75,7 @@ const openTask = task => {
     router.push({ path: '/video-studio', query: { tab: 'novel', job: task.source_id } })
     return
   }
-  if (task?.source === 'resize') router.push('/video-resize')
+  if (task?.source === 'resize') router.push({ path: '/video-resize', query: { job: task.source_id } })
   else if (task?.source === 'dsp') router.push('/canvas/new?flow=dsp')
   else if (task?.category === 'variation') router.push('/canvas/new?flow=variation')
   else router.push('/video-studio')
