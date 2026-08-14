@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict'
+import { H3_DIRECTOR_SYSTEM_PROMPT } from '../src/config/h3DirectorPrompt.js'
 import {
   bindH3ImagePrompt,
   compileH3DirectorPrompt,
   normalizeH3DirectorPrompt
 } from '../src/utils/h3DirectorPrompt.js'
+
+assert.match(H3_DIRECTOR_SYSTEM_PROMPT, /所有面向用户展示的字符串值必须使用简体中文/)
+assert.match(H3_DIRECTOR_SYSTEM_PROMPT, /JSON 键名必须保持.*英文/)
+assert.match(H3_DIRECTOR_SYSTEM_PROMPT, /不得同时输出中英文两套提示词/)
+assert.match(H3_DIRECTOR_SYSTEM_PROMPT, /用户输入包含英文时.*保留用户明确给出的英文内容/)
 
 const plan = normalizeH3DirectorPrompt({
   references: [

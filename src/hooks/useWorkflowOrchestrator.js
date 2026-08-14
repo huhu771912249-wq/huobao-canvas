@@ -119,6 +119,14 @@ const INTENT_ANALYSIS_PROMPT = `你是一个工作流分析助手。根据用户
   }
 }
 
+语言要求：
+- 返回 JSON 的键名保持现有英文协议，不得翻译键名。
+- 所有用户可见的字符串值必须使用简体中文。
+- 以下字段必须输出中文：description、image_prompt、video_prompt、character.name、character.description、shots[].title、shots[].prompt、multi_angle.character_description、picture_book.title、picture_book.style、picture_book.character.name、picture_book.character.description、picture_book.pages[].story_text、picture_book.pages[].illustration_prompt。
+- 品牌、型号、模型名、镜头焦段和行业缩写可以保留原文，但必须置于中文句子中。
+- 禁止输出整段英文提示词，禁止输出中英双语重复内容。
+- 用户主动输入的英文内容保持原样，不要擅自翻译或删除。
+
 提示词优化要求：
 - image_prompt: 基于用户输入扩展，添加画面细节、艺术风格、光影效果等
 - 所有涉及人物的生图提示词：默认使用成年中国人或东亚面孔；用户明确指定其他人种时按用户要求
