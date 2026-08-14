@@ -21,6 +21,38 @@ assert.equal(rectanglesOverlap(
 assert.notDeepEqual(second, first, 'successive toolbar nodes must not stack at the same coordinates')
 
 const template = buildH3AdGifWorkflow({ x: 400, y: 200 })
+const h3ObservedFootprints = [
+  { qaId: 'node_3', node: template.nodes[1], width: 478, height: 575 },
+  { qaId: 'node_4', node: template.nodes[2], width: 330, height: 319 },
+  { qaId: 'node_5', node: template.nodes[3], width: 400, height: 191 },
+  { qaId: 'node_6', node: template.nodes[4], width: 560, height: 800 }
+]
+const insufficientH3Gaps = []
+for (let firstIndex = 0; firstIndex < h3ObservedFootprints.length; firstIndex += 1) {
+  for (let secondIndex = firstIndex + 1; secondIndex < h3ObservedFootprints.length; secondIndex += 1) {
+    const firstNode = h3ObservedFootprints[firstIndex]
+    const secondNode = h3ObservedFootprints[secondIndex]
+    const firstBounds = {
+      left: firstNode.node.position.x,
+      top: firstNode.node.position.y,
+      right: firstNode.node.position.x + firstNode.width,
+      bottom: firstNode.node.position.y + firstNode.height
+    }
+    const secondBounds = {
+      left: secondNode.node.position.x,
+      top: secondNode.node.position.y,
+      right: secondNode.node.position.x + secondNode.width,
+      bottom: secondNode.node.position.y + secondNode.height
+    }
+    const hasMinimumGap = firstBounds.right + 48 <= secondBounds.left ||
+      secondBounds.right + 48 <= firstBounds.left ||
+      firstBounds.bottom + 48 <= secondBounds.top ||
+      secondBounds.bottom + 48 <= firstBounds.top
+    if (!hasMinimumGap) insufficientH3Gaps.push(`${firstNode.qaId}↔${secondNode.qaId}`)
+  }
+}
+assert.deepEqual(insufficientH3Gaps, [], 'H3 template nodes must preserve a 48px gap using their observed DOM footprints')
+
 const shifted = placeWorkflowWithoutOverlap(
   [{ id: 'wide-existing', type: 'dspCreativeLibrary', position: { x: 200, y: 100 } }],
   template.nodes
