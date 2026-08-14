@@ -80,6 +80,7 @@ import TaskRail from '../components/workspace/TaskRail.vue'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { STUDIO_ENTRIES } from '../config/studioEntries'
 import { listTaskCenterTasks } from '../api/taskCenter'
+import { resolveTaskDetailsTarget, withTaskCenterActions } from '../utils/taskCenter'
 
 const router = useRouter()
 const route = useRoute()
@@ -129,7 +130,7 @@ const loadTaskCenter = async () => {
   taskLoadError.value = ''
   try {
     const result = await listTaskCenterTasks({ limit: 100 })
-    recentTasks.value = result.tasks
+    recentTasks.value = result.tasks.map(withTaskCenterActions)
     if (result.sourceErrors.length) {
       const names = result.sourceErrors.map(source => taskSourceLabels[source] || source)
       taskLoadError.value = `部分分类暂时未读取：${names.join('、')}`
@@ -143,16 +144,10 @@ const openTaskCenter = () => {
   loadTaskCenter()
 }
 const openTask = task => {
-  if (task?.source === 'novel' && task.source_id) {
-    taskRailOpen.value = false
-    router.push({ path: '/video-studio', query: { tab: 'novel', job: task.source_id } })
-    return
-  }
+  const target = resolveTaskDetailsTarget(task)
+  if (!target) return
   taskRailOpen.value = false
-  if (task?.source === 'resize') router.push({ path: '/video-resize', query: { job: task.source_id } })
-  else if (task?.source === 'dsp') createFlowProject('dsp')
-  else if (task?.category === 'variation') createFlowProject('variation')
-  else router.push('/video-studio')
+  router.push(target)
 }
 const downloadTask = task => {
   if (task?.download_url) window.open(task.download_url, '_blank', 'noopener')
