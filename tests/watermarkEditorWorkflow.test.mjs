@@ -243,6 +243,10 @@ assert.match(editor, /outputJobId/)
 assert.match(editor, /outputUrl/)
 assert.match(editor, /outputMetadata/)
 assert.match(editor, /uploadGifEditorAsset/)
+assert.match(editor, /probeGifEditorMediaDuration/)
+assert.match(editor, /startAssetDownload/)
+assert.match(editor, /@click="downloadExportResult"/)
+assert.doesNotMatch(editor, /:href="exportResultUrl"\s+download/)
 assert.match(editor, /实时进度/)
 assert.match(editor, /restoreWatermarkEditorProject\(/)
 assert.match(editor, /if \(sourceChanged\) persistLinkedProject\(\)/)
@@ -265,6 +269,21 @@ globalThis.__gifEditorRequestSpy = config => {
   return Promise.resolve(config)
 }
 const gifEditorApi = await import(`data:text/javascript,${encodeURIComponent(apiSource)}#${Date.now()}`)
+const twoSecondGif = Uint8Array.from([
+  71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 0, 0, 0,
+  33, 249, 4, 0, 100, 0, 0, 0,
+  44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 0, 0,
+  33, 249, 4, 0, 100, 0, 0, 0,
+  44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 0, 0,
+  59
+])
+assert.equal(gifEditorApi.getGifDurationFromBytes(twoSecondGif), 2)
+assert.equal(await gifEditorApi.probeGifEditorMediaDuration({
+  name: 'source.gif',
+  type: 'image/gif',
+  arrayBuffer: async () => twoSecondGif.buffer
+}), 2)
+assert.equal(gifEditorApi.getGifEditorJobDuration({ results: [{ duration: 2.25 }] }), 2.25)
 await gifEditorApi.uploadGifEditorAsset('data:image/png;base64,AAAA')
 await gifEditorApi.uploadGifEditorMedia({ source_name: 'source.gif', source_base64: 'AAAA' })
 await gifEditorApi.createGifEditorJob({ source_url: reconciled.project.clips[0].url })
