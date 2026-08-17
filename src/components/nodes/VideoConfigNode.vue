@@ -407,6 +407,41 @@ const createExpandedVideoNodeViewportLifecycle = ({
   }
 }
 
+const createExpandedVideoNodeZoomLifecycle = ({
+  isExpanded,
+  afterRender,
+  requestFrame,
+  cancelFrame,
+  recalculate
+}) => {
+  let pendingFrame = null
+  let revision = 0
+
+  const cancel = () => {
+    revision += 1
+    if (pendingFrame === null) return
+    cancelFrame(pendingFrame)
+    pendingFrame = null
+  }
+  const handleZoomChange = async () => {
+    const currentRevision = ++revision
+    if (!isExpanded()) {
+      cancel()
+      return
+    }
+    await afterRender()
+    if (currentRevision !== revision || !isExpanded()) return
+    if (pendingFrame !== null) cancelFrame(pendingFrame)
+    pendingFrame = requestFrame(() => {
+      pendingFrame = null
+      if (currentRevision !== revision || !isExpanded()) return
+      recalculate()
+    })
+  }
+
+  return { handleZoomChange, cancel }
+}
+
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
 
@@ -465,6 +500,14 @@ const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   addResizeListener: handler => window.addEventListener('resize', handler),
   removeResizeListener: handler => window.removeEventListener('resize', handler)
 })
+const expandedZoomLifecycle = createExpandedVideoNodeZoomLifecycle({
+  isExpanded: () => isExpanded.value,
+  afterRender: () => nextTick(),
+  requestFrame: callback => window.requestAnimationFrame(callback),
+  cancelFrame: frameId => window.cancelAnimationFrame(frameId),
+  recalculate: () => expandedViewportLifecycle.recalculate()
+})
+watch(() => viewport.value.zoom, () => expandedZoomLifecycle.handleZoomChange())
 const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
@@ -820,7 +863,10 @@ const resolveAvailableVideoModel = () => {
 const toggleExpanded = async () => {
   isExpanded.value = !isExpanded.value
   updateNode(props.id, { expanded: isExpanded.value })
-  if (!isExpanded.value) expandedViewportLifecycle.stop()
+  if (!isExpanded.value) {
+    expandedViewportLifecycle.stop()
+    expandedZoomLifecycle.cancel()
+  }
   await nextTick()
   if (isExpanded.value) expandedViewportLifecycle.start()
   updateNodeInternals(props.id)
@@ -1314,7 +1360,10 @@ onMounted(async () => {
   }
 })
 
-onBeforeUnmount(() => expandedViewportLifecycle.stop())
+onBeforeUnmount(() => {
+  expandedViewportLifecycle.stop()
+  expandedZoomLifecycle.cancel()
+})
 
 // Watch for model changes from props | 监听 props 中模型变化
 watch(() => props.data?.model, (newModel) => {
