@@ -27,16 +27,29 @@ assert.match(videoSource, /modelStore\.allVideoModelOptions/, 'mixed-provider wo
 assert.match(videoSource, /activateModelProvider\(localModel\.value\)/, 'video generation must activate its own model provider')
 assert.match(imageSource, /activateModelProvider\(localModel\.value\)/, 'image generation must activate its own model provider')
 assert.match(videoSource, /data-testid="video-node-expand-toggle"/, 'the video node must expose a one-click expand control')
+const videoRootTag = videoSource.match(/<div ref="nodeRootRef"[^>]*>/)?.[0] || ''
+assert.match(videoRootTag, /class="[^"]*\bflex\b[^"]*"/, 'the constrained video shell must use a column layout')
+assert.match(videoRootTag, /class="[^"]*\bflex-col\b[^"]*"/, 'the constrained video shell must reserve header and content rows')
+assert.match(videoRootTag, /class="[^"]*\boverflow-hidden\b[^"]*"/, 'the outer video shell must clip instead of scrolling')
+assert.doesNotMatch(videoRootTag, /canvas-node-scroll-shell/, 'the outer video shell must not inherit the global scrolling contract')
 const videoHeaderSource = videoSource.match(
   /<div[^>]*data-testid="video-config-sticky-header"[^>]*>[\s\S]*?<\/div>\s*<\/div>/
 )?.[0] || ''
-assert.ok(videoHeaderSource, 'the video node header must expose its real sticky scroll-shell boundary')
-assert.match(videoHeaderSource, /class="[^"]*\bsticky\b[^"]*"/, 'the video node header must remain fixed while its root scroll shell moves')
-assert.match(videoHeaderSource, /class="[^"]*\btop-0\b[^"]*"/, 'the sticky video node header must stay at the shell top')
-assert.match(videoHeaderSource, /class="[^"]*\bz-\d+\b[^"]*"/, 'the sticky video node header must paint above scrolled controls')
-assert.match(videoHeaderSource, /class="[^"]*\bshrink-0\b[^"]*"/, 'the sticky video node header must keep an operable control height')
-assert.match(videoHeaderSource, /class="[^"]*bg-\[var\(--bg-secondary\)\][^"]*"/, 'the sticky video node header must have an opaque node background')
-assert.match(videoHeaderSource, /data-testid="video-node-expand-toggle"/, 'the expand/collapse toggle must remain inside the sticky header')
+assert.ok(videoHeaderSource, 'the video node header must expose its real fixed row boundary')
+assert.doesNotMatch(videoHeaderSource, /class="[^"]*\bsticky\b[^"]*"/, 'the header must occupy normal flow instead of overlaying content')
+assert.doesNotMatch(videoHeaderSource, /class="[^"]*\btop-0\b[^"]*"/, 'the normal-flow header must not use sticky positioning')
+assert.match(videoHeaderSource, /class="[^"]*\bz-\d+\b[^"]*"/, 'the fixed header row must paint above controls')
+assert.match(videoHeaderSource, /class="[^"]*\bshrink-0\b[^"]*"/, 'the fixed header row must keep an operable control height')
+assert.match(videoHeaderSource, /class="[^"]*bg-\[var\(--bg-secondary\)\][^"]*"/, 'the fixed header row must have an opaque node background')
+assert.match(videoHeaderSource, /data-testid="video-node-expand-toggle"/, 'the expand/collapse toggle must remain inside the fixed header row')
+const videoScrollContentTag = videoSource.match(/<div[^>]*data-testid="video-config-scroll-content"[^>]*>/)?.[0] || ''
+assert.match(videoScrollContentTag, /class="[^"]*\bmin-h-0\b[^"]*"/, 'the config content must be allowed to shrink below its natural height')
+assert.match(videoScrollContentTag, /class="[^"]*\bflex-1\b[^"]*"/, 'the config content must consume only the space below the header')
+assert.match(videoScrollContentTag, /class="[^"]*\boverflow-y-auto\b[^"]*"/, 'the config content must be the scrolling region')
+assert.match(videoScrollContentTag, /class="[^"]*\bnowheel\b[^"]*"/, 'scrolling config content must not zoom the canvas')
+assert.equal((videoSource.match(/\boverflow-y-auto\b/g) || []).length, 1, 'only video config content may own vertical scrolling')
+assert.match(videoSource, /<\/div>\s*<\/div>\s*<!-- Handles \| 连接点 -->\s*<div[^>]*data-testid="video-config-handle-layer"/, 'handles must live outside the clipped root and its scroll content')
+assert.match(videoSource, /data-testid="video-config-handle-layer"[^>]*class="[^"]*\boverflow-visible\b[^"]*"[\s\S]*?<Handle[^>]*\bpointer-events-auto\b[\s\S]*?<NodeHandleMenu[^>]*\bpointer-events-auto\b/, 'the non-scrolling handle layer must keep both connection controls visible and interactive')
 const expandedViewportHelpersSource = videoSource.match(
   /(const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = [\s\S]*?const createExpandedVideoNodeViewportLifecycle = [\s\S]*?\n})\n\n\/\/ 使用 Pinia/
 )?.[1] || ''
@@ -293,7 +306,8 @@ assert.match(videoSource, /ref="nodeRootRef"/, 'viewport sizing must measure the
 assert.match(videoSource, /ref="nodeHeaderRef"/, 'content-aware sizing must measure the real sticky header')
 assert.match(videoSource, /getHeaderScreenHeight:\s*\(\) => nodeHeaderRef\.value\?\.getBoundingClientRect\(\)\.height/, 'every viewport recalculation must read the sticky header screen height')
 assert.match(videoSource, /:style="expandedNodeStyle"/, 'expanded max height must be applied to the node scroll shell')
-assert.match(videoSource, /overflowY:\s*'auto'/, 'expanded video nodes must make every setting reachable by scrolling')
+assert.match(videoSource, /overflow:\s*'hidden'/, 'expanded video nodes must keep scrolling inside the config content')
+assert.doesNotMatch(videoSource, /overflowY:\s*'auto'/, 'the constrained outer shell must never become the scrolling region')
 assert.doesNotMatch(videoSource, /calc\(100vh - 96px\)/, 'fixed viewport height must not remain the sizing solution')
 assert.match(videoSource, /const toggleExpanded = \(\) => \{[\s\S]*?expandedRestoreLifecycle\.sync\(nextExpanded\)/, 'click expand and collapse must use the shared restored viewport lifecycle')
 assert.match(videoSource, /watch\(\(\) => viewport\.value\.zoom,[\s\S]*?expandedZoomLifecycle\.handleZoomChange\(\)/, 'the expanded node must react to Vue Flow zoom changes')

@@ -2,11 +2,11 @@
   <!-- Video config node wrapper | 视频配置节点包裹层 -->
   <div class="video-config-node-wrapper relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Video config node | 视频配置节点 -->
-    <div ref="nodeRootRef" class="video-config-node canvas-node-scroll-shell nowheel w-[560px] max-w-[560px] bg-[var(--bg-secondary)] rounded-xl border transition-all duration-200"
+    <div ref="nodeRootRef" class="video-config-node nowheel flex w-[560px] max-w-[560px] flex-col overflow-hidden rounded-xl border bg-[var(--bg-secondary)] transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
       :style="expandedNodeStyle">
       <!-- Header | 头部 -->
-      <div ref="nodeHeaderRef" data-testid="video-config-sticky-header" class="sticky top-0 z-20 flex shrink-0 items-center justify-between rounded-t-xl border-b border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
+      <div ref="nodeHeaderRef" data-testid="video-config-sticky-header" class="z-20 flex shrink-0 items-center justify-between rounded-t-xl border-b border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
         <span
           v-if="!isEditingLabel"
           @dblclick="startEditLabel"
@@ -50,7 +50,7 @@
       </div>
 
       <!-- Config options | 配置选项 -->
-      <div class="min-w-0 p-3 space-y-3">
+      <div data-testid="video-config-scroll-content" class="video-config-node__scroll-content nowheel min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
@@ -287,11 +287,13 @@
       </div> -->
       </div>
 
-      <!-- Handles | 连接点 -->
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" :visible="showHandleMenu" :operations="[]" />
     </div>
 
+    <!-- Handles | 连接点 -->
+    <div data-testid="video-config-handle-layer" class="pointer-events-none absolute inset-x-0 bottom-0 top-5 overflow-visible">
+      <Handle type="target" :position="Position.Left" id="left" class="pointer-events-auto !bg-[var(--accent-color)]" />
+      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" :visible="showHandleMenu" :operations="[]" class="pointer-events-auto" />
+    </div>
   </div>
 </template>
 
@@ -539,7 +541,7 @@ const expandedNodeMaxHeight = ref(getExpandedVideoNodeMaxHeight({
   zoom: viewport.value.zoom
 }))
 const expandedNodeStyle = computed(() => isExpanded.value
-  ? { maxHeight: `${expandedNodeMaxHeight.value}px`, overflowY: 'auto' }
+  ? { maxHeight: `${expandedNodeMaxHeight.value}px`, overflow: 'hidden' }
   : undefined)
 const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   getNodeTop: () => nodeRootRef.value?.getBoundingClientRect().top ?? Number.NaN,
