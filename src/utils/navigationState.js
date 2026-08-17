@@ -16,6 +16,28 @@ export const createLatestRequestGate = () => {
   }
 }
 
+export const createLatestNavigationRunner = ({ setPending = () => {} } = {}) => {
+  const requestGate = createLatestRequestGate()
+
+  return async (intent, action) => {
+    const requestToken = requestGate.begin()
+    const isCurrent = () => requestGate.isCurrent(requestToken)
+    const commit = callback => isCurrent() ? callback() : false
+    setPending(true, intent)
+    try {
+      return await action({ isCurrent, commit })
+    } finally {
+      if (isCurrent()) setPending(false, intent)
+    }
+  }
+}
+
+export const createGuardedUrlLaunchAction = ({ replace, launch }) => async ({ isCurrent, commit }) => {
+  await replace()
+  if (!isCurrent()) return false
+  return commit(launch)
+}
+
 const STUDIO_TABS = new Set(['quick', 'novel', 'assets'])
 
 export const normalizeStudioTab = value => {
