@@ -308,7 +308,7 @@ import { useVideoGeneration } from '../../hooks'
 import { importImageAsset, publishImageAsset } from '../../api/image'
 import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
 import { createMediaComposition } from '../../api/mediaComposition'
-import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
+import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges, scheduleCanvasSave } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import VideoOutputSizePicker from '../VideoOutputSizePicker.vue'
 import H3DirectorPromptEditor from '../video/H3DirectorPromptEditor.vue'
@@ -333,17 +333,39 @@ import {
 } from '../../utils/generatedImageHandoff'
 
 const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = 24
-const getExpandedVideoNodeMaxHeight = ({ nodeTop, viewportHeight, bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP } = {}) => {
-  const safeNodeTop = Number.isFinite(Number(nodeTop)) ? Math.max(0, Number(nodeTop)) : 0
+const VIDEO_NODE_MIN_EXPANDED_HEIGHT = 160
+const getExpandedVideoNodeViewportLayout = ({
+  nodeTop,
+  viewportHeight,
+  bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP,
+  minimumHeight = VIDEO_NODE_MIN_EXPANDED_HEIGHT
+} = {}) => {
+  const safeNodeTop = Number.isFinite(Number(nodeTop)) ? Number(nodeTop) : 0
   const safeViewportHeight = Number.isFinite(Number(viewportHeight)) ? Math.max(0, Number(viewportHeight)) : 0
   const safeBottomGap = Number.isFinite(Number(bottomGap)) ? Math.max(0, Number(bottomGap)) : VIDEO_NODE_VIEWPORT_BOTTOM_GAP
-  return Math.max(0, Math.floor(safeViewportHeight - safeNodeTop - safeBottomGap))
+  const viewportContentHeight = Math.max(0, safeViewportHeight - safeBottomGap)
+  const safeMinimumHeight = Number.isFinite(Number(minimumHeight)) ? Math.max(0, Number(minimumHeight)) : VIDEO_NODE_MIN_EXPANDED_HEIGHT
+  const operableMinimumHeight = Math.min(safeMinimumHeight, viewportContentHeight)
+  const availableHeight = Math.max(0, viewportContentHeight - Math.max(0, safeNodeTop))
+  const maxHeight = Math.min(viewportContentHeight, Math.max(operableMinimumHeight, availableHeight))
+  const resolvedNodeTop = Math.min(safeNodeTop, viewportContentHeight - maxHeight)
+  return {
+    maxHeight: Math.floor(maxHeight),
+    screenOffsetY: Math.floor(Math.min(0, resolvedNodeTop - safeNodeTop)),
+    resolvedNodeTop: Math.floor(resolvedNodeTop),
+    viewportBottom: Math.floor(resolvedNodeTop + maxHeight)
+  }
+}
+
+const getExpandedVideoNodeMaxHeight = ({ nodeTop, viewportHeight, bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP } = {}) => {
+  return getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight, bottomGap }).maxHeight
 }
 
 const createExpandedVideoNodeViewportLifecycle = ({
   getNodeTop,
   getViewportHeight,
   setMaxHeight,
+  moveNodeByScreenOffset = () => {},
   addResizeListener,
   removeResizeListener
 }) => {
@@ -352,9 +374,10 @@ const createExpandedVideoNodeViewportLifecycle = ({
     const nodeTop = getNodeTop()
     const viewportHeight = getViewportHeight()
     if (!Number.isFinite(Number(nodeTop)) || !Number.isFinite(Number(viewportHeight))) return null
-    const maxHeight = getExpandedVideoNodeMaxHeight({ nodeTop, viewportHeight })
-    setMaxHeight(maxHeight)
-    return maxHeight
+    const layout = getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight })
+    setMaxHeight(layout.maxHeight)
+    if (layout.screenOffsetY < 0) moveNodeByScreenOffset(layout.screenOffsetY)
+    return layout
   }
   const handleResize = () => recalculate()
 
@@ -383,7 +406,7 @@ const props = defineProps({
 })
 
 // Vue Flow instance | Vue Flow 实例
-const { updateNodeInternals } = useVueFlow()
+const { findNode, updateNodeInternals, updateNodePositions, viewport } = useVueFlow()
 
 // API config state | API 配置状态
 const isConfigured = computed(() => modelStore.isCurrentProviderConfigured)
@@ -409,6 +432,24 @@ const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
     if (expandedNodeMaxHeight.value === value) return
     expandedNodeMaxHeight.value = value
     nextTick(() => updateNodeInternals(props.id))
+  },
+  moveNodeByScreenOffset: screenOffsetY => {
+    const node = findNode(props.id)
+    if (!node) return
+    const zoom = Math.max(0.1, Number(viewport.value.zoom) || 1)
+    const position = {
+      x: node.computedPosition.x,
+      y: node.computedPosition.y + screenOffsetY / zoom
+    }
+    updateNodePositions([{
+      id: node.id,
+      position,
+      from: node.position,
+      distance: { x: 0, y: screenOffsetY / zoom },
+      dimensions: node.dimensions,
+      parentNode: node.parentNode
+    }], true, false)
+    scheduleCanvasSave()
   },
   addResizeListener: handler => window.addEventListener('resize', handler),
   removeResizeListener: handler => window.removeEventListener('resize', handler)
