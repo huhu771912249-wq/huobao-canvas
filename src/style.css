@@ -129,3 +129,38 @@ body {
   background-color: var(--accent-color) !important;
   border: 2px solid var(--bg-secondary);
 }
+
+/* Keep the dot compact while giving mouse and trackpad users a forgiving target. */
+.canvas-flow .vue-flow__handle {
+  width: 14px;
+  height: 14px;
+  touch-action: none;
+  box-shadow: 0 0 0 1px rgba(101, 230, 189, 0.18);
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+}
+
+.canvas-flow .vue-flow__handle::after {
+  position: absolute;
+  content: '';
+  inset: -10px;
+  border-radius: 999px;
+}
+
+.canvas-flow .vue-flow__handle:hover,
+.canvas-flow .vue-flow__handle.connecting,
+.canvas-flow .vue-flow__handle.vue-flow__handle-connecting {
+  border-color: #dffdf4;
+  box-shadow: 0 0 0 7px rgba(101, 230, 189, 0.16), 0 0 18px rgba(101, 230, 189, 0.5);
+}
+
+.canvas-flow .vue-flow__handle.vue-flow__handle-valid {
+  background-color: #65e6bd !important;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 10px rgba(101, 230, 189, 0.22), 0 0 24px rgba(101, 230, 189, 0.72);
+}
+
+.canvas-flow .vue-flow__connection-path {
+  stroke: #65e6bd;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 5px rgba(101, 230, 189, 0.65));
+}

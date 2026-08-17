@@ -32,6 +32,7 @@ assert.match(videoSource, /updateNodeInternals\(props\.id\)/, 'the video node mu
 assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must not widen the video node')
 assert.match(h3DirectorSource, /overflow-wrap:anywhere/, 'compiled H3 prompts must wrap long tokens inside the node')
 const canvasSource = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
+const globalStyleSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8')
 const collapsedDockCss = canvasSource.match(/\.canvas-prompt-dock--collapsed\s*\{[\s\S]*?\}/)?.[0] || ''
 assert.match(collapsedDockCss, /max-width:\s*180px/, 'collapsed H3 director must stay compact')
 assert.match(collapsedDockCss, /left:\s*180px/, 'collapsed H3 director must leave the center connection area clear')
@@ -40,5 +41,12 @@ assert.match(imageSource, /data-testid="image-config-drag-handle"/, 'the image n
 assert.match(imageSource, /class="image-config-node__controls nodrag/, 'interactive controls must not start a node drag')
 assert.match(imageSource, /Handle type="target"[^>]+width: 12px; height: 12px;/, 'the image input handle must be easy to grab')
 assert.match(imageSource, /NodeHandleMenu[^>]+nodeType="imageConfig"/, 'the image node must keep its draggable output handle')
+assert.match(canvasSource, /:connection-radius="44"/, 'connections must snap before the pointer reaches a tiny handle')
+assert.match(canvasSource, /:connect-on-click="true"/, 'users must be able to connect by clicking two handles')
+assert.match(canvasSource, /:auto-pan-on-connect="true"/, 'long connections must keep panning at the canvas edge')
+assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__handle::after\s*\{[\s\S]*?inset:\s*-10px/, 'handles must expose a forgiving pointer hit area')
+assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__handle\.connecting/, 'click-to-connect must visibly mark the selected start handle')
+assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__handle\.vue-flow__handle-valid/, 'valid connection targets must be visually highlighted')
+assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__connection-path/, 'the active connection line must stay visible while dragging')
 
 console.log('canvasNativeSelectors.test.mjs passed')
