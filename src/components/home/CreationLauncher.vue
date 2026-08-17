@@ -73,8 +73,14 @@
         </button>
       </div>
       <div class="intent-steps"><small>将执行步骤</small><ol><li v-for="step in intentPreview.steps" :key="step">{{ step }}</li></ol></div>
-      <button type="button" class="intent-confirmation__confirm" :aria-busy="busy" @click="$emit('confirm-intent')">
-        {{ busy ? '正在准备最新去向…' : '确认并继续' }}
+      <button
+        type="button"
+        class="intent-confirmation__confirm"
+        :aria-busy="busy && !intentConfirmationUnavailable"
+        :disabled="intentConfirmationUnavailable"
+        @click="confirmIntent"
+      >
+        {{ intentConfirmationUnavailable ? '请更换需求或移除附件' : busy ? '正在准备最新去向…' : '确认并继续' }}
       </button>
     </section>
 
@@ -112,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { NIcon } from 'naive-ui'
 import {
   ArrowForwardOutline,
@@ -124,7 +130,7 @@ import {
 } from '@vicons/ionicons5'
 import { createHomeIntentAttachmentState } from '../../utils/homeIntent.js'
 
-defineProps({
+const props = defineProps({
   suggestions: {
     type: Array,
     default: () => []
@@ -158,6 +164,16 @@ const attachmentInput = ref(null)
 const attachmentSelection = ref(null)
 const attachmentError = ref('')
 const dragActive = ref(false)
+const intentConfirmationUnavailable = computed(() => {
+  const selectedDestination = props.intentPreview?.selectedDestination
+  if (!selectedDestination || selectedDestination === 'unavailable') return true
+  const destination = props.intentPreview?.destinations?.[selectedDestination]
+  return !destination || destination.disabled === true
+})
+const confirmIntent = () => {
+  if (intentConfirmationUnavailable.value) return
+  emit('confirm-intent')
+}
 const attachmentState = createHomeIntentAttachmentState({
   onChange: ({ attachment, error }) => {
     attachmentSelection.value = attachment
