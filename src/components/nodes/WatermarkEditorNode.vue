@@ -17,7 +17,7 @@
           <img v-if="sourceUrl && sourceIsImage" :src="sourceUrl" class="h-36 w-full object-contain" alt="待编辑素材" />
           <video v-else-if="sourceUrl" :src="sourceUrl" muted class="h-36 w-full object-contain" />
           <div v-else class="grid h-28 place-items-center px-5 text-center text-xs text-[var(--text-secondary)]">连接图片、视频或 GIF 成品</div>
-          <div v-if="sourceNode" class="truncate border-t border-white/10 px-3 py-2 text-[10px] text-emerald-300">已连接：{{ sourceNode.data?.label || '上游素材' }}</div>
+          <div v-if="sourceNode" class="truncate border-t border-white/10 px-3 py-2 text-[10px] text-emerald-300">{{ compositionReady ? '已生成水印 GIF' : `已连接：${sourceNode.data?.label || '上游素材'}` }}</div>
         </div>
 
         <div class="grid grid-cols-2 gap-2 text-xs">
@@ -32,7 +32,8 @@
           <b class="text-cyan-300">已保存 {{ savedWatermarkCount }} 个水印</b>
         </div>
         <a :href="editorHref" class="block w-full rounded-lg bg-cyan-400 px-3 py-2.5 text-center text-sm font-semibold text-slate-950">进入详情编辑</a>
-        <p class="rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-[10px] leading-5 text-amber-200">当前节点只保存水印和时间轴编辑工程，水印尚未实际合成到素材；进入详情页可以继续调整。</p>
+        <p v-if="compositionReady" class="rounded-lg border border-emerald-400/25 bg-emerald-400/5 px-3 py-2 text-[10px] leading-5 text-emerald-200">真实水印 GIF 已合成，右侧节点会收到成品地址。</p>
+        <p v-else class="rounded-lg border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-[10px] leading-5 text-amber-200">{{ isCompositionWorking ? '水印 GIF 正在后端合成，可进入详情页查看实时进度。' : '进入详情页添加水印并真实导出 GIF。' }}</p>
       </div>
 
       <Handle type="target" :position="Position.Left" id="left" class="!bg-cyan-400" />
@@ -63,7 +64,7 @@ const props = defineProps({ id: String, data: Object })
 const router = useRouter()
 const showHandleMenu = ref(false)
 const initialProject = props.data?.editorProject || createDefaultWatermarkEditorProject()
-const watermarkId = ref(props.data?.quickSettings?.watermarkId || initialProject.quickSettings?.watermarkId || 'image-1')
+const watermarkId = ref(props.data?.quickSettings?.watermarkId || initialProject.quickSettings?.watermarkId || '')
 const position = ref(props.data?.quickSettings?.position || initialProject.quickSettings?.position || 'top-right')
 const size = ref(Number(props.data?.quickSettings?.size || initialProject.quickSettings?.size || 22))
 const opacity = ref(Number(props.data?.quickSettings?.opacity || initialProject.quickSettings?.opacity || 92))
@@ -74,16 +75,20 @@ const incomingNodes = computed(() => edges.value
   .map(edge => nodes.value.find(node => node.id === edge.source))
   .filter(Boolean))
 const sourceNode = computed(() => incomingNodes.value.find(node => ['image', 'video', 'videoGif', 'textOverlay', 'materialInput', 'materialExport'].includes(node.type) && mediaUrlOf(node)))
-const sourceUrl = computed(() => mediaUrlOf(sourceNode.value) || props.data?.sourceUrl || '')
-const sourceMime = computed(() => sourceNode.value?.data?.mime || props.data?.sourceMime || '')
+const upstreamSourceUrl = computed(() => mediaUrlOf(sourceNode.value) || props.data?.sourceUrl || '')
+const upstreamSourceMime = computed(() => sourceNode.value?.data?.mime || props.data?.sourceMime || '')
+const compositionReady = computed(() => props.data?.compositionReady === true && Boolean(props.data?.outputUrl))
+const isCompositionWorking = computed(() => ['queued', 'importing', 'probing', 'framing', 'composing', 'encoding', 'running'].includes(String(props.data?.editorStatus || '')))
+const sourceUrl = computed(() => compositionReady.value ? props.data.outputUrl : upstreamSourceUrl.value)
+const sourceMime = computed(() => compositionReady.value ? 'image/gif' : upstreamSourceMime.value)
 const sourceIsImage = computed(() => sourceNode.value?.type === 'image'
   || sourceMime.value.startsWith('image/')
   || /\.(?:png|jpe?g|webp|gif)(?:$|\?)/i.test(sourceUrl.value))
 const watermarkOptions = computed(() => {
   const saved = props.data?.editorProject?.watermarkLibrary || initialProject.watermarkLibrary || []
-  return saved.length ? saved : [{ id: 'image-1', name: '品牌 Logo.png' }]
+  return saved.length ? saved : [{ id: '', name: '请在详情页上传水印' }]
 })
-const savedWatermarkCount = computed(() => watermarkOptions.value.length)
+const savedWatermarkCount = computed(() => (props.data?.editorProject?.watermarkLibrary || initialProject.watermarkLibrary || []).length)
 const editorRoute = computed(() => {
   const query = { node: props.id, from: 'canvas' }
   if (currentProjectId.value) query.project = currentProjectId.value
@@ -91,18 +96,92 @@ const editorRoute = computed(() => {
 })
 const editorHref = computed(() => router.resolve(editorRoute.value).href)
 
-const quickSettings = () => ({ watermarkId: watermarkId.value, position: position.value, size: size.value, opacity: opacity.value })
-watch([watermarkId, position, size, opacity, sourceUrl, sourceMime], () => updateNode(props.id, {
-  quickSettings: quickSettings(),
-  sourceUrl: sourceUrl.value,
-  sourceMime: sourceMime.value,
-  sourceLabel: sourceNode.value?.data?.label || props.data?.sourceLabel || '',
-  url: sourceUrl.value,
-  gifUrl: sourceMime.value === 'image/gif' || /\.gif(?:$|\?)/i.test(sourceUrl.value) ? sourceUrl.value : '',
-  mime: sourceMime.value || (/\.gif(?:$|\?)/i.test(sourceUrl.value) ? 'image/gif' : ''),
-  compositionReady: false,
-  updatedAt: Date.now()
-}), { immediate: true })
+const resolveWatermarkNodeSync = ({ data = {}, current = {}, previous = null } = {}) => {
+  const currentQuickSettings = current.quickSettings || data.quickSettings || {}
+  const settingsChanged = Boolean(previous) && ['watermarkId', 'position', 'size', 'opacity'].some(
+    key => currentQuickSettings[key] !== previous.quickSettings?.[key]
+  )
+  const sourceUrl = String(current.sourceUrl || data.sourceUrl || '')
+  const sourceMime = String(current.sourceMime || data.sourceMime || '')
+  const sourceLabel = String(current.sourceLabel || data.sourceLabel || '')
+  const previousSourceUrl = String(previous?.sourceUrl || '')
+  const storedSourceUrl = String(data.editorProject?.clips?.[0]?.url || '')
+  const sourceReplaced = Boolean(previousSourceUrl && sourceUrl && previousSourceUrl !== sourceUrl)
+  const storedSourceMismatch = Boolean(storedSourceUrl && sourceUrl && storedSourceUrl !== sourceUrl)
+  const shouldInvalidate = settingsChanged || sourceReplaced || storedSourceMismatch
+  const emptyResult = { jobId: '', status: '', progress: 0, outputUrl: '', error: '', metadata: {} }
+
+  if (shouldInvalidate) {
+    return {
+      quickSettings: currentQuickSettings,
+      sourceUrl,
+      sourceMime,
+      sourceLabel,
+      ...(data.editorProject
+        ? { editorProject: { ...data.editorProject, result: emptyResult } }
+        : {}),
+      outputUrl: '',
+      outputJobId: '',
+      outputMetadata: {},
+      url: '',
+      gifUrl: '',
+      compositionReady: false,
+      editorStatus: 'draft',
+      mime: sourceMime
+    }
+  }
+
+  const storedResult = data.editorProject?.result || {}
+  const recoverableResult = Boolean(
+    storedSourceUrl
+    && sourceUrl
+    && storedSourceUrl === sourceUrl
+    && storedResult.status === 'completed'
+    && storedResult.jobId
+    && storedResult.outputUrl
+  )
+  const outputUrl = String(data.outputUrl || (recoverableResult ? storedResult.outputUrl : '') || '')
+  const outputJobId = String(data.outputJobId || (recoverableResult ? storedResult.jobId : '') || '')
+  const compositionReady = Boolean(
+    outputUrl
+    && outputJobId
+    && (data.compositionReady === true || recoverableResult)
+  )
+  return {
+    quickSettings: currentQuickSettings,
+    sourceUrl,
+    sourceMime,
+    sourceLabel,
+    outputUrl,
+    outputJobId,
+    outputMetadata: data.outputMetadata || (recoverableResult ? storedResult.metadata || {} : {}),
+    url: compositionReady ? outputUrl : '',
+    gifUrl: compositionReady ? outputUrl : '',
+    compositionReady,
+    editorStatus: compositionReady ? 'completed' : data.editorStatus || 'draft',
+    mime: compositionReady ? 'image/gif' : sourceMime
+  }
+}
+
+watch([watermarkId, position, size, opacity, upstreamSourceUrl, upstreamSourceMime], (values, previousValues) => {
+  const current = {
+    quickSettings: { watermarkId: values[0], position: values[1], size: values[2], opacity: values[3] },
+    sourceUrl: values[4],
+    sourceMime: values[5],
+    sourceLabel: sourceNode.value?.data?.label || props.data?.sourceLabel || ''
+  }
+  const previous = previousValues?.length === values.length
+    ? {
+        quickSettings: { watermarkId: previousValues[0], position: previousValues[1], size: previousValues[2], opacity: previousValues[3] },
+        sourceUrl: previousValues[4],
+        sourceMime: previousValues[5]
+      }
+    : null
+  updateNode(props.id, {
+    ...resolveWatermarkNodeSync({ data: props.data, current, previous }),
+    updatedAt: Date.now()
+  })
+}, { immediate: true })
 
 </script>
 

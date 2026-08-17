@@ -63,14 +63,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { RESIZE_PRESETS, normalizeResizeTargets, validateSocialVideoUrl } from '../utils/videoResize'
 import { cancelVideoResizeJob, createVideoResizeJob, getVideoResizeJob, handoffVideoResizeJob, retryVideoResizeJob, saveVideoResizeJob } from '../api/videoResize'
 import { createProject } from '../stores/projects'
 import ComputeStatusIndicator from '../components/ComputeStatusIndicator.vue'
 
-const router = useRouter(); const sourceMode = ref('url'); const sourceUrl = ref(''); const file = ref(null); const fileInput = ref(null); const dragActive = ref(false); const fitMode = ref('contain'); const forceAi = ref(false); const overlayText = ref(''); const targets = ref(['720x1280','1080x1920','1080x1080','1280x720','1920x1080']); const outputs = ref(['mp4']); const customWidth = ref(1080); const customHeight = ref(1350); const error = ref(''); const job = ref(null); const submitting = ref(false); let pollTimer = 0
+const router = useRouter(); const route = useRoute(); const sourceMode = ref('url'); const sourceUrl = ref(''); const file = ref(null); const fileInput = ref(null); const dragActive = ref(false); const fitMode = ref('contain'); const forceAi = ref(false); const overlayText = ref(''); const targets = ref(['720x1280','1080x1920','1080x1080','1280x720','1920x1080']); const outputs = ref(['mp4']); const customWidth = ref(1080); const customHeight = ref(1350); const error = ref(''); const job = ref(null); const submitting = ref(false); let pollTimer = 0
 const presetLabels = {'720x1280':'FB/IG 竖版','1080x1920':'Reels / Stories','1080x1080':'社媒方图','1280x720':'常用横版','1920x1080':'Full HD 横版'}
 const presets = RESIZE_PRESETS.map(value=>({value,label:presetLabels[value]})); const fitModes = [{key:'contain',title:'完整保留＋黑色留边',desc:'画面完整保留，空白区域使用黑色填充'},{key:'blur',title:'完整保留＋模糊背景',desc:'画面不裁切，空白区域使用模糊背景'},{key:'center',title:'居中裁剪',desc:'固定中心构图，适合主体居中的素材'}]
 const terminal = computed(() => ['completed','failed','cancelled'].includes(job.value?.status))
@@ -94,6 +94,7 @@ const cancel=async()=>{job.value=await cancelVideoResizeJob(job.value.job_id)}
 const retry=async()=>{job.value=await retryVideoResizeJob(job.value.job_id);poll()}
 const save=async()=>{const result=await saveVideoResizeJob(job.value.job_id);window.$message?.success(result.saved?'已保存到冠希素材库':'没有可保存的成品')}
 const handoff=async()=>{const result=await handoffVideoResizeJob(job.value.job_id);const nodes=(result.canvas_payload?.results||[]).map((item,index)=>({id:`video-${index}`,type:'video',position:{x:80+index*40,y:80+index*40},data:{url:item.mp4_url,label:`${item.actual_width}×${item.actual_height}`}}));const id=createProject('视频尺寸成品',{canvasData:{nodes,edges:[],viewport:{x:80,y:50,zoom:.8}}});router.push(`/canvas/${id}`)}
+onMounted(async () => { const requestedJobId=String(route.query.job||'').trim(); if(!requestedJobId)return; try{job.value=await getVideoResizeJob(requestedJobId);if(!terminal.value)poll()}catch(e){error.value=e?.response?.data?.error?.message||e.message||'任务读取失败'} })
 onBeforeUnmount(()=>window.clearTimeout(pollTimer))
 </script>
 

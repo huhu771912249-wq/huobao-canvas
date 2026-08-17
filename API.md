@@ -34,6 +34,7 @@
 | `/v1/media/text-overlays` | 视频文字叠加 |
 | `/v1/material/variations` | 素材再创作 |
 | `/v1/video-resize/jobs` | 多尺寸视频任务 |
+| `/v1/media/gif-watermarks` | 视频/GIF 的真实静态文字、可选图片水印与 GIF 导出任务 |
 | `/v1/test-assets/generate` | 精确尺寸生成 PNG、JPG、GIF、MP4 测试素材和批量 ZIP |
 | `/v1/studio/documents/parse` | 文档/小说解析 |
 | `/v1/studio/storyboards` | 故事板生成 |
@@ -50,6 +51,13 @@ WAI v17 已从前端移除，旧画板打开时回落到 Z-Image。Z-Image Base 
 未安装时必须显示真实失败，不静默切换模型。画板中的“视频转 GIF”
 节点可连接 H3 视频成品并选择尺寸、适配方式、帧率与颜色数；输出的 GIF
 可再连接“文字叠加”和“素材导出”节点。这些节点都是独立积木，不固定连线顺序。
+
+GIF 详细编辑页调用 `POST /v1/media/gif-watermarks`。图片水印为可选项，
+`text_tracks` 最多 8 条；每条静态文字包含内容、起止秒、中心锚点位置、字号、
+颜色、描边、背景与对齐。图片水印和文字轨道至少存在一项。当前不提交弹入、淡入、
+上滑、渐变或字体上传等未被后端真实合成的效果。提交成功后继续使用
+`GET /v1/video-resize/jobs/{id}` 轮询，成品元数据中的 `text_tracks_applied`
+用于确认实际应用的文字轨道数量。
 
 ## 异步任务状态
 

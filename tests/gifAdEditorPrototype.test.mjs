@@ -33,7 +33,7 @@ for (const contract of [
   '转场',
   '圆角',
   '导出 GIF',
-  '当前为交互原型'
+  '开始真实导出'
 ]) {
   assert.match(view, new RegExp(contract))
 }

@@ -378,6 +378,7 @@ import {
   buildCanvasStarterActions,
   resolvePromptDockExpanded
 } from '../utils/workspaceUi'
+import { findOpenNodePosition, placeWorkflowWithoutOverlap } from '../utils/canvasLayout.js'
 
 // API Settings component | API 设置组件
 import ApiSettings from '../components/ApiSettings.vue'
@@ -619,9 +620,10 @@ const addNewNode = async (type, data = {}) => {
   const viewportCenterY = -viewport.value.y / viewport.value.zoom + (window.innerHeight / 2) / viewport.value.zoom
   
   // Add node at viewport center | 在视口中心添加节点
+  const preferredPosition = { x: viewportCenterX - 100, y: viewportCenterY - 100 }
   const nodeId = addNode(
     type,
-    { x: viewportCenterX - 100, y: viewportCenterY - 100 },
+    findOpenNodePosition(nodes.value, preferredPosition, type),
     data
   )
   
@@ -675,7 +677,8 @@ const handleAddWorkflow = ({ workflow, options }) => {
 
   // Create nodes from workflow template | 从工作流模板创建节点
   const startPosition = { x: viewportCenterX - 300, y: viewportCenterY - 200 }
-  const { nodes: newNodes, edges: newEdges } = workflow.createNodes(startPosition, options)
+  const { nodes: createdNodes, edges: newEdges } = workflow.createNodes(startPosition, options)
+  const newNodes = placeWorkflowWithoutOverlap(nodes.value, createdNodes)
 
   // Start batch operation manually | 手动开始批量操作
   startBatchOperation()
@@ -1319,7 +1322,11 @@ onUnmounted(() => {
 }
 
 .canvas-prompt-dock--collapsed {
-  max-width: 250px !important;
+  right: auto !important;
+  left: 180px !important;
+  max-width: 180px !important;
+  padding: 0 !important;
+  transform: none !important;
 }
 
 .canvas-prompt-dock--director {
@@ -1385,6 +1392,10 @@ onUnmounted(() => {
 .canvas-prompt-dock__launcher small {
   color: rgba(194, 205, 224, 0.62);
   font-size: 10px;
+}
+
+.canvas-prompt-dock--collapsed .canvas-prompt-dock__launcher small {
+  display: none;
 }
 
 .canvas-prompt-dock__header {

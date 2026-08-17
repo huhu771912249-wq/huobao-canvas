@@ -39,6 +39,7 @@ import { useRouter } from 'vue-router'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import TaskRail from '../components/workspace/TaskRail.vue'
 import { listTaskCenterTasks } from '../api/taskCenter.js'
+import { resolveTaskDetailsTarget, withTaskCenterActions } from '../utils/taskCenter.js'
 
 const router = useRouter()
 const serviceStatus = { label: '服务已连接', tone: 'success' }
@@ -58,7 +59,7 @@ const loadTasks = async () => {
   taskLoadError.value = ''
   try {
     const result = await listTaskCenterTasks({ limit: 100 })
-    tasks.value = result.tasks
+    tasks.value = result.tasks.map(withTaskCenterActions)
     if (result.sourceErrors.length) {
       const names = result.sourceErrors.map(source => taskSourceLabels[source] || source)
       taskLoadError.value = `部分分类暂时未读取：${names.join('、')}`
@@ -71,14 +72,8 @@ const loadTasks = async () => {
 }
 
 const openTask = task => {
-  if (task?.source === 'novel' && task.source_id) {
-    router.push({ path: '/video-studio', query: { tab: 'novel', job: task.source_id } })
-    return
-  }
-  if (task?.source === 'resize') router.push('/video-resize')
-  else if (task?.source === 'dsp') router.push('/canvas/new?flow=dsp')
-  else if (task?.category === 'variation') router.push('/canvas/new?flow=variation')
-  else router.push('/video-studio')
+  const target = resolveTaskDetailsTarget(task)
+  if (target) router.push(target)
 }
 
 const downloadTask = task => {

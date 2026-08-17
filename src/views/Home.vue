@@ -20,7 +20,11 @@
         @submit="handlePromptSubmit"
         @refresh-suggestions="refreshSuggestions"
       />
+      <section v-if="projectsLoading" id="projects" class="mx-auto max-w-[1180px] px-7 py-12" role="status" aria-live="polite">
+        <div class="workspace-panel grid min-h-[240px] place-content-center rounded-[22px] text-center text-[var(--text-secondary)]">正在读取最近项目…</div>
+      </section>
       <RecentProjects
+        v-else
         :busy="navigationPending"
         :projects="projects"
         :format-date="formatDate"
@@ -76,6 +80,7 @@ import TaskRail from '../components/workspace/TaskRail.vue'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { STUDIO_ENTRIES } from '../config/studioEntries'
 import { listTaskCenterTasks } from '../api/taskCenter'
+import { resolveTaskDetailsTarget, withTaskCenterActions } from '../utils/taskCenter'
 
 const router = useRouter()
 const route = useRoute()
@@ -83,6 +88,7 @@ const dialog = useDialog()
 const modelStore = useModelStore()
 const studioEntries = STUDIO_ENTRIES
 const navigationPending = ref(false)
+const projectsLoading = ref(true)
 const runNavigation = async action => {
   if (navigationPending.value) return false
   navigationPending.value = true
@@ -124,7 +130,7 @@ const loadTaskCenter = async () => {
   taskLoadError.value = ''
   try {
     const result = await listTaskCenterTasks({ limit: 100 })
-    recentTasks.value = result.tasks
+    recentTasks.value = result.tasks.map(withTaskCenterActions)
     if (result.sourceErrors.length) {
       const names = result.sourceErrors.map(source => taskSourceLabels[source] || source)
       taskLoadError.value = `部分分类暂时未读取：${names.join('、')}`
@@ -138,16 +144,10 @@ const openTaskCenter = () => {
   loadTaskCenter()
 }
 const openTask = task => {
-  if (task?.source === 'novel' && task.source_id) {
-    taskRailOpen.value = false
-    router.push({ path: '/video-studio', query: { tab: 'novel', job: task.source_id } })
-    return
-  }
+  const target = resolveTaskDetailsTarget(task)
+  if (!target) return
   taskRailOpen.value = false
-  if (task?.source === 'resize') router.push('/video-resize')
-  else if (task?.source === 'dsp') createFlowProject('dsp')
-  else if (task?.category === 'variation') createFlowProject('variation')
-  else router.push('/video-studio')
+  router.push(target)
 }
 const downloadTask = task => {
   if (task?.download_url) window.open(task.download_url, '_blank', 'noopener')
@@ -377,6 +377,7 @@ const confirmRename = () => {
 
 onMounted(async () => {
   await initProjectsStore()
+  projectsLoading.value = false
   loadTaskCenter()
   const launch = String(route.query.launch || '')
   const panel = String(route.query.panel || '')
