@@ -26,7 +26,6 @@ assert.match(styles, /\.canvas-node-scroll-shell\s*\{[^}]*max-height:\s*calc\(10
 
 for (const component of [
   'ImageConfigNode.vue',
-  'VideoConfigNode.vue',
   'LLMConfigNode.vue',
   'TextOverlayNode.vue',
   'MaterialInputNode.vue',
@@ -36,5 +35,14 @@ for (const component of [
 ]) {
   assert.match(read(`../src/components/nodes/${component}`), /canvas-node-scroll-shell/)
 }
+
+const videoConfig = read('../src/components/nodes/VideoConfigNode.vue')
+const videoRootTag = videoConfig.match(/<div ref="nodeRootRef"[^>]*>/)?.[0] || ''
+const videoScrollContentTag = videoConfig.match(/<div[^>]*data-testid="video-config-scroll-content"[^>]*>/)?.[0] || ''
+assert.match(videoRootTag, /class="[^"]*\bvideo-config-node\b[^"]*"/, 'H3 must expose its visible root shell')
+assert.doesNotMatch(videoRootTag, /\bnodrag\b/, 'H3 root shell must remain draggable')
+assert.doesNotMatch(videoRootTag, /overflow-y-auto|canvas-node-scroll-shell/, 'H3 root shell must not own internal scrolling')
+assert.match(videoScrollContentTag, /class="[^"]*\bnowheel\b[^"]*\boverflow-y-auto\b[^"]*"/, 'only H3 config content should scroll without zooming the canvas')
+assert.equal((videoConfig.match(/\boverflow-y-auto\b/g) || []).length, 1, 'H3 must expose exactly one internal vertical scroll region')
 
 console.log('globalPageScroll.test.mjs passed')
