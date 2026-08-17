@@ -130,12 +130,12 @@
           <H3DirectorPromptEditor
             :references="activeH3References"
             :source-prompt="connectedPrompt"
+            :director-plan="directorPlan"
             :aspect-ratio="localRatio"
             :duration-seconds="localDuration"
             :output-width="outputWidth"
             :output-height="outputHeight"
-            @update:prompt="compiledDirectorPrompt = $event"
-            @update:plan="directorPlan = $event"
+            @update:state="handleDirectorStateUpdate"
           />
         </template>
 
@@ -442,6 +442,28 @@ const createExpandedVideoNodeZoomLifecycle = ({
   return { handleZoomChange, cancel }
 }
 
+const normalizeH3DirectorNodeState = value => ({
+  directorPlan: value?.directorPlan && typeof value.directorPlan === 'object' && !Array.isArray(value.directorPlan)
+    ? value.directorPlan
+    : null,
+  compiledDirectorPrompt: String(value?.compiledDirectorPrompt || '')
+})
+
+const createH3DirectorNodeStateController = ({ setLocalState, persistState }) => {
+  const restore = value => {
+    const state = normalizeH3DirectorNodeState(value)
+    setLocalState(state)
+    return state
+  }
+  const handleEditorState = value => {
+    const state = normalizeH3DirectorNodeState(value)
+    setLocalState(state)
+    persistState(state)
+    return state
+  }
+  return { restore, handleEditorState }
+}
+
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
 
@@ -536,6 +558,14 @@ const compositionError = ref('')
 const compiledDirectorPrompt = ref(props.data?.compiledDirectorPrompt || '')
 const directorPlan = ref(props.data?.directorPlan || null)
 const confirmedMultiViewReference = ref(props.data?.confirmedMultiViewReference || null)
+const directorStateController = createH3DirectorNodeStateController({
+  setLocalState: state => {
+    directorPlan.value = state.directorPlan
+    compiledDirectorPrompt.value = state.compiledDirectorPrompt
+  },
+  persistState: state => updateNode(props.id, state)
+})
+const handleDirectorStateUpdate = state => directorStateController.handleEditorState(state)
 
 const handleMultiViewConfirmed = (reference) => {
   confirmedMultiViewReference.value = reference
@@ -1371,6 +1401,17 @@ watch(() => props.data?.model, (newModel) => {
     localModel.value = newModel
   }
 })
+
+watch(
+  () => [props.data?.directorPlan, props.data?.compiledDirectorPrompt],
+  ([nextDirectorPlan, nextCompiledPrompt]) => {
+    directorStateController.restore({
+      directorPlan: nextDirectorPlan,
+      compiledDirectorPrompt: nextCompiledPrompt
+    })
+  },
+  { deep: true }
+)
 
 // 修复 Vue Flow visibility: hidden 问题
 // 当节点数据变化时，强制更新内部状态

@@ -5,41 +5,36 @@ import { streamChatCompletions } from '../../api/chat.js'
 import { getMaterialApiBase } from '../../utils/apiBase.js'
 import { buildOfficialH3PromptSystemInstruction } from '../../utils/h3GenerationOptions.js'
 
-const props = defineProps({
-  references: { type: Array, default: () => [] },
-  sourcePrompt: { type: String, default: '' },
-  aspectRatio: { type: String, default: '16:9' },
-  durationSeconds: { type: Number, default: 5 },
-  outputWidth: { type: Number, default: 1920 },
-  outputHeight: { type: Number, default: 1080 }
-})
-const emit = defineEmits(['update:prompt', 'update:plan'])
-const plan = reactive({
-  subject_definitions: '',
-  summary: '',
-  dialogue: '',
-  required: '',
-  flexible: '',
-  detailed_description: [{ start: 0, end: 5, action: '', camera: '[Tracking shot]' }],
-  overall_soundscape: '',
-  non_diegetic_music: ''
-})
-const aiLoading = ref(false)
-const aiError = ref('')
-const generationMode = computed(() => props.references.length ? '参考生视频' : '文生视频')
-const outputLabel = computed(() => `${props.outputWidth}×${props.outputHeight}`)
-const compiledPreview = computed(() => {
-  try { return compileH3DirectorPrompt(toPlan()) } catch { return '' }
-})
-const error = computed(() => {
-  const hasContent = plan.subject_definitions || plan.summary || plan.dialogue || plan.detailed_description.some(item => item.action)
-  if (!hasContent) return ''
-  try { compileH3DirectorPrompt(toPlan()); return '' } catch (reason) { return reason.message }
-})
+const createH3DirectorEditorPlan = (value, durationSeconds = 5) => {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : null
+  const safeDuration = Number.isFinite(Number(durationSeconds)) && Number(durationSeconds) > 0
+    ? Number(durationSeconds)
+    : 5
+  const shots = source && Array.isArray(source.detailed_description)
+    ? source.detailed_description.map(item => ({
+        start: Number(item?.start || 0),
+        end: Number(item?.end || safeDuration),
+        action: String(item?.action || ''),
+        camera: String(item?.camera || '[Tracking shot]')
+      }))
+    : [{ start: 0, end: safeDuration, action: '', camera: '[Tracking shot]' }]
+  const required = source?.retention_analysis?.required
+  const flexible = source?.retention_analysis?.flexible
+  return {
+    subject_definitions: String(source?.subject_definitions || ''),
+    summary: String(source?.summary || ''),
+    dialogue: String(source?.dialogue || ''),
+    required: Array.isArray(required) ? required.join('，') : String(required || ''),
+    flexible: Array.isArray(flexible) ? flexible.join('，') : String(flexible || ''),
+    detailed_description: shots,
+    overall_soundscape: String(source?.overall_soundscape || ''),
+    non_diegetic_music: String(source?.non_diegetic_music || '')
+  }
+}
 
-function toPlan() {
-  return normalizeH3DirectorPrompt({
-    references: props.references,
+const buildH3DirectorEditorState = (plan, references) => {
+  const directorPlan = normalizeH3DirectorPrompt({
+    references,
     subject_definitions: plan.subject_definitions,
     summary: plan.summary,
     dialogue: plan.dialogue,
@@ -51,6 +46,54 @@ function toPlan() {
     overall_soundscape: plan.overall_soundscape,
     non_diegetic_music: plan.non_diegetic_music
   })
+  return {
+    directorPlan,
+    compiledDirectorPrompt: compileH3DirectorPrompt(directorPlan)
+  }
+}
+
+const props = defineProps({
+  references: { type: Array, default: () => [] },
+  sourcePrompt: { type: String, default: '' },
+  directorPlan: { type: Object, default: null },
+  aspectRatio: { type: String, default: '16:9' },
+  durationSeconds: { type: Number, default: 5 },
+  outputWidth: { type: Number, default: 1920 },
+  outputHeight: { type: Number, default: 1080 }
+})
+const emit = defineEmits(['update:state'])
+const plan = reactive(createH3DirectorEditorPlan(props.directorPlan, props.durationSeconds))
+let syncingDirectorPlan = false
+const aiLoading = ref(false)
+const aiError = ref('')
+const generationMode = computed(() => props.references.length ? '参考生视频' : '文生视频')
+const outputLabel = computed(() => `${props.outputWidth}×${props.outputHeight}`)
+const compiledPreview = computed(() => {
+  try { return buildH3DirectorEditorState(plan, props.references).compiledDirectorPrompt } catch { return '' }
+})
+const error = computed(() => {
+  const hasContent = plan.subject_definitions || plan.summary || plan.dialogue || plan.detailed_description.some(item => item.action)
+  if (!hasContent) return ''
+  try { buildH3DirectorEditorState(plan, props.references); return '' } catch (reason) { return reason.message }
+})
+
+function replaceDirectorPlan(value) {
+  const restored = createH3DirectorEditorPlan(value, props.durationSeconds)
+  syncingDirectorPlan = true
+  plan.subject_definitions = restored.subject_definitions
+  plan.summary = restored.summary
+  plan.dialogue = restored.dialogue
+  plan.required = restored.required
+  plan.flexible = restored.flexible
+  plan.detailed_description.splice(0, plan.detailed_description.length, ...restored.detailed_description)
+  plan.overall_soundscape = restored.overall_soundscape
+  plan.non_diegetic_music = restored.non_diegetic_music
+  syncingDirectorPlan = false
+}
+
+function emitDirectorState() {
+  if (syncingDirectorPlan || error.value) return
+  emit('update:state', buildH3DirectorEditorState(plan, props.references))
 }
 
 function addShot() {
@@ -87,14 +130,8 @@ async function generateDirectorPlan() {
       summary: official.integrated_multimodal_description || official.summary,
       references: props.references
     })
-    plan.subject_definitions = generatedPlan.subject_definitions
-    plan.summary = generatedPlan.summary
-    plan.dialogue = generatedPlan.dialogue
-    plan.required = generatedPlan.retention_analysis.required.join('，')
-    plan.flexible = generatedPlan.retention_analysis.flexible.join('，')
-    plan.detailed_description.splice(0, plan.detailed_description.length, ...generatedPlan.detailed_description)
-    plan.overall_soundscape = generatedPlan.overall_soundscape
-    plan.non_diegetic_music = generatedPlan.non_diegetic_music
+    replaceDirectorPlan(generatedPlan)
+    emitDirectorState()
   } catch (reason) {
     aiError.value = reason?.message || 'AI 导演提示生成失败'
   } finally {
@@ -110,12 +147,9 @@ function insertReference(reference) {
     .join('；')
 }
 
-watch([plan, () => props.references], () => {
-  if (error.value) return
-  const normalized = toPlan()
-  emit('update:plan', normalized)
-  emit('update:prompt', compileH3DirectorPrompt(normalized))
-}, { deep: true, immediate: true })
+watch(plan, emitDirectorState, { deep: true, flush: 'sync' })
+watch(() => props.references, emitDirectorState, { deep: true })
+watch(() => props.directorPlan, replaceDirectorPlan, { deep: true })
 </script>
 
 <template>
