@@ -525,26 +525,31 @@ const setPromptDockExpanded = (expanded) => {
 }
 
 const createCanvasConnectionLifecycle = ({ setConnectionInProgress, resetClickConnection }) => {
-  let activeConnectionKind = null
+  let clickActive = false
+  let dragActive = false
 
-  const finishConnection = () => {
-    activeConnectionKind = null
-    setConnectionInProgress(false)
-  }
+  const syncConnectionInProgress = () => setConnectionInProgress(clickActive || dragActive)
   const handleConnectionStart = () => {
-    activeConnectionKind = 'drag'
-    setConnectionInProgress(true)
+    dragActive = true
+    syncConnectionInProgress()
   }
-  const handleConnectionEnd = () => finishConnection()
+  const handleConnectionEnd = () => {
+    dragActive = false
+    syncConnectionInProgress()
+  }
   const handleClickConnectionStart = () => {
-    activeConnectionKind = 'click'
-    setConnectionInProgress(true)
+    clickActive = true
+    syncConnectionInProgress()
   }
-  const handleClickConnectionEnd = () => finishConnection()
-  const cancelClickConnection = event => {
-    if (activeConnectionKind !== 'click') return false
-    resetClickConnection(event)
-    finishConnection()
+  const handleClickConnectionEnd = () => {
+    clickActive = false
+    syncConnectionInProgress()
+  }
+  const cancelClickConnection = () => {
+    if (!clickActive) return false
+    resetClickConnection()
+    clickActive = false
+    syncConnectionInProgress()
     return true
   }
   const handleConnectionKeydown = event => {
@@ -563,7 +568,7 @@ const createCanvasConnectionLifecycle = ({ setConnectionInProgress, resetClickCo
 
 const connectionLifecycle = createCanvasConnectionLifecycle({
   setConnectionInProgress: active => { connectionInProgress.value = active },
-  resetClickConnection: event => endConnection(event, true)
+  resetClickConnection: () => endConnection(undefined, true)
 })
 const {
   handleConnectionStart,
