@@ -33,6 +33,42 @@ assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must no
 assert.match(h3DirectorSource, /overflow-wrap:anywhere/, 'compiled H3 prompts must wrap long tokens inside the node')
 const canvasSource = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
 const globalStyleSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8')
+const connectionLifecycleSource = canvasSource.match(
+  /(const createCanvasConnectionLifecycle = [\s\S]*?)\n\nconst connectionLifecycle =/
+)?.[1] || ''
+assert.ok(connectionLifecycleSource, 'canvas must expose an executable connection lifecycle')
+const { createCanvasConnectionLifecycle } = await import(
+  `data:text/javascript,${encodeURIComponent(`${connectionLifecycleSource}\nexport { createCanvasConnectionLifecycle }`)}`
+)
+let connectionActive = false
+const cancelledClickEvents = []
+const connectionLifecycle = createCanvasConnectionLifecycle({
+  setConnectionInProgress: active => { connectionActive = active },
+  resetClickConnection: event => { cancelledClickEvents.push(event.type || event.key) }
+})
+
+connectionLifecycle.handleClickConnectionStart()
+assert.equal(connectionActive, true, 'click-connect start must activate the dock lifecycle')
+connectionLifecycle.handleConnectionKeydown({ key: 'Escape' })
+assert.equal(connectionActive, false, 'Escape must cancel click-connect and restore the dock')
+assert.deepEqual(cancelledClickEvents, ['Escape'], 'Escape cancellation must reset Vue Flow click-connect state once')
+
+connectionLifecycle.handleClickConnectionStart()
+connectionLifecycle.cancelClickConnection({ type: 'pane-click' })
+assert.equal(connectionActive, false, 'blank pane click must cancel click-connect and restore the dock')
+assert.deepEqual(cancelledClickEvents, ['Escape', 'pane-click'], 'pane cancellation must reset Vue Flow click-connect state once')
+
+connectionLifecycle.handleClickConnectionStart()
+connectionLifecycle.handleClickConnectionEnd()
+assert.equal(connectionActive, false, 'a valid click target must finish the lifecycle')
+assert.equal(cancelledClickEvents.length, 2, 'successful click-connect must not run the cancellation path')
+
+connectionLifecycle.handleConnectionStart()
+assert.equal(connectionActive, true, 'drag-connect start must still activate the dock lifecycle')
+connectionLifecycle.handleConnectionKeydown({ key: 'Escape' })
+assert.equal(connectionActive, true, 'click cancellation must not interrupt an active drag connection')
+connectionLifecycle.handleConnectionEnd()
+assert.equal(connectionActive, false, 'drag-connect end must still restore the dock')
 const connectionIdentitySource = canvasSource.match(
   /(const getCanvasConnectionId = [\s\S]*?const isDuplicateCanvasConnection = [\s\S]*?)\n\nconst onConnect/
 )?.[1] || ''
@@ -76,16 +112,21 @@ assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__handle\.connecting/, 
 assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__handle\.vue-flow__handle-valid/, 'valid connection targets must be visually highlighted')
 assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__connection-path/, 'the active connection line must stay visible while dragging')
 
-for (const eventName of ['connect-start', 'connect-end', 'click-connect-start', 'click-connect-end']) {
-  assert.match(canvasSource, new RegExp(`@${eventName}="handleConnection(?:Start|End)"`), `${eventName} must participate in the dock lifecycle`)
+const connectionEventHandlers = {
+  'connect-start': 'handleConnectionStart',
+  'connect-end': 'handleConnectionEnd',
+  'click-connect-start': 'handleClickConnectionStart',
+  'click-connect-end': 'handleClickConnectionEnd'
+}
+for (const [eventName, handlerName] of Object.entries(connectionEventHandlers)) {
+  assert.match(canvasSource, new RegExp(`@${eventName}="${handlerName}"`), `${eventName} must participate in the dock lifecycle`)
 }
 assert.match(canvasSource, /'canvas-prompt-dock--connection-active': connectionInProgress && promptDockExpanded/, 'only an expanded H3 dock should move aside during a connection')
 assert.match(canvasSource, /const connectionInProgress = ref\(false\)/)
-const connectionLifecycleSource = canvasSource.match(
-  /const handleConnectionStart = \(\) => \{[\s\S]*?const handleConnectionEnd = \(\) => \{[\s\S]*?\n\}/
-)?.[0] || ''
-assert.match(connectionLifecycleSource, /handleConnectionStart[\s\S]*?connectionInProgress\.value = true/)
-assert.match(connectionLifecycleSource, /handleConnectionEnd[\s\S]*?connectionInProgress\.value = false/)
+assert.match(canvasSource, /setConnectionInProgress:\s*active => \{ connectionInProgress\.value = active \}/)
+assert.match(canvasSource, /resetClickConnection:\s*event => endConnection\(event, true\)/, 'click cancellation must clear Vue Flow public connection state')
+assert.match(canvasSource, /window\.addEventListener\('keydown', handleConnectionKeydown\)/, 'Escape cancellation must work regardless of canvas focus')
+assert.match(canvasSource, /window\.removeEventListener\('keydown', handleConnectionKeydown\)/, 'the global cancellation listener must be cleaned up')
 assert.doesNotMatch(connectionLifecycleSource, /promptDockExpanded\.value\s*=|chatInput\.value\s*=|directorPlan\.value\s*=/, 'connection lifecycle must preserve H3 expansion, input, and plan state')
 const activeConnectionDockCss = canvasSource.match(/\.canvas-prompt-dock--connection-active\s*\{[\s\S]*?\}/)?.[0] || ''
 assert.match(activeConnectionDockCss, /pointer-events:\s*none/, 'the H3 dock must stop intercepting connection targets temporarily')

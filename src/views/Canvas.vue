@@ -60,8 +60,8 @@
         @connect="onConnect"
         @connect-start="handleConnectionStart"
         @connect-end="handleConnectionEnd"
-        @click-connect-start="handleConnectionStart"
-        @click-connect-end="handleConnectionEnd"
+        @click-connect-start="handleClickConnectionStart"
+        @click-connect-end="handleClickConnectionEnd"
         @node-click="onNodeClick"
         @node-drag-stop="handleNodeDragStop"
         @pane-click="onPaneClick"
@@ -465,7 +465,7 @@ const router = useRouter()
 const route = useRoute()
 
 // Vue Flow instance | Vue Flow 实例
-const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals } = useVueFlow()
+const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals, endConnection } = useVueFlow()
 
 // Register custom node types | 注册自定义节点类型
 const nodeTypes = {
@@ -524,13 +524,55 @@ const setPromptDockExpanded = (expanded) => {
   promptDockExpanded.value = Boolean(expanded)
 }
 
-const handleConnectionStart = () => {
-  connectionInProgress.value = true
+const createCanvasConnectionLifecycle = ({ setConnectionInProgress, resetClickConnection }) => {
+  let activeConnectionKind = null
+
+  const finishConnection = () => {
+    activeConnectionKind = null
+    setConnectionInProgress(false)
+  }
+  const handleConnectionStart = () => {
+    activeConnectionKind = 'drag'
+    setConnectionInProgress(true)
+  }
+  const handleConnectionEnd = () => finishConnection()
+  const handleClickConnectionStart = () => {
+    activeConnectionKind = 'click'
+    setConnectionInProgress(true)
+  }
+  const handleClickConnectionEnd = () => finishConnection()
+  const cancelClickConnection = event => {
+    if (activeConnectionKind !== 'click') return false
+    resetClickConnection(event)
+    finishConnection()
+    return true
+  }
+  const handleConnectionKeydown = event => {
+    if (event.key === 'Escape') cancelClickConnection(event)
+  }
+
+  return {
+    handleConnectionStart,
+    handleConnectionEnd,
+    handleClickConnectionStart,
+    handleClickConnectionEnd,
+    cancelClickConnection,
+    handleConnectionKeydown
+  }
 }
 
-const handleConnectionEnd = () => {
-  connectionInProgress.value = false
-}
+const connectionLifecycle = createCanvasConnectionLifecycle({
+  setConnectionInProgress: active => { connectionInProgress.value = active },
+  resetClickConnection: event => endConnection(event, true)
+})
+const {
+  handleConnectionStart,
+  handleConnectionEnd,
+  handleClickConnectionStart,
+  handleClickConnectionEnd,
+  cancelClickConnection,
+  handleConnectionKeydown
+} = connectionLifecycle
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
 const flowKey = ref(Date.now())
@@ -893,7 +935,8 @@ const onEdgesChange = (changes) => {
 }
 
 // Handle pane click | 处理画布点击
-const onPaneClick = () => {
+const onPaneClick = (event) => {
+  cancelClickConnection(event)
   showNodeMenu.value = false
   // Clear all selections | 清除所有选中
   // nodes.value = nodes.value.map(node => ({
@@ -1090,6 +1133,7 @@ watch(
 onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  window.addEventListener('keydown', handleConnectionKeydown)
   
   // Initialize projects store | 初始化项目存储
   await initProjectsStore()
@@ -1112,6 +1156,7 @@ onMounted(async () => {
 // Cleanup on unmount | 卸载时清理
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('keydown', handleConnectionKeydown)
   projectLoadGate.invalidate()
   // Save project before leaving | 离开前保存项目
   if (loadedProjectId.value && currentProjectId.value === loadedProjectId.value) saveProject()
