@@ -247,8 +247,8 @@
       </div> -->
 
         <!-- Generate button | 生成按钮 -->
-        <button @click="handleGenerate" :disabled="isGenerating || !isConfigured || !isModelAvailable || (isScail2Model && !drivingVideoFile)"
-          class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        <button data-testid="video-generate-action" @click="handleGenerate" :disabled="isGenerating || !isConfigured || !isModelAvailable || (isScail2Model && !drivingVideoFile)"
+          class="sticky top-0 z-10 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent-color)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">
           <n-spin v-if="isGenerating" :size="14" />
           <template v-else>
             <n-icon :size="16">

@@ -6,6 +6,20 @@ const imageSource = readFileSync(new URL('../src/components/nodes/ImageConfigNod
 const videoSource = readFileSync(new URL('../src/components/nodes/VideoConfigNode.vue', import.meta.url), 'utf8')
 const h3DirectorSource = readFileSync(new URL('../src/components/video/H3DirectorPromptEditor.vue', import.meta.url), 'utf8')
 
+const extractDivByTestId = (source, testId) => {
+  const start = source.indexOf(`<div data-testid="${testId}"`)
+  if (start < 0) return ''
+  const tags = /<div\b[^>]*>|<\/div>/g
+  tags.lastIndex = start
+  let depth = 0
+  let match
+  while ((match = tags.exec(source))) {
+    depth += match[0].startsWith('</') ? -1 : 1
+    if (depth === 0) return source.slice(start, tags.lastIndex)
+  }
+  return ''
+}
+
 for (const testId of ['image-model-select', 'image-quality-select', 'image-size-select']) {
   assert.match(imageSource, new RegExp(`data-testid="${testId}"`), `${testId} must be a directly clickable in-node control`)
 }
@@ -47,6 +61,15 @@ assert.match(videoScrollContentTag, /class="[^"]*\bmin-h-0\b[^"]*"/, 'the config
 assert.match(videoScrollContentTag, /class="[^"]*\bflex-1\b[^"]*"/, 'the config content must consume only the space below the header')
 assert.match(videoScrollContentTag, /class="[^"]*\boverflow-y-auto\b[^"]*"/, 'the config content must be the scrolling region')
 assert.match(videoScrollContentTag, /class="[^"]*\bnowheel\b[^"]*"/, 'scrolling config content must not zoom the canvas')
+const videoScrollContentSource = extractDivByTestId(videoSource, 'video-config-scroll-content')
+assert.ok(videoScrollContentSource, 'the complete video config scroll boundary must be executable in tests')
+assert.doesNotMatch(videoScrollContentSource, /data-testid="video-config-sticky-header"/, 'the outer header must remain a sibling outside scroll content')
+const videoGenerateActionTag = videoScrollContentSource.match(/<button[^>]*data-testid="video-generate-action"[^>]*>/)?.[0] || ''
+assert.match(videoGenerateActionTag, /class="[^"]*\bsticky\b[^"]*"/, 'the generate action must remain visible after reaching the scroll-content top')
+assert.match(videoGenerateActionTag, /class="[^"]*\btop-0\b[^"]*"/, 'the action sticky boundary must be the scroll-content top')
+assert.match(videoGenerateActionTag, /class="[^"]*\bz-\d+\b[^"]*"/, 'the sticky action must remain clickable above later status text')
+assert.match(videoGenerateActionTag, /class="[^"]*bg-\[var\(--accent-color\)\][^"]*"/, 'the sticky action must keep its opaque action background')
+assert.ok(videoScrollContentSource.indexOf('<!-- Error message') > videoScrollContentSource.indexOf('data-testid="video-generate-action"'), 'status and error content must remain scrollable after the sticky action')
 assert.equal((videoSource.match(/\boverflow-y-auto\b/g) || []).length, 1, 'only video config content may own vertical scrolling')
 assert.match(videoSource, /<\/div>\s*<\/div>\s*<!-- Handles \| 连接点 -->\s*<div[^>]*data-testid="video-config-handle-layer"/, 'handles must live outside the clipped root and its scroll content')
 assert.match(videoSource, /data-testid="video-config-handle-layer"[^>]*class="[^"]*\boverflow-visible\b[^"]*"[\s\S]*?<Handle[^>]*\bpointer-events-auto\b[\s\S]*?<NodeHandleMenu[^>]*\bpointer-events-auto\b/, 'the non-scrolling handle layer must keep both connection controls visible and interactive')
