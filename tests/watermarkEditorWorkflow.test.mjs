@@ -3,12 +3,17 @@ import { readFileSync } from 'node:fs'
 import {
   GIF_TEXT_STYLE_PRESETS,
   buildGifEditorTextTracks,
+  createGifEditorTrackTimeDraftStore,
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
+  formatGifEditorTrackTime,
+  isGifEditorTrackActive,
   isWatermarkEditorJobTerminal,
+  normalizeGifEditorTrackRange,
   restoreWatermarkEditorProject,
   sanitizeWatermarkEditorProject
 } from '../src/utils/watermarkEditorProject.js'
+import { timelineRangeStyle } from '../src/utils/gifAdEditorPrototype.js'
 
 const project = createDefaultWatermarkEditorProject({ title: '品牌角标工程' })
 assert.equal(project.title, '品牌角标工程')
@@ -27,6 +32,208 @@ assert.equal(linkedProject.clips.length, 1)
 assert.equal(linkedProject.clips[0].url, '/public-assets/source.gif')
 assert.equal(linkedProject.clips[0].kind, 'gif')
 assert.equal(linkedProject.clips[0].duration, 6.4)
+
+for (const invalidTime of ['', Number.NaN, undefined]) {
+  assert.doesNotThrow(() => formatGifEditorTrackTime(invalidTime))
+  assert.equal(formatGifEditorTrackTime(invalidTime), '—')
+  assert.doesNotThrow(() => isGifEditorTrackActive({ start: invalidTime, end: '' }, 0.5, 2))
+  const safeRange = normalizeGifEditorTrackRange({ start: invalidTime, end: '' }, 2)
+  const rangeStyle = timelineRangeStyle(safeRange.start, safeRange.end, 2)
+  assert.doesNotMatch(`${rangeStyle.left} ${rangeStyle.width}`, /NaN|Infinity/)
+}
+assert.equal(formatGifEditorTrackTime('0.3'), '0.3')
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { start: '' }), { start: 0, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { start: '0.3' }), { start: 0.3, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0.3, end: 2 }, 2, { start: Number.NaN }), { start: 0.3, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0.3, end: 2 }, 2, { end: '' }), { start: 0.3, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { end: 8 }), { start: 0, end: 2 })
+const reversedStartRange = normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { start: 2 })
+assert.ok(reversedStartRange.start >= 0 && reversedStartRange.start < reversedStartRange.end && reversedStartRange.end <= 2)
+const reversedEndRange = normalizeGifEditorTrackRange({ start: 1.5, end: 2 }, 2, { end: 1 })
+assert.ok(reversedEndRange.start >= 0 && reversedEndRange.start < reversedEndRange.end && reversedEndRange.end <= 2)
+const tinyLegacyRange = normalizeGifEditorTrackRange({ start: 0, end: 0.0001 }, 2)
+assert.ok(tinyLegacyRange.start >= 0 && tinyLegacyRange.start < tinyLegacyRange.end && tinyLegacyRange.end <= 2)
+
+const sanitizedTrackTimes = sanitizeWatermarkEditorProject({
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  textTracks: [{ id: 'text-time', text: '小数时间', start: '0.3', end: '' }],
+  imageTracks: [{ id: 'image-time', name: 'logo', url: '/public-assets/logo.png', start: Number.NaN, end: 8 }]
+})
+assert.deepEqual(
+  { start: sanitizedTrackTimes.textTracks[0].start, end: sanitizedTrackTimes.textTracks[0].end },
+  { start: 0.3, end: 2 },
+  '文字轨道持久化必须保留合法小数并清理空中间态'
+)
+assert.deepEqual(
+  { start: sanitizedTrackTimes.imageTracks[0].start, end: sanitizedTrackTimes.imageTracks[0].end },
+  { start: 0, end: 2 },
+  '图片轨道持久化必须清理 NaN 和超时长值'
+)
+assert.doesNotThrow(() => buildGifEditorTextTracks(sanitizedTrackTimes.textTracks, 2), '归一化后的文字轨道应可继续导出')
+
+const sharedTextTrack = { id: 'shared-track', start: 0, end: 2 }
+const sharedImageTrack = { id: 'shared-track', start: 1, end: 2 }
+const timeDraftStore = createGifEditorTrackTimeDraftStore()
+timeDraftStore.set('text', sharedTextTrack, 'start', '0.3')
+timeDraftStore.set('image', sharedImageTrack, 'start', '1.2')
+assert.equal(timeDraftStore.get('text', sharedTextTrack, 'start'), '0.3', '文字和图片同 ID 不得共用 draft')
+assert.equal(timeDraftStore.get('image', sharedImageTrack, 'start'), '1.2', '图片轨道必须读取自己的 draft')
+timeDraftStore.clearTrack('text', sharedTextTrack)
+assert.equal(timeDraftStore.get('text', sharedTextTrack, 'start'), 0, '删除文字轨道应清理其 draft')
+assert.equal(timeDraftStore.get('image', sharedImageTrack, 'start'), '1.2', '删除文字轨道不得清理同 ID 图片 draft')
+
+const missingIdTrackA = { start: 0, end: 2 }
+const missingIdTrackB = { start: 1, end: 2 }
+timeDraftStore.set('text', missingIdTrackA, 'start', '0.4')
+timeDraftStore.set('text', missingIdTrackB, 'start', '1.4')
+assert.equal(timeDraftStore.get('text', missingIdTrackA, 'start'), '0.4', '缺 ID 轨道不得坍缩到共享 key')
+assert.equal(timeDraftStore.get('text', missingIdTrackB, 'start'), '1.4')
+
+const switchTrackA = { id: 'switch-a', start: 0, end: 2 }
+const switchTrackB = { id: 'switch-b', start: 1, end: 2 }
+timeDraftStore.set('text', switchTrackA, 'start', '0.3')
+assert.equal(timeDraftStore.get('text', switchTrackB, 'start'), 1, '切到 B 不得显示 A draft')
+timeDraftStore.set('text', switchTrackB, 'start', '1.3')
+assert.equal(timeDraftStore.get('text', switchTrackA, 'start'), '0.3', '回到 A 应继续显示 A 未提交 draft')
+
+timeDraftStore.clearAll()
+const restoredOwnTrack = { id: 'shared-track', start: 1, end: 2 }
+assert.equal(timeDraftStore.get('image', restoredOwnTrack, 'start'), 1, '恢复工程后必须显示新轨道自有值')
+assert.deepEqual(
+  normalizeGifEditorTrackRange(restoredOwnTrack, 2, { start: timeDraftStore.get('image', restoredOwnTrack, 'start') }),
+  { start: 1, end: 2 },
+  '恢复工程后失焦提交仍应保留自有 start=1'
+)
+
+const legacyTracksWithoutIds = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  textTracks: [
+    { text: '旧文字', start: 0, end: 2 },
+    { text: '第二条旧文字', start: 1, end: 2 }
+  ],
+  imageTracks: [{ name: '旧图片', url: '/public-assets/logo.png', start: 1, end: 2 }]
+}
+const firstLegacySanitize = sanitizeWatermarkEditorProject(legacyTracksWithoutIds)
+const secondLegacySanitize = sanitizeWatermarkEditorProject(legacyTracksWithoutIds)
+assert.match(firstLegacySanitize.textTracks[0].id, /^legacy-text-/)
+assert.match(firstLegacySanitize.imageTracks[0].id, /^legacy-image-/)
+assert.notEqual(firstLegacySanitize.textTracks[0].id, firstLegacySanitize.imageTracks[0].id)
+assert.notEqual(firstLegacySanitize.textTracks[0].id, firstLegacySanitize.textTracks[1].id, '缺 ID 同类轨道必须获得唯一 ID')
+assert.equal(firstLegacySanitize.textTracks[0].id, secondLegacySanitize.textTracks[0].id, '旧文字轨道 ID 必须稳定')
+assert.equal(firstLegacySanitize.imageTracks[0].id, secondLegacySanitize.imageTracks[0].id, '旧图片轨道 ID 必须稳定')
+
+const reservedReferenceProject = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  imageTracks: [
+    { name: 'missing-first', url: '/public-assets/missing-first.png', start: 0, end: 2 },
+    { id: 'legacy-image-1', name: 'referenced-logo', url: '/public-assets/referenced-logo.png', start: 0, end: 2 }
+  ],
+  quickSettings: { watermarkId: 'legacy-image-1' }
+}
+const sanitizedReservedReference = sanitizeWatermarkEditorProject(reservedReferenceProject)
+assert.equal(sanitizedReservedReference.imageTracks[1].id, 'legacy-image-1', '后续显式 ID 必须优先保留')
+assert.equal(
+  sanitizedReservedReference.imageTracks.find(item => item.id === sanitizedReservedReference.quickSettings.watermarkId)?.name,
+  'referenced-logo',
+  'quickSettings 引用必须继续指向原显式目标'
+)
+assert.notEqual(sanitizedReservedReference.imageTracks[0].id, 'legacy-image-1', '缺 ID 轨道不得抢占预留 ID')
+
+const allReservedIdsProject = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  imageTracks: [
+    { name: 'missing-one', url: '/public-assets/missing-one.png' },
+    { name: 'missing-two', url: '/public-assets/missing-two.png' },
+    { id: 'legacy-image-1', name: 'reserved-one', url: '/public-assets/reserved-one.png' },
+    { id: 'legacy-image-2', name: 'reserved-two', url: '/public-assets/reserved-two.png' },
+    { id: 'legacy-image-1-2', name: 'reserved-derived', url: '/public-assets/reserved-derived.png' }
+  ]
+}
+const sanitizedAllReservedIds = sanitizeWatermarkEditorProject(allReservedIdsProject)
+assert.deepEqual(
+  sanitizedAllReservedIds.imageTracks.slice(0, 2).map(item => item.id),
+  ['legacy-image-1-3', 'legacy-image-2-2'],
+  '多个缺 ID 轨道补位时必须跳过全部显式预留 ID'
+)
+assert.deepEqual(
+  sanitizedAllReservedIds.imageTracks.slice(2).map(item => item.id),
+  ['legacy-image-1', 'legacy-image-2', 'legacy-image-1-2'],
+  '显式 ID 不得因前置补位而漂移'
+)
+
+const duplicateExplicitProject = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  imageTracks: [
+    { id: 'duplicate-logo', name: 'first-owner', url: '/public-assets/first-owner.png' },
+    { id: 'duplicate-logo', name: 'duplicate-owner', url: '/public-assets/duplicate-owner.png' },
+    { id: 'duplicate-logo-2', name: 'reserved-suffix', url: '/public-assets/reserved-suffix.png' }
+  ],
+  quickSettings: { watermarkId: 'duplicate-logo' }
+}
+const sanitizedDuplicates = sanitizeWatermarkEditorProject(duplicateExplicitProject)
+assert.deepEqual(
+  sanitizedDuplicates.imageTracks.map(item => item.id),
+  ['duplicate-logo', 'duplicate-logo-3', 'duplicate-logo-2'],
+  '重复显式 ID 仅第一合法拥有者保留，后续获得稳定非冲突派生 ID'
+)
+assert.equal(
+  sanitizedDuplicates.imageTracks.find(item => item.id === sanitizedDuplicates.quickSettings.watermarkId)?.name,
+  'first-owner',
+  '重复 ID 的既有引用语义必须保持指向第一合法拥有者'
+)
+
+const typedReservedIds = sanitizeWatermarkEditorProject({
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  textTracks: [
+    { text: 'missing text' },
+    { id: 'legacy-text-1', text: 'explicit text' },
+    { id: 'shared-explicit', text: 'shared text' }
+  ],
+  imageTracks: [
+    { name: 'missing image', url: '/public-assets/missing-image.png' },
+    { id: 'legacy-image-1', name: 'explicit image', url: '/public-assets/explicit-image.png' },
+    { id: 'shared-explicit', name: 'shared image', url: '/public-assets/shared-image.png' }
+  ],
+  quickSettings: { watermarkId: 'shared-explicit' }
+})
+assert.equal(typedReservedIds.textTracks[1].id, 'legacy-text-1', '文字轨道必须独立预留显式 ID')
+assert.equal(typedReservedIds.imageTracks[1].id, 'legacy-image-1', '图片轨道必须独立预留显式 ID')
+assert.equal(typedReservedIds.textTracks[2].id, 'shared-explicit', '同一显式 ID 可分别存在于文字类型')
+assert.equal(typedReservedIds.imageTracks[2].id, 'shared-explicit', '同一显式 ID 可分别存在于图片类型')
+assert.equal(
+  typedReservedIds.imageTracks.find(item => item.id === typedReservedIds.quickSettings.watermarkId)?.name,
+  'shared image',
+  '跨类型同 ID 不得破坏图片 quickSettings 引用'
+)
+
+const sanitizedDuplicatesTwice = sanitizeWatermarkEditorProject(sanitizedDuplicates)
+assert.deepEqual(
+  sanitizedDuplicatesTwice.imageTracks.map(item => item.id),
+  sanitizedDuplicates.imageTracks.map(item => item.id),
+  'sanitize(sanitize(project)) 的 ID 必须完全稳定'
+)
+assert.deepEqual(sanitizedDuplicatesTwice.quickSettings, sanitizedDuplicates.quickSettings)
+const restoredStableIds = restoreWatermarkEditorProject({
+  savedProject: sanitizedDuplicates,
+  sourceProject: { clips: sanitizedDuplicates.clips },
+  nodeData: { editorStatus: 'draft', quickSettings: sanitizedDuplicates.quickSettings }
+}).project
+const sanitizedAfterRestore = sanitizeWatermarkEditorProject(restoredStableIds)
+assert.deepEqual(
+  sanitizedAfterRestore.imageTracks.map(item => item.id),
+  sanitizedDuplicates.imageTracks.map(item => item.id),
+  'restore 后再次 sanitize 的 ID 不得漂移'
+)
+assert.deepEqual(sanitizedAfterRestore.quickSettings, sanitizedDuplicates.quickSettings, 'restore 后引用不得漂移')
+
+const legacyRestoreDraftStore = createGifEditorTrackTimeDraftStore()
+legacyRestoreDraftStore.set('text', legacyTracksWithoutIds.textTracks[0], 'start', '0.7')
+legacyRestoreDraftStore.clearAll()
+assert.equal(
+  legacyRestoreDraftStore.get('text', firstLegacySanitize.textTracks[0], 'start'),
+  0,
+  '缺 ID 旧轨道恢复后不得继承恢复前 draft'
+)
 
 const sanitized = sanitizeWatermarkEditorProject({
   ...project,
@@ -312,6 +519,20 @@ assert.match(editor, /startAssetDownload/)
 assert.match(editor, /@click="downloadExportResult"/)
 assert.doesNotMatch(editor, /:href="exportResultUrl"\s+download/)
 assert.match(editor, /text_tracks/)
+assert.doesNotMatch(editor, /item\.(?:start|end)\.toFixed\(/, '模板不得直接格式化未验证的轨道时间')
+assert.doesNotMatch(editor, /v-model\.number="selected(?:Text|Image)\.(?:start|end)"/, '时间输入中间态不得直接写入自动保存对象')
+assert.match(editor, /trackTimeDrafts/)
+assert.match(editor, /commitTrackTimeInput/)
+assert.match(editor, /trackTimeDrafts\.clearAll\(\)[\s\S]*?sanitizeWatermarkEditorProject\(value\)/, '恢复工程前必须清空所有 draft')
+assert.match(editor, /trackTimeDrafts\.clearTrack\(selectedType\.value, selectedItem\.value\)/, '删除轨道必须定向清理 draft')
+assert.match(editor, /safeTimelineRangeStyle/)
+const editorAutoSaveWatch = editor.match(
+  /watch\(\s*\[clips, textTracks, imageTracks,[\s\S]*?\{ deep: true \}\s*\)/
+)?.[0] || ''
+assert.ok(editorAutoSaveWatch, '必须保留编辑工程自动保存')
+assert.doesNotMatch(editorAutoSaveWatch, /trackTimeDrafts/, '输入中间态不得触发工程自动保存')
+assert.match(editor, /const normalizedTextTracks = textTracks\.value\.map\(item => \(\{ \.\.\.item, \.\.\.normalizedTrackRange\(item\) \}\)\)/)
+assert.match(editor, /const watermarkRange = watermark \? normalizedTrackRange\(watermark\) : null/)
 assert.doesNotMatch(editor, /弹入|淡入|上滑|品牌渐变/)
 assert.match(editor, /实时进度/)
 assert.match(editor, /restoreWatermarkEditorProject\(/)
