@@ -96,6 +96,18 @@ const editor = readFileSync(new URL('../src/views/GifAdEditor.vue', import.meta.
 const home = readFileSync(new URL('../src/views/Home.vue', import.meta.url), 'utf8')
 const entries = readFileSync(new URL('../src/config/studioEntries.js', import.meta.url), 'utf8')
 
+const normalizeTextTracksAppliedSource = editor.match(
+  /const normalizeTextTracksApplied = ([\s\S]*?)\nconst completeExport/
+)?.[1] || ''
+assert.ok(normalizeTextTracksAppliedSource, '完成态必须按本次提交的文字轨道数校验后端结果')
+const { default: normalizeTextTracksApplied } = await import(
+  `data:text/javascript,${encodeURIComponent(`export default ${normalizeTextTracksAppliedSource}`)}`
+)
+assert.equal(normalizeTextTracksApplied(1, 1), 1)
+assert.equal(normalizeTextTracksApplied(2, 2), 2)
+assert.throws(() => normalizeTextTracksApplied(1, 2), /文字轨道实际合成数量不足/)
+assert.equal(normalizeTextTracksApplied(undefined, 0), 0, '无文字任务不应要求返回应用数量')
+
 const nodeSyncSource = node.match(
   /const resolveWatermarkNodeSync = ([\s\S]*?)\n\nwatch\(/
 )?.[1] || ''

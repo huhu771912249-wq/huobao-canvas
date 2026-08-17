@@ -285,6 +285,7 @@ const exportResultUrl = ref('')
 const outputJobId = ref('')
 const outputMetadata = ref({})
 const exportStatus = ref('')
+const expectedTextTrackCount = ref(0)
 let playbackTimer = 0
 let projectSaveTimer = 0
 let exportPollGeneration = 0
@@ -565,13 +566,21 @@ const applyJobState = job => {
   exportProgress.value = Math.min(100, Math.max(0, Number(job?.progress || 0)))
   exportStep.value = String(job?.current_step || job?.stage || '')
 }
+const normalizeTextTracksApplied = (value, expectedCount) => {
+  const applied = Number(value)
+  const count = Number.isInteger(applied) && applied >= 0 ? applied : 0
+  if (expectedCount > 0 && count !== expectedCount) {
+    throw new Error(`后端返回的文字轨道实际合成数量不足或不匹配（${count}/${expectedCount}），本次结果不会标记为成品`)
+  }
+  return count
+}
 const completeExport = job => {
   const result = job?.results?.[0] || {}
   const duration = getGifEditorJobDuration(job)
   const outputUrl = String(result.gif_url || '')
   if (!outputUrl) throw new Error('任务已完成，但没有返回 GIF 成品地址')
   if (exportWatermark.value?.url && result.watermark_applied !== true) throw new Error('后端未确认图片水印已合成，本次结果不会标记为成品')
-  if (textTracks.value.length && result.text_tracks_applied !== true) throw new Error('后端未确认文字轨道已合成，本次结果不会标记为成品')
+  const textTracksApplied = normalizeTextTracksApplied(result.text_tracks_applied, expectedTextTrackCount.value)
   exportResultUrl.value = outputUrl
   exportStatus.value = 'completed'
   exportProgress.value = 100
@@ -585,7 +594,7 @@ const completeExport = job => {
     loop: result.loop ?? loop.value,
     cornerRadius: Number(result.corner_radius ?? cornerRadius.value),
     watermarkApplied: result.watermark_applied === true,
-    textTracksApplied: result.text_tracks_applied === true
+    textTracksApplied
   }
   persistLinkedProject()
 }
@@ -657,6 +666,7 @@ const runExport = async () => {
     exportError.value = error?.message || '导出设置无效'
     return
   }
+  expectedTextTrackCount.value = payload.text_tracks?.length || 0
   exporting.value = true
   const generation = ++exportPollGeneration
   try {
