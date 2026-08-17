@@ -5,7 +5,7 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'
 const classNames = source => Array.from(source.matchAll(/class="([^"]+)"/g), match => match[1])
 
 const draggableShells = [
-  ['src/components/nodes/VideoConfigNode.vue', 'video-config-node canvas-node-scroll-shell'],
+  ['src/components/nodes/VideoConfigNode.vue', 'video-config-node nowheel'],
   ['src/components/nodes/VideoGifNode.vue', 'canvas-node-scroll-shell'],
   ['src/components/nodes/TextOverlayNode.vue', 'text-overlay-node canvas-node-scroll-shell'],
   ['src/components/nodes/WatermarkEditorNode.vue', 'w-[410px] overflow-hidden'],

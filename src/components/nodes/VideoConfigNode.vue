@@ -2,11 +2,11 @@
   <!-- Video config node wrapper | 视频配置节点包裹层 -->
   <div class="video-config-node-wrapper relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Video config node | 视频配置节点 -->
-    <div class="video-config-node canvas-node-scroll-shell nowheel w-[560px] max-w-[560px] bg-[var(--bg-secondary)] rounded-xl border transition-all duration-200"
+    <div ref="nodeRootRef" class="video-config-node nowheel flex w-[560px] max-w-[560px] flex-col overflow-hidden rounded-xl border bg-[var(--bg-secondary)] transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
-      :style="isExpanded ? { maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' } : undefined">
+      :style="expandedNodeStyle">
       <!-- Header | 头部 -->
-      <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
+      <div ref="nodeHeaderRef" data-testid="video-config-sticky-header" class="z-20 flex shrink-0 items-center justify-between rounded-t-xl border-b border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
         <span
           v-if="!isEditingLabel"
           @dblclick="startEditLabel"
@@ -50,7 +50,7 @@
       </div>
 
       <!-- Config options | 配置选项 -->
-      <div class="min-w-0 p-3 space-y-3">
+      <div data-testid="video-config-scroll-content" class="video-config-node__scroll-content nowheel min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-3">
         <!-- Model selector | 模型选择 -->
         <div class="flex items-center justify-between">
           <span class="text-xs text-[var(--text-secondary)]">模型</span>
@@ -130,12 +130,12 @@
           <H3DirectorPromptEditor
             :references="activeH3References"
             :source-prompt="connectedPrompt"
+            :director-plan="directorPlan"
             :aspect-ratio="localRatio"
             :duration-seconds="localDuration"
             :output-width="outputWidth"
             :output-height="outputHeight"
-            @update:prompt="compiledDirectorPrompt = $event"
-            @update:plan="directorPlan = $event"
+            @update:state="handleDirectorStateUpdate"
           />
         </template>
 
@@ -247,8 +247,8 @@
       </div> -->
 
         <!-- Generate button | 生成按钮 -->
-        <button @click="handleGenerate" :disabled="isGenerating || !isConfigured || !isModelAvailable || (isScail2Model && !drivingVideoFile)"
-          class="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-[var(--accent-color)] hover:bg-[var(--accent-hover)] text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+        <button data-testid="video-generate-action" @click="handleGenerate" :disabled="isGenerating || !isConfigured || !isModelAvailable || (isScail2Model && !drivingVideoFile)"
+          class="sticky top-0 z-10 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--accent-color)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--accent-hover)] disabled:cursor-not-allowed disabled:opacity-50">
           <n-spin v-if="isGenerating" :size="14" />
           <template v-else>
             <n-icon :size="16">
@@ -287,11 +287,13 @@
       </div> -->
       </div>
 
-      <!-- Handles | 连接点 -->
-      <Handle type="target" :position="Position.Left" id="left" class="!bg-[var(--accent-color)]" />
-      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" :visible="showHandleMenu" :operations="[]" />
     </div>
 
+    <!-- Handles | 连接点 -->
+    <div data-testid="video-config-handle-layer" class="pointer-events-none absolute inset-x-0 bottom-0 top-5 overflow-visible">
+      <Handle type="target" :position="Position.Left" id="left" class="pointer-events-auto !bg-[var(--accent-color)]" />
+      <NodeHandleMenu :nodeId="id" nodeType="videoConfig" :visible="showHandleMenu" :operations="[]" class="pointer-events-auto" />
+    </div>
   </div>
 </template>
 
@@ -300,7 +302,7 @@
  * Video config node component | 视频配置节点组件
  * Configuration panel for video generation with API integration
  */
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline, ExpandOutline, ContractOutline } from '@vicons/ionicons5'
@@ -308,7 +310,7 @@ import { useVideoGeneration } from '../../hooks'
 import { importImageAsset, publishImageAsset } from '../../api/image'
 import { createLtxAudioTask, waitForLtxAudio } from '../../api/audio'
 import { createMediaComposition } from '../../api/mediaComposition'
-import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges } from '../../stores/canvas'
+import { updateNode, removeNode, removeEdge, duplicateNode, addNode, addEdge, nodes, edges, scheduleCanvasSave } from '../../stores/canvas'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import VideoOutputSizePicker from '../VideoOutputSizePicker.vue'
 import H3DirectorPromptEditor from '../video/H3DirectorPromptEditor.vue'
@@ -332,6 +334,185 @@ import {
   localizeGeneratedImageInput
 } from '../../utils/generatedImageHandoff'
 
+const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = 24
+const VIDEO_NODE_MIN_EXPANDED_HEIGHT = 160
+const VIDEO_NODE_MIN_CONTENT_HEIGHT = 48
+const getEffectiveVideoNodeZoom = value => {
+  const zoom = Number(value)
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+}
+const getExpandedVideoNodeViewportLayout = ({
+  nodeTop,
+  viewportHeight,
+  zoom = 1,
+  bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP,
+  minimumHeight = VIDEO_NODE_MIN_EXPANDED_HEIGHT,
+  minimumContentHeight = VIDEO_NODE_MIN_CONTENT_HEIGHT,
+  headerScreenHeight
+} = {}) => {
+  const safeNodeTop = Number.isFinite(Number(nodeTop)) ? Number(nodeTop) : 0
+  const safeViewportHeight = Number.isFinite(Number(viewportHeight)) ? Math.max(0, Number(viewportHeight)) : 0
+  const safeBottomGap = Number.isFinite(Number(bottomGap)) ? Math.max(0, Number(bottomGap)) : VIDEO_NODE_VIEWPORT_BOTTOM_GAP
+  const viewportContentHeight = Math.max(0, safeViewportHeight - safeBottomGap)
+  const safeMinimumHeight = Number.isFinite(Number(minimumHeight)) ? Math.max(0, Number(minimumHeight)) : VIDEO_NODE_MIN_EXPANDED_HEIGHT
+  const safeMinimumContentHeight = Number.isFinite(Number(minimumContentHeight)) ? Math.max(0, Number(minimumContentHeight)) : VIDEO_NODE_MIN_CONTENT_HEIGHT
+  const effectiveZoom = getEffectiveVideoNodeZoom(zoom)
+  const safeHeaderScreenHeight = Number(headerScreenHeight)
+  const requiredMinimumScreenHeight = Number.isFinite(safeHeaderScreenHeight) && safeHeaderScreenHeight > 0
+    ? Math.max(safeMinimumHeight, safeHeaderScreenHeight + safeMinimumContentHeight * effectiveZoom)
+    : safeMinimumHeight
+  const operableMinimumHeight = Math.min(requiredMinimumScreenHeight, viewportContentHeight)
+  const availableHeight = Math.max(0, viewportContentHeight - Math.max(0, safeNodeTop))
+  const desiredScreenHeight = Math.min(viewportContentHeight, Math.max(operableMinimumHeight, availableHeight))
+  const maxHeight = desiredScreenHeight / effectiveZoom
+  const resolvedNodeTop = Math.min(safeNodeTop, viewportContentHeight - desiredScreenHeight)
+  return {
+    maxHeight,
+    desiredScreenHeight,
+    requiredMinimumScreenHeight,
+    effectiveZoom,
+    screenOffsetY: Math.min(0, resolvedNodeTop - safeNodeTop),
+    resolvedNodeTop,
+    viewportBottom: resolvedNodeTop + desiredScreenHeight
+  }
+}
+
+const getExpandedVideoNodeMaxHeight = ({ nodeTop, viewportHeight, zoom = 1, bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP } = {}) => {
+  return getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight, zoom, bottomGap }).maxHeight
+}
+
+const createExpandedVideoNodeViewportLifecycle = ({
+  getNodeTop,
+  getViewportHeight,
+  getZoom = () => 1,
+  getHeaderScreenHeight = () => Number.NaN,
+  setMaxHeight,
+  moveNodeByScreenOffset = () => {},
+  addResizeListener,
+  removeResizeListener
+}) => {
+  let listening = false
+  const recalculate = () => {
+    const nodeTop = getNodeTop()
+    const viewportHeight = getViewportHeight()
+    if (!Number.isFinite(Number(nodeTop)) || !Number.isFinite(Number(viewportHeight))) return null
+    const layout = getExpandedVideoNodeViewportLayout({
+      nodeTop,
+      viewportHeight,
+      zoom: getZoom(),
+      headerScreenHeight: getHeaderScreenHeight()
+    })
+    setMaxHeight(layout.maxHeight)
+    if (layout.screenOffsetY < 0) moveNodeByScreenOffset(layout.screenOffsetY, layout.effectiveZoom)
+    return layout
+  }
+  const handleResize = () => recalculate()
+
+  return {
+    recalculate,
+    start: () => {
+      recalculate()
+      if (listening) return
+      addResizeListener(handleResize)
+      listening = true
+    },
+    stop: () => {
+      if (!listening) return
+      removeResizeListener(handleResize)
+      listening = false
+    }
+  }
+}
+
+const createExpandedVideoNodeZoomLifecycle = ({
+  isExpanded,
+  afterRender,
+  requestFrame,
+  cancelFrame,
+  recalculate
+}) => {
+  let pendingFrame = null
+  let revision = 0
+
+  const cancel = () => {
+    revision += 1
+    if (pendingFrame === null) return
+    cancelFrame(pendingFrame)
+    pendingFrame = null
+  }
+  const handleZoomChange = async () => {
+    const currentRevision = ++revision
+    if (!isExpanded()) {
+      cancel()
+      return
+    }
+    await afterRender()
+    if (currentRevision !== revision || !isExpanded()) return
+    if (pendingFrame !== null) cancelFrame(pendingFrame)
+    pendingFrame = requestFrame(() => {
+      pendingFrame = null
+      if (currentRevision !== revision || !isExpanded()) return
+      recalculate()
+    })
+  }
+
+  return { handleZoomChange, cancel }
+}
+
+const createExpandedVideoNodeRestoreLifecycle = ({
+  setExpanded,
+  startViewport,
+  stopViewport,
+  scheduleStableRecalculation,
+  cancelStableRecalculation,
+  afterStateChange = () => {}
+}) => {
+  let active = false
+  const sync = value => {
+    const nextExpanded = Boolean(value)
+    setExpanded(nextExpanded)
+    if (active === nextExpanded) return false
+    active = nextExpanded
+    if (nextExpanded) {
+      startViewport()
+      scheduleStableRecalculation()
+    } else {
+      stopViewport()
+      cancelStableRecalculation()
+    }
+    afterStateChange(nextExpanded)
+    return true
+  }
+  const dispose = () => {
+    active = false
+    stopViewport()
+    cancelStableRecalculation()
+  }
+  return { sync, dispose }
+}
+
+const normalizeH3DirectorNodeState = value => ({
+  directorPlan: value?.directorPlan && typeof value.directorPlan === 'object' && !Array.isArray(value.directorPlan)
+    ? value.directorPlan
+    : null,
+  compiledDirectorPrompt: String(value?.compiledDirectorPrompt || '')
+})
+
+const createH3DirectorNodeStateController = ({ setLocalState, persistState }) => {
+  const restore = value => {
+    const state = normalizeH3DirectorNodeState(value)
+    setLocalState(state)
+    return state
+  }
+  const handleEditorState = value => {
+    const state = normalizeH3DirectorNodeState(value)
+    setLocalState(state)
+    persistState(state)
+    return state
+  }
+  return { restore, handleEditorState }
+}
+
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
 
@@ -341,7 +522,7 @@ const props = defineProps({
 })
 
 // Vue Flow instance | Vue Flow 实例
-const { updateNodeInternals } = useVueFlow()
+const { findNode, updateNodeInternals, updateNodePositions, viewport } = useVueFlow()
 
 // API config state | API 配置状态
 const isConfigured = computed(() => modelStore.isCurrentProviderConfigured)
@@ -352,6 +533,62 @@ const { loading, error, status, video: generatedVideo, progress, createVideoTask
 // Local state | 本地状态
 const showHandleMenu = ref(false)
 const isExpanded = ref(Boolean(props.data?.expanded))
+const nodeRootRef = ref(null)
+const nodeHeaderRef = ref(null)
+const expandedNodeMaxHeight = ref(getExpandedVideoNodeMaxHeight({
+  nodeTop: 0,
+  viewportHeight: typeof window === 'undefined' ? 0 : window.innerHeight,
+  zoom: viewport.value.zoom
+}))
+const expandedNodeStyle = computed(() => isExpanded.value
+  ? { maxHeight: `${expandedNodeMaxHeight.value}px`, overflow: 'hidden' }
+  : undefined)
+const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
+  getNodeTop: () => nodeRootRef.value?.getBoundingClientRect().top ?? Number.NaN,
+  getViewportHeight: () => window.innerHeight,
+  getZoom: () => viewport.value.zoom,
+  getHeaderScreenHeight: () => nodeHeaderRef.value?.getBoundingClientRect().height ?? Number.NaN,
+  setMaxHeight: value => {
+    if (expandedNodeMaxHeight.value === value) return
+    expandedNodeMaxHeight.value = value
+    nextTick(() => updateNodeInternals(props.id))
+  },
+  moveNodeByScreenOffset: (screenOffsetY, effectiveZoom) => {
+    const node = findNode(props.id)
+    if (!node) return
+    const position = {
+      x: node.computedPosition.x,
+      y: node.computedPosition.y + screenOffsetY / effectiveZoom
+    }
+    updateNodePositions([{
+      id: node.id,
+      position,
+      from: node.position,
+      distance: { x: 0, y: screenOffsetY / effectiveZoom },
+      dimensions: node.dimensions,
+      parentNode: node.parentNode
+    }], true, false)
+    scheduleCanvasSave()
+  },
+  addResizeListener: handler => window.addEventListener('resize', handler),
+  removeResizeListener: handler => window.removeEventListener('resize', handler)
+})
+const expandedZoomLifecycle = createExpandedVideoNodeZoomLifecycle({
+  isExpanded: () => isExpanded.value,
+  afterRender: () => nextTick(),
+  requestFrame: callback => window.requestAnimationFrame(callback),
+  cancelFrame: frameId => window.cancelAnimationFrame(frameId),
+  recalculate: () => expandedViewportLifecycle.recalculate()
+})
+const expandedRestoreLifecycle = createExpandedVideoNodeRestoreLifecycle({
+  setExpanded: value => { isExpanded.value = value },
+  startViewport: () => expandedViewportLifecycle.start(),
+  stopViewport: () => expandedViewportLifecycle.stop(),
+  scheduleStableRecalculation: () => expandedZoomLifecycle.handleZoomChange(),
+  cancelStableRecalculation: () => expandedZoomLifecycle.cancel(),
+  afterStateChange: () => nextTick(() => updateNodeInternals(props.id))
+})
+watch(() => viewport.value.zoom, () => expandedZoomLifecycle.handleZoomChange())
 const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
@@ -380,6 +617,14 @@ const compositionError = ref('')
 const compiledDirectorPrompt = ref(props.data?.compiledDirectorPrompt || '')
 const directorPlan = ref(props.data?.directorPlan || null)
 const confirmedMultiViewReference = ref(props.data?.confirmedMultiViewReference || null)
+const directorStateController = createH3DirectorNodeStateController({
+  setLocalState: state => {
+    directorPlan.value = state.directorPlan
+    compiledDirectorPrompt.value = state.compiledDirectorPrompt
+  },
+  persistState: state => updateNode(props.id, state)
+})
+const handleDirectorStateUpdate = state => directorStateController.handleEditorState(state)
 
 const handleMultiViewConfirmed = (reference) => {
   confirmedMultiViewReference.value = reference
@@ -704,11 +949,10 @@ const resolveAvailableVideoModel = () => {
   return availableModels[0]?.key || DEFAULT_VIDEO_MODEL
 }
 
-const toggleExpanded = async () => {
-  isExpanded.value = !isExpanded.value
-  updateNode(props.id, { expanded: isExpanded.value })
-  await nextTick()
-  updateNodeInternals(props.id)
+const toggleExpanded = () => {
+  const nextExpanded = !isExpanded.value
+  expandedRestoreLifecycle.sync(nextExpanded)
+  updateNode(props.id, { expanded: nextExpanded })
 }
 
 // Handle duplicate | 处理复制
@@ -1192,14 +1436,34 @@ onMounted(() => {
     localModel.value = resolvedModel
     updateNode(props.id, { model: resolvedModel })
   }
+  expandedRestoreLifecycle.sync(Boolean(props.data?.expanded))
+})
+
+onBeforeUnmount(() => {
+  expandedRestoreLifecycle.dispose()
 })
 
 // Watch for model changes from props | 监听 props 中模型变化
+watch(() => props.data?.expanded, value => {
+  expandedRestoreLifecycle.sync(value)
+})
+
 watch(() => props.data?.model, (newModel) => {
   if (newModel && newModel !== localModel.value) {
     localModel.value = newModel
   }
 })
+
+watch(
+  () => [props.data?.directorPlan, props.data?.compiledDirectorPrompt],
+  ([nextDirectorPlan, nextCompiledPrompt]) => {
+    directorStateController.restore({
+      directorPlan: nextDirectorPlan,
+      compiledDirectorPrompt: nextCompiledPrompt
+    })
+  },
+  { deep: true }
+)
 
 // 修复 Vue Flow visibility: hidden 问题
 // 当节点数据变化时，强制更新内部状态
