@@ -49,4 +49,19 @@ assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__handle\.connecting/, 
 assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__handle\.vue-flow__handle-valid/, 'valid connection targets must be visually highlighted')
 assert.match(globalStyleSource, /\.canvas-flow \.vue-flow__connection-path/, 'the active connection line must stay visible while dragging')
 
+for (const eventName of ['connect-start', 'connect-end', 'click-connect-start', 'click-connect-end']) {
+  assert.match(canvasSource, new RegExp(`@${eventName}="handleConnection(?:Start|End)"`), `${eventName} must participate in the dock lifecycle`)
+}
+assert.match(canvasSource, /'canvas-prompt-dock--connection-active': connectionInProgress && promptDockExpanded/, 'only an expanded H3 dock should move aside during a connection')
+assert.match(canvasSource, /const connectionInProgress = ref\(false\)/)
+const connectionLifecycleSource = canvasSource.match(
+  /const handleConnectionStart = \(\) => \{[\s\S]*?const handleConnectionEnd = \(\) => \{[\s\S]*?\n\}/
+)?.[0] || ''
+assert.match(connectionLifecycleSource, /handleConnectionStart[\s\S]*?connectionInProgress\.value = true/)
+assert.match(connectionLifecycleSource, /handleConnectionEnd[\s\S]*?connectionInProgress\.value = false/)
+assert.doesNotMatch(connectionLifecycleSource, /promptDockExpanded\.value\s*=|chatInput\.value\s*=|directorPlan\.value\s*=/, 'connection lifecycle must preserve H3 expansion, input, and plan state')
+const activeConnectionDockCss = canvasSource.match(/\.canvas-prompt-dock--connection-active\s*\{[\s\S]*?\}/)?.[0] || ''
+assert.match(activeConnectionDockCss, /pointer-events:\s*none/, 'the H3 dock must stop intercepting connection targets temporarily')
+assert.match(activeConnectionDockCss, /opacity:\s*0/, 'the H3 dock must visibly move aside without unmounting its content')
+
 console.log('canvasNativeSelectors.test.mjs passed')

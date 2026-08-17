@@ -58,6 +58,10 @@
         :auto-pan-on-connect="true"
         :auto-pan-speed="18"
         @connect="onConnect"
+        @connect-start="handleConnectionStart"
+        @connect-end="handleConnectionEnd"
+        @click-connect-start="handleConnectionStart"
+        @click-connect-end="handleConnectionEnd"
         @node-click="onNodeClick"
         @node-drag-stop="handleNodeDragStop"
         @pane-click="onPaneClick"
@@ -184,7 +188,11 @@
       <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
       <div
         class="canvas-prompt-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20"
-        :class="{ 'canvas-prompt-dock--collapsed': !promptDockExpanded, 'canvas-prompt-dock--director': directorPlan }"
+        :class="{
+          'canvas-prompt-dock--collapsed': !promptDockExpanded,
+          'canvas-prompt-dock--director': directorPlan,
+          'canvas-prompt-dock--connection-active': connectionInProgress && promptDockExpanded
+        }"
       >
         <button
           v-if="!promptDockExpanded"
@@ -498,6 +506,7 @@ const directorError = ref('')
 const directorStatusText = ref('')
 const promptDockExpanded = ref(false)
 const promptDockTouched = ref(false)
+const connectionInProgress = ref(false)
 const starterActions = buildCanvasStarterActions()
 
 watch(
@@ -513,6 +522,14 @@ watch(
 const setPromptDockExpanded = (expanded) => {
   promptDockTouched.value = true
   promptDockExpanded.value = Boolean(expanded)
+}
+
+const handleConnectionStart = () => {
+  connectionInProgress.value = true
+}
+
+const handleConnectionEnd = () => {
+  connectionInProgress.value = false
 }
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
@@ -1323,6 +1340,12 @@ onUnmounted(() => {
   bottom: 18px !important;
   max-width: 760px !important;
   transition: max-width 180ms ease;
+}
+
+.canvas-prompt-dock--connection-active {
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 24px) scale(0.98) !important;
 }
 
 .canvas-prompt-dock--collapsed {
