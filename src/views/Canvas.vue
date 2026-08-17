@@ -746,12 +746,22 @@ const handleAddWorkflow = ({ workflow, options }) => {
 }
 
 // Handle connection | 处理连接
+const getCanvasConnectionId = params => {
+  if (params?.id) return String(params.id)
+  return `edge_${[
+    params?.source,
+    params?.target,
+    params?.sourceHandle,
+    params?.targetHandle
+  ].map(value => encodeURIComponent(String(value || ''))).join('|')}`
+}
+
 const isDuplicateCanvasConnection = (existingEdges, params) => {
   const source = String(params?.source || '')
   const target = String(params?.target || '')
   const sourceHandle = String(params?.sourceHandle || '')
   const targetHandle = String(params?.targetHandle || '')
-  const edgeId = String(params?.id || `edge_${source}_${target}`)
+  const edgeId = getCanvasConnectionId(params)
 
   return existingEdges.some(edge => {
     if (String(edge?.id || '') === edgeId) return true
@@ -763,7 +773,8 @@ const isDuplicateCanvasConnection = (existingEdges, params) => {
 }
 
 const onConnect = (params) => {
-  if (isDuplicateCanvasConnection(edges.value, params)) return
+  const connectionParams = { ...params, id: getCanvasConnectionId(params) }
+  if (isDuplicateCanvasConnection(edges.value, connectionParams)) return
 
   // Check connection types | 检查连接类型
   const sourceNode = nodes.value.find(n => n.id === params.source)
@@ -772,7 +783,7 @@ const onConnect = (params) => {
   if (sourceNode?.type === 'image' && targetNode?.type === 'videoConfig') {
     // Use imageRole edge type | 使用图片角色边类型
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'imageRole',
       data: { imageRole: 'first_frame_image' } // Default to first frame | 默认首帧
     })
@@ -785,7 +796,7 @@ const onConnect = (params) => {
     const nextOrder = existingTextEdges.length + 1
     
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'promptOrder',
       data: { promptOrder: nextOrder }
     })
@@ -819,7 +830,7 @@ const onConnect = (params) => {
     const nextOrder = existingImageEdges.length + mentionedImageCount + 1
 
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'imageOrder',
       data: { imageOrder: nextOrder }
     })
@@ -831,19 +842,19 @@ const onConnect = (params) => {
     const nextOrder = existingTextEdges.length + 1
 
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'promptOrder',
       data: { promptOrder: nextOrder }
     })
   } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'videoConfig') {
     // LLM output as prompt for video generation | LLM 输出作为视频生成提示词
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'promptOrder',
       data: { promptOrder: 1 }
     })
   } else {
-    addEdge(params)
+    addEdge(connectionParams)
   }
 }
 const onNodeClick = (event) => {

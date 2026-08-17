@@ -33,26 +33,33 @@ assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must no
 assert.match(h3DirectorSource, /overflow-wrap:anywhere/, 'compiled H3 prompts must wrap long tokens inside the node')
 const canvasSource = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
 const globalStyleSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8')
-const duplicateConnectionSource = canvasSource.match(
-  /const isDuplicateCanvasConnection = ([\s\S]*?)\n\nconst onConnect/
+const connectionIdentitySource = canvasSource.match(
+  /(const getCanvasConnectionId = [\s\S]*?const isDuplicateCanvasConnection = [\s\S]*?)\n\nconst onConnect/
 )?.[1] || ''
-assert.ok(duplicateConnectionSource, 'canvas connections must expose an executable idempotency guard')
-const { default: isDuplicateCanvasConnection } = await import(
-  `data:text/javascript,${encodeURIComponent(`export default ${duplicateConnectionSource}`)}`
+assert.ok(connectionIdentitySource, 'canvas connections must expose executable stable ID and idempotency helpers')
+const { getCanvasConnectionId, isDuplicateCanvasConnection } = await import(
+  `data:text/javascript,${encodeURIComponent(`${connectionIdentitySource}\nexport { getCanvasConnectionId, isDuplicateCanvasConnection }`)}`
 )
 const connection = { source: 'node_0', target: 'node_1', sourceHandle: 'right', targetHandle: 'left' }
 let persistedConnections = []
 const receiveConnectionEvent = params => {
-  if (isDuplicateCanvasConnection(persistedConnections, params)) return
-  persistedConnections = [...persistedConnections, { id: `edge_${params.source}_${params.target}`, ...params }]
+  const connectionWithId = { ...params, id: getCanvasConnectionId(params) }
+  if (isDuplicateCanvasConnection(persistedConnections, connectionWithId)) return
+  persistedConnections = [...persistedConnections, connectionWithId]
 }
 receiveConnectionEvent(connection) // drag connect
 receiveConnectionEvent({ ...connection }) // duplicate drag connect
-receiveConnectionEvent({ ...connection, id: 'edge_node_0_node_1' }) // interleaved click connect
+receiveConnectionEvent({ ...connection, id: getCanvasConnectionId(connection) }) // interleaved click connect
 assert.equal(persistedConnections.length, 1, 'duplicate drag/click events must persist one unique edge')
+const alternateHandleConnection = { ...connection, sourceHandle: 'alternate-right' }
+receiveConnectionEvent(alternateHandleConnection)
+assert.equal(persistedConnections.length, 2, 'the same nodes must keep a legal connection from a different handle')
+assert.notEqual(persistedConnections[0].id, persistedConnections[1].id, 'different handle tuples need collision-free stable IDs')
+receiveConnectionEvent({ ...alternateHandleConnection })
+assert.equal(persistedConnections.length, 2, 'duplicate events for the alternate handle must remain idempotent')
 receiveConnectionEvent({ ...connection, target: 'node_2' })
-assert.equal(persistedConnections.length, 2, 'a different endpoint must remain connectable')
-assert.match(canvasSource, /const onConnect = \(params\) => \{\s*if \(isDuplicateCanvasConnection\(edges\.value, params\)\) return/, 'the executable guard must run before Canvas persists an edge')
+assert.equal(persistedConnections.length, 3, 'a different endpoint must remain connectable')
+assert.match(canvasSource, /const connectionParams = \{ \.\.\.params, id: getCanvasConnectionId\(params\) \}/, 'Canvas must pass the stable ID to its existing addEdge path')
 const collapsedDockCss = canvasSource.match(/\.canvas-prompt-dock--collapsed\s*\{[\s\S]*?\}/)?.[0] || ''
 assert.match(collapsedDockCss, /max-width:\s*180px/, 'collapsed H3 director must stay compact')
 assert.match(collapsedDockCss, /left:\s*180px/, 'collapsed H3 director must leave the center connection area clear')
