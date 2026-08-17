@@ -27,6 +27,16 @@ assert.match(videoSource, /modelStore\.allVideoModelOptions/, 'mixed-provider wo
 assert.match(videoSource, /activateModelProvider\(localModel\.value\)/, 'video generation must activate its own model provider')
 assert.match(imageSource, /activateModelProvider\(localModel\.value\)/, 'image generation must activate its own model provider')
 assert.match(videoSource, /data-testid="video-node-expand-toggle"/, 'the video node must expose a one-click expand control')
+const videoHeaderSource = videoSource.match(
+  /<div[^>]*data-testid="video-config-sticky-header"[^>]*>[\s\S]*?<\/div>\s*<\/div>/
+)?.[0] || ''
+assert.ok(videoHeaderSource, 'the video node header must expose its real sticky scroll-shell boundary')
+assert.match(videoHeaderSource, /class="[^"]*\bsticky\b[^"]*"/, 'the video node header must remain fixed while its root scroll shell moves')
+assert.match(videoHeaderSource, /class="[^"]*\btop-0\b[^"]*"/, 'the sticky video node header must stay at the shell top')
+assert.match(videoHeaderSource, /class="[^"]*\bz-\d+\b[^"]*"/, 'the sticky video node header must paint above scrolled controls')
+assert.match(videoHeaderSource, /class="[^"]*\bshrink-0\b[^"]*"/, 'the sticky video node header must keep an operable control height')
+assert.match(videoHeaderSource, /class="[^"]*bg-\[var\(--bg-secondary\)\][^"]*"/, 'the sticky video node header must have an opaque node background')
+assert.match(videoHeaderSource, /data-testid="video-node-expand-toggle"/, 'the expand/collapse toggle must remain inside the sticky header')
 const expandedViewportHelpersSource = videoSource.match(
   /(const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = [\s\S]*?const createExpandedVideoNodeViewportLifecycle = [\s\S]*?\n})\n\n\/\/ 使用 Pinia/
 )?.[1] || ''

@@ -6,7 +6,7 @@
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
       :style="expandedNodeStyle">
       <!-- Header | 头部 -->
-      <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
+      <div data-testid="video-config-sticky-header" class="sticky top-0 z-20 flex shrink-0 items-center justify-between rounded-t-xl border-b border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
         <span
           v-if="!isEditingLabel"
           @dblclick="startEditLabel"
