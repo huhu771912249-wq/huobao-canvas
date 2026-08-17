@@ -334,9 +334,14 @@ import {
 
 const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = 24
 const VIDEO_NODE_MIN_EXPANDED_HEIGHT = 160
+const getEffectiveVideoNodeZoom = value => {
+  const zoom = Number(value)
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+}
 const getExpandedVideoNodeViewportLayout = ({
   nodeTop,
   viewportHeight,
+  zoom = 1,
   bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP,
   minimumHeight = VIDEO_NODE_MIN_EXPANDED_HEIGHT
 } = {}) => {
@@ -347,23 +352,28 @@ const getExpandedVideoNodeViewportLayout = ({
   const safeMinimumHeight = Number.isFinite(Number(minimumHeight)) ? Math.max(0, Number(minimumHeight)) : VIDEO_NODE_MIN_EXPANDED_HEIGHT
   const operableMinimumHeight = Math.min(safeMinimumHeight, viewportContentHeight)
   const availableHeight = Math.max(0, viewportContentHeight - Math.max(0, safeNodeTop))
-  const maxHeight = Math.min(viewportContentHeight, Math.max(operableMinimumHeight, availableHeight))
-  const resolvedNodeTop = Math.min(safeNodeTop, viewportContentHeight - maxHeight)
+  const desiredScreenHeight = Math.min(viewportContentHeight, Math.max(operableMinimumHeight, availableHeight))
+  const effectiveZoom = getEffectiveVideoNodeZoom(zoom)
+  const maxHeight = desiredScreenHeight / effectiveZoom
+  const resolvedNodeTop = Math.min(safeNodeTop, viewportContentHeight - desiredScreenHeight)
   return {
-    maxHeight: Math.floor(maxHeight),
-    screenOffsetY: Math.floor(Math.min(0, resolvedNodeTop - safeNodeTop)),
-    resolvedNodeTop: Math.floor(resolvedNodeTop),
-    viewportBottom: Math.floor(resolvedNodeTop + maxHeight)
+    maxHeight,
+    desiredScreenHeight,
+    effectiveZoom,
+    screenOffsetY: Math.min(0, resolvedNodeTop - safeNodeTop),
+    resolvedNodeTop,
+    viewportBottom: resolvedNodeTop + desiredScreenHeight
   }
 }
 
-const getExpandedVideoNodeMaxHeight = ({ nodeTop, viewportHeight, bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP } = {}) => {
-  return getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight, bottomGap }).maxHeight
+const getExpandedVideoNodeMaxHeight = ({ nodeTop, viewportHeight, zoom = 1, bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP } = {}) => {
+  return getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight, zoom, bottomGap }).maxHeight
 }
 
 const createExpandedVideoNodeViewportLifecycle = ({
   getNodeTop,
   getViewportHeight,
+  getZoom = () => 1,
   setMaxHeight,
   moveNodeByScreenOffset = () => {},
   addResizeListener,
@@ -374,9 +384,9 @@ const createExpandedVideoNodeViewportLifecycle = ({
     const nodeTop = getNodeTop()
     const viewportHeight = getViewportHeight()
     if (!Number.isFinite(Number(nodeTop)) || !Number.isFinite(Number(viewportHeight))) return null
-    const layout = getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight })
+    const layout = getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight, zoom: getZoom() })
     setMaxHeight(layout.maxHeight)
-    if (layout.screenOffsetY < 0) moveNodeByScreenOffset(layout.screenOffsetY)
+    if (layout.screenOffsetY < 0) moveNodeByScreenOffset(layout.screenOffsetY, layout.effectiveZoom)
     return layout
   }
   const handleResize = () => recalculate()
@@ -420,7 +430,8 @@ const isExpanded = ref(Boolean(props.data?.expanded))
 const nodeRootRef = ref(null)
 const expandedNodeMaxHeight = ref(getExpandedVideoNodeMaxHeight({
   nodeTop: 0,
-  viewportHeight: typeof window === 'undefined' ? 0 : window.innerHeight
+  viewportHeight: typeof window === 'undefined' ? 0 : window.innerHeight,
+  zoom: viewport.value.zoom
 }))
 const expandedNodeStyle = computed(() => isExpanded.value
   ? { maxHeight: `${expandedNodeMaxHeight.value}px`, overflowY: 'auto' }
@@ -428,24 +439,24 @@ const expandedNodeStyle = computed(() => isExpanded.value
 const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   getNodeTop: () => nodeRootRef.value?.getBoundingClientRect().top ?? Number.NaN,
   getViewportHeight: () => window.innerHeight,
+  getZoom: () => viewport.value.zoom,
   setMaxHeight: value => {
     if (expandedNodeMaxHeight.value === value) return
     expandedNodeMaxHeight.value = value
     nextTick(() => updateNodeInternals(props.id))
   },
-  moveNodeByScreenOffset: screenOffsetY => {
+  moveNodeByScreenOffset: (screenOffsetY, effectiveZoom) => {
     const node = findNode(props.id)
     if (!node) return
-    const zoom = Math.max(0.1, Number(viewport.value.zoom) || 1)
     const position = {
       x: node.computedPosition.x,
-      y: node.computedPosition.y + screenOffsetY / zoom
+      y: node.computedPosition.y + screenOffsetY / effectiveZoom
     }
     updateNodePositions([{
       id: node.id,
       position,
       from: node.position,
-      distance: { x: 0, y: screenOffsetY / zoom },
+      distance: { x: 0, y: screenOffsetY / effectiveZoom },
       dimensions: node.dimensions,
       parentNode: node.parentNode
     }], true, false)

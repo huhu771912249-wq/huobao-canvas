@@ -55,19 +55,38 @@ for (const nodeTop of [850, 875, 876, 900]) {
   assert.ok(layout.resolvedNodeTop >= 0, `extreme lower node at ${nodeTop}px must remain inside the viewport top`)
   assert.ok(layout.viewportBottom <= 876, `extreme lower node at ${nodeTop}px must preserve the 24px bottom safety gap`)
 }
+const zoomHeightCases = new Map([
+  [0.8, 200],
+  [1, 160],
+  [1.25, 128],
+  [2, 80]
+])
+for (const [zoom, expectedCssHeight] of zoomHeightCases) {
+  const layout = getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom })
+  const renderedHeight = layout.maxHeight * zoom
+  const renderedBottom = 875 + layout.screenOffsetY + renderedHeight
+  assert.equal(layout.maxHeight, expectedCssHeight, `zoom ${zoom} must convert the 160px screen shell into flow/CSS units`)
+  assert.ok(renderedHeight >= 160, `zoom ${zoom} rendered shell must remain at least 160px tall`)
+  assert.ok(renderedBottom <= 876, `zoom ${zoom} rendered shell must preserve the bottom safety gap`)
+}
+assert.equal(getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom: 0 }).effectiveZoom, 1)
+assert.equal(getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom: -1 }).effectiveZoom, 1)
+assert.equal(getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom: Number.NaN }).effectiveZoom, 1)
 
 let measuredNodeTop = 100
 let measuredViewportHeight = 900
+let measuredZoom = 0.8
 let resizeHandler = null
 let resizeAdds = 0
 let resizeRemoves = 0
 const appliedMaxHeights = []
-const appliedScreenOffsets = []
+const appliedViewportMoves = []
 const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   getNodeTop: () => measuredNodeTop,
   getViewportHeight: () => measuredViewportHeight,
+  getZoom: () => measuredZoom,
   setMaxHeight: value => appliedMaxHeights.push(value),
-  moveNodeByScreenOffset: value => appliedScreenOffsets.push(value),
+  moveNodeByScreenOffset: (screenOffsetY, effectiveZoom) => appliedViewportMoves.push({ screenOffsetY, effectiveZoom }),
   addResizeListener: handler => {
     resizeAdds += 1
     resizeHandler = handler
@@ -81,17 +100,20 @@ const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
 expandedViewportLifecycle.start()
 expandedViewportLifecycle.start()
 assert.equal(resizeAdds, 1, 'repeated expanded lifecycle starts must register one resize listener')
-assert.equal(appliedMaxHeights.at(-1), 776)
+assert.equal(appliedMaxHeights.at(-1), 970)
 measuredNodeTop = 700
 resizeHandler()
-assert.equal(appliedMaxHeights.at(-1), 176, 'resize must recalculate from the node current viewport top')
+assert.equal(appliedMaxHeights.at(-1), 220, 'resize must recalculate screen height into flow/CSS units')
 measuredNodeTop = 875
 resizeHandler()
-assert.equal(appliedMaxHeights.at(-1), 160, 'extreme lower resize must retain the operable shell height')
-assert.equal(appliedScreenOffsets.at(-1), -159, 'extreme lower resize must request a real upward canvas movement')
+assert.equal(appliedMaxHeights.at(-1), 200, 'extreme lower resize must retain 160 rendered pixels at 0.8 zoom')
+assert.deepEqual(appliedViewportMoves.at(-1), { screenOffsetY: -159, effectiveZoom: 0.8 }, 'extreme lower resize must pass the screen move with its effective zoom')
+assert.equal(appliedViewportMoves.at(-1).screenOffsetY / appliedViewportMoves.at(-1).effectiveZoom, -198.75, 'screen movement must convert to flow coordinates')
 measuredNodeTop = 716
+measuredZoom = 2
 resizeHandler()
-assert.equal(appliedScreenOffsets.length, 1, 'the resolved viewport position must not keep moving upward')
+assert.equal(appliedMaxHeights.at(-1), 80, 'resize must recalculate CSS height when zoom changes')
+assert.equal(appliedViewportMoves.length, 1, 'the resolved viewport position must not keep moving upward')
 expandedViewportLifecycle.stop()
 expandedViewportLifecycle.stop()
 assert.equal(resizeRemoves, 1, 'collapse and unmount cleanup must be idempotent')
@@ -102,7 +124,7 @@ assert.match(videoSource, /overflowY:\s*'auto'/, 'expanded video nodes must make
 assert.doesNotMatch(videoSource, /calc\(100vh - 96px\)/, 'fixed viewport height must not remain the sizing solution')
 assert.match(videoSource, /expandedViewportLifecycle\.stop\(\)[\s\S]*?await nextTick\(\)/, 'collapse must stop viewport resize tracking')
 assert.match(videoSource, /onBeforeUnmount\(\(\) => expandedViewportLifecycle\.stop\(\)\)/, 'unmount must clean up viewport resize tracking')
-assert.match(videoSource, /updateNodePositions\(\[\{[\s\S]*?screenOffsetY \/ zoom[\s\S]*?}], true, false\)/, 'viewport relief must update real Vue Flow coordinates instead of using a visual transform')
+assert.match(videoSource, /updateNodePositions\(\[\{[\s\S]*?screenOffsetY \/ effectiveZoom[\s\S]*?}], true, false\)/, 'viewport relief must update real Vue Flow coordinates instead of using a visual transform')
 assert.match(videoSource, /updateNodeInternals\(props\.id\)/, 'the video node must refresh its Vue Flow bounds after resizing')
 assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must not widen the video node')
 assert.match(h3DirectorSource, /overflow-wrap:anywhere/, 'compiled H3 prompts must wrap long tokens inside the node')
