@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   AUTH_SESSION_CACHE_MS,
+  createGuardedUrlLaunchAction,
   createLatestNavigationRunner,
   createLatestRequestGate,
   hasFreshAuthenticatedSession,
@@ -72,6 +73,43 @@ const assertLatestNavigationWins = async completionOrder => {
 await assertLatestNavigationWins(['A', 'B'])
 await assertLatestNavigationWins(['B', 'A'])
 
+const urlReplaceDelay = createDeferred()
+const shortcutNavigationDelay = createDeferred()
+const urlLaunchPendingUpdates = []
+let urlLaunchCreateCount = 0
+let urlLaunchNavigateCount = 0
+let urlLaunchDestination = null
+const runUrlLaunchNavigation = createLatestNavigationRunner({
+  setPending: (active, intent) => { urlLaunchPendingUpdates.push({ active, intent }) }
+})
+const staleUrlLaunch = runUrlLaunchNavigation('url-launch:gifEditor', createGuardedUrlLaunchAction({
+  replace: () => urlReplaceDelay.promise,
+  launch: () => {
+    urlLaunchCreateCount += 1
+    urlLaunchNavigateCount += 1
+    urlLaunchDestination = { url: '/gif-editor', title: '水印与 GIF 素材编辑', form: 'gif' }
+  }
+}))
+const latestShortcut = runUrlLaunchNavigation('studio:resize', async ({ commit }) => {
+  await shortcutNavigationDelay.promise
+  return commit(() => {
+    urlLaunchDestination = { url: '/video-resize', title: '视频尺寸工作台', form: 'resize' }
+  })
+})
+urlReplaceDelay.resolve()
+await Promise.resolve()
+shortcutNavigationDelay.resolve()
+await Promise.all([staleUrlLaunch, latestShortcut])
+
+assert.equal(urlLaunchCreateCount, 0, 'stale URL launch must not create a project after replace resolves')
+assert.equal(urlLaunchNavigateCount, 0, 'stale URL launch must not navigate after replace resolves')
+assert.deepEqual(urlLaunchDestination, { url: '/video-resize', title: '视频尺寸工作台', form: 'resize' })
+assert.deepEqual(urlLaunchPendingUpdates, [
+  { active: true, intent: 'url-launch:gifEditor' },
+  { active: true, intent: 'studio:resize' },
+  { active: false, intent: 'studio:resize' }
+], 'stale URL launch must not clear the latest shortcut loading state')
+
 assert.equal(normalizeStudioTab('novel'), 'novel')
 assert.equal(normalizeStudioTab('assets'), 'assets')
 assert.equal(normalizeStudioTab('unknown'), 'quick')
@@ -101,6 +139,8 @@ assert.match(studio, /computed\(\(\) => normalizeStudioTab\(route\.query\.tab\)\
 assert.match(studio, /route\.query\.job/)
 assert.match(home, /navigationPending/)
 assert.match(home, /createProject\(cleanPrompt \|\| entry\.title, \{/)
+assert.match(home, /runNavigation\(`url-launch:\$\{launch\}`, createGuardedUrlLaunchAction\(\{[\s\S]*?replace:\s*\(\) => router\.replace\(\{ path: '\/' \}\),[\s\S]*?launch:\s*\(\) => launchFlow\(launch\)/, 'URL launch must register one guarded token before replace')
+assert.doesNotMatch(home, /await router\.replace\(\{ path: '\/' \}\)\s*handleLaunch\(launch\)/, 'URL launch must not create a second token after replace')
 const creationCardMarkup = launcher.match(/<div class="creation-grid">[\s\S]*?<\/div>\s*<div class="suggestion-row">/)?.[0] || ''
 assert.ok(creationCardMarkup, 'launcher must expose creation shortcuts')
 assert.doesNotMatch(creationCardMarkup, /:disabled="busy"/, 'pending navigation must not disable switching to another shortcut')

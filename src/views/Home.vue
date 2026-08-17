@@ -74,7 +74,7 @@ import {
 import { useModelStore } from '../stores/pinia'
 import { buildCanvasLaunch, WORKSPACE_LAUNCH_LABELS } from '../config/workspaceLaunch'
 import { nextSuggestionSetIndex } from '../utils/suggestions'
-import { createLatestNavigationRunner } from '../utils/navigationState'
+import { createGuardedUrlLaunchAction, createLatestNavigationRunner } from '../utils/navigationState'
 import ApiSettings from '../components/ApiSettings.vue'
 import CreationLauncher from '../components/home/CreationLauncher.vue'
 import RecentProjects from '../components/home/RecentProjects.vue'
@@ -303,14 +303,17 @@ const createFlowProject = (flow) => {
   return checkApiKeyAndNavigate(create)
 }
 
-const handleLaunch = (flow) => {
-  return runNavigation(`launch:${flow}`, ({ commit }) => commit(() => {
-    if (flow === 'image') return createPromptProject()
-    if (flow === 'video') return createVideoProject(videoEntries.video)
-    if (flow === 'image-to-video') return createVideoProject(videoEntries['image-to-video'])
-    return createFlowProject(flow)
-  }))
+const launchFlow = flow => {
+  if (flow === 'image') return createPromptProject()
+  if (flow === 'video') return createVideoProject(videoEntries.video)
+  if (flow === 'image-to-video') return createVideoProject(videoEntries['image-to-video'])
+  return createFlowProject(flow)
 }
+
+const handleLaunch = flow => runNavigation(
+  `launch:${flow}`,
+  ({ commit }) => commit(() => launchFlow(flow))
+)
 
 const handlePromptSubmit = (prompt) => {
   if (!String(prompt || '').trim()) {
@@ -389,8 +392,10 @@ onMounted(async () => {
   const panel = String(route.query.panel || '')
   const section = String(route.query.section || '')
   if (launch && WORKSPACE_LAUNCH_LABELS[launch]) {
-    await router.replace({ path: '/' })
-    handleLaunch(launch)
+    await runNavigation(`url-launch:${launch}`, createGuardedUrlLaunchAction({
+      replace: () => router.replace({ path: '/' }),
+      launch: () => launchFlow(launch)
+    }))
     return
   }
   if (panel === 'tasks') {

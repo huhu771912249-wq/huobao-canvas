@@ -32,6 +32,12 @@ export const createLatestNavigationRunner = ({ setPending = () => {} } = {}) => 
   }
 }
 
+export const createGuardedUrlLaunchAction = ({ replace, launch }) => async ({ isCurrent, commit }) => {
+  await replace()
+  if (!isCurrent()) return false
+  return commit(launch)
+}
+
 const STUDIO_TABS = new Set(['quick', 'novel', 'assets'])
 
 export const normalizeStudioTab = value => {
