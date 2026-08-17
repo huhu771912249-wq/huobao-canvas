@@ -94,7 +94,7 @@
                 v-for="item in activeTextTracks"
                 :key="item.id"
                 class="stage-text"
-                :class="[{ selected: selectedType === 'text' && selectedId === item.id }, `effect-${item.effect}`]"
+                :class="{ selected: selectedType === 'text' && selectedId === item.id }"
                 :style="textOverlayStyle(item)"
                 type="button"
                 @click.stop="selectItem('text', item.id)"
@@ -157,8 +157,7 @@
         <section v-if="selectedText" class="inspector-section">
           <div class="section-label">文字内容</div>
           <textarea v-model="selectedText.text" rows="3" maxlength="80"></textarea>
-          <label>样式<select v-model="selectedText.style"><option>爆款白字</option><option>高亮黄字</option><option>品牌渐变</option><option>字幕黑底</option></select></label>
-          <label>入场效果<select v-model="selectedText.effect"><option value="pop">弹入</option><option value="fade">淡入</option><option value="slide">上滑</option><option value="none">无</option></select></label>
+          <label>样式<select v-model="selectedText.style"><option v-for="styleName in textStyleNames" :key="styleName">{{ styleName }}</option></select></label>
           <div class="field-pair"><label>开始（秒）<input v-model.number="selectedText.start" type="number" min="0" :max="totalDuration" step="0.1"></label><label>结束（秒）<input v-model.number="selectedText.end" type="number" min="0.1" :max="totalDuration" step="0.1"></label></div>
           <label>字号 {{ selectedText.fontSize }} px<input v-model.number="selectedText.fontSize" type="range" min="14" max="72"></label>
           <label>横向位置 {{ selectedText.x }}%<input v-model.number="selectedText.x" type="range" min="5" max="95"></label>
@@ -201,15 +200,14 @@
     <div v-if="showExport" class="modal-backdrop" @click.self="showExport = false">
       <section class="export-modal">
         <button class="modal-close" type="button" @click="showExport = false">×</button>
-        <div class="modal-icon">GIF</div><span class="eyebrow">REAL GIF EXPORT</span><h2>{{ exportResultUrl ? '水印 GIF 已生成' : '生成水印 GIF' }}</h2>
-        <p v-if="!exportResultUrl">将调用后端 FFmpeg 真实合成。必须先导入一段 GIF/视频，并至少添加一张水印图片。</p>
-        <p v-if="textTracks.length && !exportResultUrl" class="export-warning">本批真实导出只合成图片水印；文字和多段转场不会冒充已导出效果。</p>
+        <div class="modal-icon">GIF</div><span class="eyebrow">REAL GIF EXPORT</span><h2>{{ exportResultUrl ? '编辑 GIF 已生成' : '生成编辑 GIF' }}</h2>
+        <p v-if="!exportResultUrl">将调用后端 FFmpeg 真实合成。必须先导入一段 GIF/视频，并至少添加一条文字或一张图片水印。</p>
         <img v-if="exportResultUrl" :src="exportResultUrl" alt="水印 GIF 成品" class="result-preview">
         <dl><div><dt>画布</dt><dd>{{ outputPreset.label }}</dd></div><div><dt>时间</dt><dd>{{ displayedDuration.toFixed(1) }} 秒</dd></div><div><dt>质量</dt><dd>{{ fps }} FPS / {{ colors }} 色</dd></div><div><dt>圆角</dt><dd>{{ cornerRadius }}%</dd></div></dl>
         <div v-if="exporting || exportProgress" class="export-progress" role="status"><span :style="{ width: `${exportProgress}%` }"></span></div>
         <p v-if="exporting">实时进度：{{ exportProgress }}% · {{ exportStep || '后端正在处理' }}</p>
         <p v-if="exportError" class="export-error" role="alert">{{ exportError }}</p>
-        <button v-if="exportResultUrl" class="result-download" type="button" :disabled="downloadingResult" @click="downloadExportResult">{{ downloadingResult ? '正在准备下载…' : '下载水印 GIF' }}</button>
+        <button v-if="exportResultUrl" class="result-download" type="button" :disabled="downloadingResult" @click="downloadExportResult">{{ downloadingResult ? '正在准备下载…' : '下载编辑 GIF' }}</button>
         <button v-else class="primary wide" type="button" :disabled="exporting || !canExport" @click="runExport">{{ exporting ? '正在生成…' : '开始真实导出' }}</button>
         <button v-if="exportResultUrl" class="secondary wide" type="button" @click="showExport = false">返回继续编辑</button>
       </section>
@@ -221,6 +219,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  buildGifEditorJobPayload,
   createGifEditorJob,
   getGifEditorJob,
   getGifEditorJobDuration,
@@ -238,6 +237,7 @@ import {
   timelineRangeStyle
 } from '../utils/gifAdEditorPrototype'
 import {
+  GIF_TEXT_STYLE_PRESETS,
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
   isWatermarkEditorJobTerminal,
@@ -298,6 +298,7 @@ const imageTracks = ref(defaultEditorProject.imageTracks)
 const selectedType = ref('')
 const selectedId = ref('')
 const transitions = ['无', '叠化', '闪白', '推入', '缩放']
+const textStyleNames = Object.keys(GIF_TEXT_STYLE_PRESETS)
 const totalDuration = computed(() => calculateTimelineDuration(clips.value))
 const displayedDuration = computed(() => {
   const resultDuration = Number(outputMetadata.value.duration)
@@ -312,7 +313,7 @@ const selectedClip = computed(() => selectedType.value === 'clip' ? clips.value.
 const selectedItem = computed(() => selectedText.value || selectedImage.value || selectedClip.value)
 const watermarkLibrary = computed(() => imageTracks.value.filter(item => item.saved))
 const exportWatermark = computed(() => selectedImage.value?.url ? selectedImage.value : imageTracks.value.find(item => item.saved && item.url) || imageTracks.value.find(item => item.url))
-const canExport = computed(() => Boolean(clips.value[0]?.url && exportWatermark.value?.url))
+const canExport = computed(() => Boolean(clips.value[0]?.url && (exportWatermark.value?.url || textTracks.value.length)))
 const jobStatusText = computed(() => {
   if (exporting.value) return `真实 GIF 合成 ${exportProgress.value}% · ${exportStep.value || '等待后端状态'}`
   if (exportResultUrl.value) return '真实水印 GIF 已生成'
@@ -432,7 +433,8 @@ const scheduleLinkedSave = () => {
 
 const selectItem = (type, id) => { selectedType.value = type; selectedId.value = id }
 const addText = () => {
-  const item = { id: `text-${++sequence}`, text: '双击修改广告文案', start: playhead.value, end: Math.min(totalDuration.value, playhead.value + 3), x: 50, y: 50, fontSize: 32, style: '爆款白字', effect: 'pop' }
+  if (textTracks.value.length >= 8) { notice.value = '文字轨道最多 8 条'; return }
+  const item = { id: `text-${++sequence}`, text: '双击修改广告文案', start: playhead.value, end: Math.min(totalDuration.value, playhead.value + 3), x: 50, y: 50, fontSize: 32, style: '爆款白字' }
   textTracks.value.push(item); selectItem('text', item.id)
 }
 
@@ -524,7 +526,19 @@ const removeSelected = () => {
 const clipTimelineStyle = clip => ({ width: `${Math.max(6, clip.duration / totalDuration.value * 100)}%`, background: clip.color })
 const transitionStyle = index => ({ left: `${clips.value.slice(0, index + 1).reduce((sum, clip) => sum + clip.duration, 0) / totalDuration.value * 100}%` })
 const cycleTransition = index => { const current = transitions.indexOf(clips.value[index].transition); clips.value[index].transition = transitions[(current + 1) % transitions.length] }
-const textOverlayStyle = item => ({ left: `${item.x}%`, top: `${item.y}%`, fontSize: `${item.fontSize}px`, fontFamily: importedFont.value })
+const textOverlayStyle = item => {
+  const style = GIF_TEXT_STYLE_PRESETS[item.style] || GIF_TEXT_STYLE_PRESETS['爆款白字']
+  return {
+    left: `${item.x}%`,
+    top: `${item.y}%`,
+    color: style.color,
+    fontSize: `${item.fontSize}px`,
+    fontFamily: importedFont.value,
+    WebkitTextStroke: `${style.strokeWidth}px ${style.strokeColor}`,
+    backgroundColor: style.background ? 'rgba(0, 0, 0, 0.72)' : 'transparent',
+    padding: style.background ? '4px 8px' : '0'
+  }
+}
 const imageOverlayStyle = item => ({ left: `${item.x}%`, top: `${item.y}%`, width: `${item.size}%`, opacity: Number(item.opacity ?? 100) / 100 })
 const stepForward = () => { playhead.value = Math.min(totalDuration.value, playhead.value + 0.5) }
 const togglePlayback = () => {
@@ -556,7 +570,8 @@ const completeExport = job => {
   const duration = getGifEditorJobDuration(job)
   const outputUrl = String(result.gif_url || '')
   if (!outputUrl) throw new Error('任务已完成，但没有返回 GIF 成品地址')
-  if (result.watermark_applied !== true) throw new Error('后端未确认水印已合成，本次结果不会标记为成品')
+  if (exportWatermark.value?.url && result.watermark_applied !== true) throw new Error('后端未确认图片水印已合成，本次结果不会标记为成品')
+  if (textTracks.value.length && result.text_tracks_applied !== true) throw new Error('后端未确认文字轨道已合成，本次结果不会标记为成品')
   exportResultUrl.value = outputUrl
   exportStatus.value = 'completed'
   exportProgress.value = 100
@@ -569,7 +584,8 @@ const completeExport = job => {
     colors: Number(result.colors || colors.value),
     loop: result.loop ?? loop.value,
     cornerRadius: Number(result.corner_radius ?? cornerRadius.value),
-    watermarkApplied: result.watermark_applied === true
+    watermarkApplied: result.watermark_applied === true,
+    textTracksApplied: result.text_tracks_applied === true
   }
   persistLinkedProject()
 }
@@ -580,8 +596,8 @@ const downloadExportResult = async () => {
   try {
     const result = await startAssetDownload({
       url: exportResultUrl.value,
-      fileName: `${projectName.value || '水印 GIF'}.gif`,
-      label: '水印 GIF 成品'
+      fileName: `${projectName.value || '编辑 GIF'}.gif`,
+      label: '编辑 GIF 成品'
     })
     notice.value = `已开始下载：${result.filename}`
   } catch (error) {
@@ -609,22 +625,24 @@ const runExport = async () => {
   outputMetadata.value = {}
   if (!clips.value[0]?.url) { exportError.value = '请先导入一段 GIF 或视频'; return }
   const watermark = exportWatermark.value
-  if (!watermark?.url) { exportError.value = '请先添加一张 PNG、JPG 或 WebP 水印图片'; return }
-  exporting.value = true
-  const generation = ++exportPollGeneration
+  let payload
   try {
-    const created = await createGifEditorJob({
+    payload = buildGifEditorJobPayload({
       source_url: publicAssetPath(clips.value[0].url),
-      watermark: {
-        image_url: publicAssetPath(watermark.url),
-        position: 'custom',
-        x: Number(watermark.x || 0),
-        y: Number(watermark.y || 0),
-        width: Number(watermark.size || 22),
-        opacity: Number(watermark.opacity ?? 100) / 100,
-        start: Number(watermark.start || 0),
-        ...(Number(watermark.end) < totalDuration.value - 0.05 ? { end: Number(watermark.end) } : {})
-      },
+      watermark: watermark?.url
+        ? {
+            image_url: publicAssetPath(watermark.url),
+            position: 'custom',
+            x: Number(watermark.x || 0),
+            y: Number(watermark.y || 0),
+            width: Number(watermark.size || 22),
+            opacity: Number(watermark.opacity ?? 100) / 100,
+            start: Number(watermark.start || 0),
+            ...(Number(watermark.end) < totalDuration.value - 0.05 ? { end: Number(watermark.end) } : {})
+          }
+        : null,
+      text_tracks: textTracks.value,
+      duration: totalDuration.value,
       output: {
         width: outputPreset.value.width,
         height: outputPreset.value.height,
@@ -635,6 +653,14 @@ const runExport = async () => {
         corner_radius: cornerRadius.value
       }
     })
+  } catch (error) {
+    exportError.value = error?.message || '导出设置无效'
+    return
+  }
+  exporting.value = true
+  const generation = ++exportPollGeneration
+  try {
+    const created = await createGifEditorJob(payload)
     if (!created?.job_id) throw new Error('后端未返回任务 ID')
     outputJobId.value = created.job_id
     applyJobState(created)

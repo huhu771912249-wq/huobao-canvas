@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
+  GIF_TEXT_STYLE_PRESETS,
+  buildGifEditorTextTracks,
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
   isWatermarkEditorJobTerminal,
@@ -36,6 +38,56 @@ const sanitized = sanitizeWatermarkEditorProject({
 assert.equal(sanitized.imageTracks[0].url, '/public-assets/logo.png')
 assert.equal(sanitized.imageTracks.length, 1, '不得持久化 blob 临时水印')
 assert.equal(sanitizeWatermarkEditorProject({ clips: [{ name: '假素材.mp4' }] }).clips.length, 0)
+
+const textOnlyTracks = buildGifEditorTextTracks([{
+  text: '  真实静态文字  ',
+  start: 0.5,
+  end: 2.5,
+  x: 45,
+  y: 70,
+  fontSize: 36,
+  style: '字幕黑底'
+}], 3)
+assert.deepEqual(textOnlyTracks, [{
+  text: '真实静态文字',
+  start: 0.5,
+  end: 2.5,
+  x: 45,
+  y: 70,
+  font_size: 36,
+  color: '#ffffff',
+  stroke_color: '#111111',
+  stroke_width: 0,
+  background: true,
+  background_color: '#000000',
+  background_opacity: 0.72,
+  align: 'center'
+}])
+assert.equal(Object.hasOwn(GIF_TEXT_STYLE_PRESETS, '品牌渐变'), false)
+assert.throws(() => buildGifEditorTextTracks([{ text: '   ', start: 0, end: 1 }], 3), /文案不能为空/)
+assert.throws(() => buildGifEditorTextTracks([{ text: '越界', start: 2, end: 4 }], 3), /时间范围无效/)
+assert.throws(() => buildGifEditorTextTracks(
+  Array.from({ length: 9 }, (_, index) => ({ text: `文字 ${index + 1}`, start: 0, end: 1 })),
+  3
+), /最多 8 条/)
+
+const sanitizedTextProject = sanitizeWatermarkEditorProject({
+  ...project,
+  textTracks: Array.from({ length: 9 }, (_, index) => ({
+    id: `legacy-${index}`,
+    text: `旧文字 ${index + 1}`,
+    start: 0,
+    end: 2,
+    x: 50,
+    y: 50,
+    fontSize: 32,
+    style: '品牌渐变',
+    effect: 'slide'
+  }))
+})
+assert.equal(sanitizedTextProject.textTracks.length, 8)
+assert.equal(sanitizedTextProject.textTracks[0].style, '爆款白字')
+assert.equal(Object.hasOwn(sanitizedTextProject.textTracks[0], 'effect'), false)
 
 const canvas = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
 const node = readFileSync(new URL('../src/components/nodes/WatermarkEditorNode.vue', import.meta.url), 'utf8')
@@ -247,6 +299,8 @@ assert.match(editor, /probeGifEditorMediaDuration/)
 assert.match(editor, /startAssetDownload/)
 assert.match(editor, /@click="downloadExportResult"/)
 assert.doesNotMatch(editor, /:href="exportResultUrl"\s+download/)
+assert.match(editor, /text_tracks/)
+assert.doesNotMatch(editor, /弹入|淡入|上滑|品牌渐变/)
 assert.match(editor, /实时进度/)
 assert.match(editor, /restoreWatermarkEditorProject\(/)
 assert.match(editor, /if \(sourceChanged\) persistLinkedProject\(\)/)
@@ -263,7 +317,12 @@ assert.match(entries, /flow:\s*'gifEditor'/)
 
 const apiSource = readFileSync(new URL('../src/api/gifEditor.js', import.meta.url), 'utf8')
   .replace(/^import request from ['"][^'"]+['"]\s*/m, 'const request = globalThis.__gifEditorRequestSpy\n')
+  .replace(
+    /^import \{ buildGifEditorTextTracks \} from ['"][^'"]+['"]\s*/m,
+    'const buildGifEditorTextTracks = globalThis.__buildGifEditorTextTracks\n'
+  )
 const apiCalls = []
+globalThis.__buildGifEditorTextTracks = buildGifEditorTextTracks
 globalThis.__gifEditorRequestSpy = config => {
   apiCalls.push(config)
   return Promise.resolve(config)
@@ -284,6 +343,23 @@ assert.equal(await gifEditorApi.probeGifEditorMediaDuration({
   arrayBuffer: async () => twoSecondGif.buffer
 }), 2)
 assert.equal(gifEditorApi.getGifEditorJobDuration({ results: [{ duration: 2.25 }] }), 2.25)
+assert.deepEqual(gifEditorApi.buildGifEditorJobPayload({
+  source_url: '/public-assets/source.gif',
+  text_tracks: [{ text: '纯文字导出', start: 0, end: 2, x: 50, y: 50, fontSize: 32, style: '高亮黄字' }],
+  duration: 2,
+  output: { width: 720, height: 1280 }
+}), {
+  source_url: '/public-assets/source.gif',
+  text_tracks: [{
+    text: '纯文字导出', start: 0, end: 2, x: 50, y: 50, font_size: 32,
+    color: '#fde047', stroke_color: '#111111', stroke_width: 3,
+    background: false, background_color: '#000000', background_opacity: 0, align: 'center'
+  }],
+  output: { width: 720, height: 1280 }
+})
+assert.throws(() => gifEditorApi.buildGifEditorJobPayload({
+  source_url: '/public-assets/source.gif', text_tracks: [], duration: 2, output: {}
+}), /至少添加一条文字或一张图片水印/)
 await gifEditorApi.uploadGifEditorAsset('data:image/png;base64,AAAA')
 await gifEditorApi.uploadGifEditorMedia({ source_name: 'source.gif', source_base64: 'AAAA' })
 await gifEditorApi.createGifEditorJob({ source_url: reconciled.project.clips[0].url })
@@ -296,5 +372,6 @@ assert.deepEqual(apiCalls, [
 ])
 assert.throws(() => gifEditorApi.getGifEditorJob(''), /jobId is required/)
 delete globalThis.__gifEditorRequestSpy
+delete globalThis.__buildGifEditorTextTracks
 
 console.log('watermarkEditorWorkflow.test.mjs passed')

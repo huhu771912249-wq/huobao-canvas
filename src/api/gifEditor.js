@@ -1,4 +1,5 @@
 import request from '../utils/request'
+import { buildGifEditorTextTracks } from '../utils/watermarkEditorProject.js'
 
 const requiredId = jobId => {
   const value = typeof jobId === 'string' || jobId instanceof String ? String(jobId).trim() : ''
@@ -105,6 +106,22 @@ export const probeGifEditorMediaDuration = async (source, kind = '') => {
 export const getGifEditorJobDuration = job => positiveDuration(
   job?.results?.[0]?.duration ?? job?.result?.duration ?? job?.duration
 )
+
+export const buildGifEditorJobPayload = ({ source_url, watermark, text_tracks, duration, output } = {}) => {
+  const sourceUrl = String(source_url || '').trim()
+  if (!sourceUrl) throw new TypeError('源素材地址不能为空')
+  const textTracks = buildGifEditorTextTracks(text_tracks, duration)
+  const imageWatermark = watermark?.image_url ? { ...watermark } : null
+  if (!imageWatermark && !textTracks.length) {
+    throw new TypeError('至少添加一条文字或一张图片水印')
+  }
+  return {
+    source_url: sourceUrl,
+    ...(imageWatermark ? { watermark: imageWatermark } : {}),
+    ...(textTracks.length ? { text_tracks: textTracks } : {}),
+    output: { ...(output || {}) }
+  }
+}
 
 export const uploadGifEditorAsset = image => request({
   url: '/v1/assets/images',
