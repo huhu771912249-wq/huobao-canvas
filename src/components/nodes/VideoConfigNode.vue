@@ -442,6 +442,38 @@ const createExpandedVideoNodeZoomLifecycle = ({
   return { handleZoomChange, cancel }
 }
 
+const createExpandedVideoNodeRestoreLifecycle = ({
+  setExpanded,
+  startViewport,
+  stopViewport,
+  scheduleStableRecalculation,
+  cancelStableRecalculation,
+  afterStateChange = () => {}
+}) => {
+  let active = false
+  const sync = value => {
+    const nextExpanded = Boolean(value)
+    setExpanded(nextExpanded)
+    if (active === nextExpanded) return false
+    active = nextExpanded
+    if (nextExpanded) {
+      startViewport()
+      scheduleStableRecalculation()
+    } else {
+      stopViewport()
+      cancelStableRecalculation()
+    }
+    afterStateChange(nextExpanded)
+    return true
+  }
+  const dispose = () => {
+    active = false
+    stopViewport()
+    cancelStableRecalculation()
+  }
+  return { sync, dispose }
+}
+
 const normalizeH3DirectorNodeState = value => ({
   directorPlan: value?.directorPlan && typeof value.directorPlan === 'object' && !Array.isArray(value.directorPlan)
     ? value.directorPlan
@@ -528,6 +560,14 @@ const expandedZoomLifecycle = createExpandedVideoNodeZoomLifecycle({
   requestFrame: callback => window.requestAnimationFrame(callback),
   cancelFrame: frameId => window.cancelAnimationFrame(frameId),
   recalculate: () => expandedViewportLifecycle.recalculate()
+})
+const expandedRestoreLifecycle = createExpandedVideoNodeRestoreLifecycle({
+  setExpanded: value => { isExpanded.value = value },
+  startViewport: () => expandedViewportLifecycle.start(),
+  stopViewport: () => expandedViewportLifecycle.stop(),
+  scheduleStableRecalculation: () => expandedZoomLifecycle.handleZoomChange(),
+  cancelStableRecalculation: () => expandedZoomLifecycle.cancel(),
+  afterStateChange: () => nextTick(() => updateNodeInternals(props.id))
 })
 watch(() => viewport.value.zoom, () => expandedZoomLifecycle.handleZoomChange())
 const isGenerating = ref(false)  // 任务创建中状态
@@ -890,16 +930,10 @@ const resolveAvailableVideoModel = () => {
   return availableModels[0]?.key || DEFAULT_VIDEO_MODEL
 }
 
-const toggleExpanded = async () => {
-  isExpanded.value = !isExpanded.value
-  updateNode(props.id, { expanded: isExpanded.value })
-  if (!isExpanded.value) {
-    expandedViewportLifecycle.stop()
-    expandedZoomLifecycle.cancel()
-  }
-  await nextTick()
-  if (isExpanded.value) expandedViewportLifecycle.start()
-  updateNodeInternals(props.id)
+const toggleExpanded = () => {
+  const nextExpanded = !isExpanded.value
+  expandedRestoreLifecycle.sync(nextExpanded)
+  updateNode(props.id, { expanded: nextExpanded })
 }
 
 // Handle duplicate | 处理复制
@@ -1377,25 +1411,24 @@ const handleDelete = () => {
 }
 
 // Initialize on mount | 挂载时初始化
-onMounted(async () => {
+onMounted(() => {
   const resolvedModel = resolveAvailableVideoModel()
   if (!localModel.value || localModel.value !== resolvedModel) {
     localModel.value = resolvedModel
     updateNode(props.id, { model: resolvedModel })
   }
-  if (isExpanded.value) {
-    await nextTick()
-    expandedViewportLifecycle.start()
-    updateNodeInternals(props.id)
-  }
+  expandedRestoreLifecycle.sync(Boolean(props.data?.expanded))
 })
 
 onBeforeUnmount(() => {
-  expandedViewportLifecycle.stop()
-  expandedZoomLifecycle.cancel()
+  expandedRestoreLifecycle.dispose()
 })
 
 // Watch for model changes from props | 监听 props 中模型变化
+watch(() => props.data?.expanded, value => {
+  expandedRestoreLifecycle.sync(value)
+})
+
 watch(() => props.data?.model, (newModel) => {
   if (newModel && newModel !== localModel.value) {
     localModel.value = newModel

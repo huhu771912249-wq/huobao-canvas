@@ -45,9 +45,10 @@ const {
   getExpandedVideoNodeMaxHeight,
   getExpandedVideoNodeViewportLayout,
   createExpandedVideoNodeViewportLifecycle,
-  createExpandedVideoNodeZoomLifecycle
+  createExpandedVideoNodeZoomLifecycle,
+  createExpandedVideoNodeRestoreLifecycle
 } = await import(
-  `data:text/javascript,${encodeURIComponent(`${expandedViewportHelpersSource}\nexport { getExpandedVideoNodeMaxHeight, getExpandedVideoNodeViewportLayout, createExpandedVideoNodeViewportLifecycle, createExpandedVideoNodeZoomLifecycle }`)}`
+  `data:text/javascript,${encodeURIComponent(`${expandedViewportHelpersSource}\nexport { getExpandedVideoNodeMaxHeight, getExpandedVideoNodeViewportLayout, createExpandedVideoNodeViewportLifecycle, createExpandedVideoNodeZoomLifecycle, createExpandedVideoNodeRestoreLifecycle }`)}`
 )
 assert.equal(
   getExpandedVideoNodeMaxHeight({ nodeTop: 100, viewportHeight: 900 }),
@@ -135,6 +136,79 @@ expandedViewportLifecycle.stop()
 assert.equal(resizeRemoves, 1, 'collapse and unmount cleanup must be idempotent')
 assert.equal(resizeHandler, null)
 
+let restoredExpanded = true
+let restoredNodeTop = 0
+let restoredResizeAdds = 0
+let restoredResizeRemoves = 0
+let restoredFrameSequence = 0
+let restoredFrameCancels = 0
+const restoredMaxHeights = []
+const restoredPendingFrames = new Map()
+const restoredViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
+  getNodeTop: () => restoredNodeTop,
+  getViewportHeight: () => 900,
+  getZoom: () => 0.8,
+  setMaxHeight: value => restoredMaxHeights.push(value),
+  moveNodeByScreenOffset: () => {},
+  addResizeListener: () => { restoredResizeAdds += 1 },
+  removeResizeListener: () => { restoredResizeRemoves += 1 }
+})
+const restoredZoomLifecycle = createExpandedVideoNodeZoomLifecycle({
+  isExpanded: () => restoredExpanded,
+  afterRender: () => nextTick(),
+  requestFrame: callback => {
+    const frameId = ++restoredFrameSequence
+    restoredPendingFrames.set(frameId, callback)
+    return frameId
+  },
+  cancelFrame: frameId => {
+    if (restoredPendingFrames.delete(frameId)) restoredFrameCancels += 1
+  },
+  recalculate: () => restoredViewportLifecycle.recalculate()
+})
+const restoredExpandedValues = []
+const restoredLifecycle = createExpandedVideoNodeRestoreLifecycle({
+  setExpanded: value => {
+    restoredExpanded = value
+    restoredExpandedValues.push(value)
+  },
+  startViewport: () => restoredViewportLifecycle.start(),
+  stopViewport: () => restoredViewportLifecycle.stop(),
+  scheduleStableRecalculation: () => restoredZoomLifecycle.handleZoomChange(),
+  cancelStableRecalculation: () => restoredZoomLifecycle.cancel()
+})
+restoredLifecycle.sync(true)
+assert.equal(restoredMaxHeights.length, 1, 'mounted expanded nodes must take the existing early measurement')
+assert.equal(restoredResizeAdds, 1, 'mounted expanded nodes must start resize tracking once')
+restoredNodeTop = 700
+await nextTick()
+assert.equal(restoredPendingFrames.size, 1, 'mounted expanded nodes must schedule one post-layout frame')
+const [restoredFrameId, restoredFrameCallback] = restoredPendingFrames.entries().next().value
+restoredPendingFrames.delete(restoredFrameId)
+restoredFrameCallback()
+const restoredCssHeight = restoredMaxHeights.at(-1)
+assert.equal(restoredMaxHeights.length, 2, 'the stable frame must measure the real restored rect again')
+assert.ok(restoredCssHeight * 0.8 >= 160, '80% restored nodes must retain at least 160 rendered pixels')
+assert.ok(restoredNodeTop + restoredCssHeight * 0.8 <= 876, '80% restored nodes must preserve the viewport bottom gap')
+restoredLifecycle.sync(true)
+await nextTick()
+assert.equal(restoredResizeAdds, 1, 'repeated true restores must not register another resize listener')
+assert.equal(restoredPendingFrames.size, 0, 'repeated true restores must not schedule another position adjustment')
+restoredLifecycle.sync(false)
+assert.equal(restoredExpandedValues.at(-1), false, 'external collapsed state must synchronize local expanded state')
+assert.equal(restoredResizeRemoves, 1, 'external collapse must stop resize tracking')
+restoredLifecycle.sync(true)
+assert.equal(restoredExpandedValues.at(-1), true, 'external expanded state must synchronize local expanded state')
+restoredLifecycle.sync(false)
+await nextTick()
+assert.equal(restoredPendingFrames.size, 0, 'collapse before the stable frame must cancel delayed restore work')
+restoredLifecycle.sync(true)
+await nextTick()
+assert.equal(restoredPendingFrames.size, 1, 'a restored expanded node must keep one cancellable stable frame')
+restoredLifecycle.dispose()
+assert.equal(restoredFrameCancels, 1, 'unmount must cancel the pending restored-layout frame')
+assert.equal(restoredPendingFrames.size, 0)
+
 const dynamicZoom = ref(1)
 let zoomExpanded = true
 let zoomNodeTop = 875
@@ -197,9 +271,11 @@ assert.match(videoSource, /ref="nodeRootRef"/, 'viewport sizing must measure the
 assert.match(videoSource, /:style="expandedNodeStyle"/, 'expanded max height must be applied to the node scroll shell')
 assert.match(videoSource, /overflowY:\s*'auto'/, 'expanded video nodes must make every setting reachable by scrolling')
 assert.doesNotMatch(videoSource, /calc\(100vh - 96px\)/, 'fixed viewport height must not remain the sizing solution')
-assert.match(videoSource, /expandedViewportLifecycle\.stop\(\)[\s\S]*?await nextTick\(\)/, 'collapse must stop viewport resize tracking')
+assert.match(videoSource, /const toggleExpanded = \(\) => \{[\s\S]*?expandedRestoreLifecycle\.sync\(nextExpanded\)/, 'click expand and collapse must use the shared restored viewport lifecycle')
 assert.match(videoSource, /watch\(\(\) => viewport\.value\.zoom,[\s\S]*?expandedZoomLifecycle\.handleZoomChange\(\)/, 'the expanded node must react to Vue Flow zoom changes')
-assert.match(videoSource, /onBeforeUnmount\([\s\S]*?expandedZoomLifecycle\.cancel\(\)[\s\S]*?\)/, 'unmount must clean up pending zoom work')
+assert.match(videoSource, /onMounted\([\s\S]*?expandedRestoreLifecycle\.sync\(Boolean\(props\.data\?\.expanded\)\)/, 'mount must restore expanded viewport state through the stable-layout lifecycle')
+assert.match(videoSource, /watch\(\(\) => props\.data\?\.expanded,[\s\S]*?expandedRestoreLifecycle\.sync\(value\)/, 'external expanded state must use the same stable-layout lifecycle')
+assert.match(videoSource, /onBeforeUnmount\([\s\S]*?expandedRestoreLifecycle\.dispose\(\)[\s\S]*?\)/, 'unmount must clean up resize and pending stable-layout work')
 assert.match(videoSource, /updateNodePositions\(\[\{[\s\S]*?screenOffsetY \/ effectiveZoom[\s\S]*?}], true, false\)/, 'viewport relief must update real Vue Flow coordinates instead of using a visual transform')
 assert.match(videoSource, /updateNodeInternals\(props\.id\)/, 'the video node must refresh its Vue Flow bounds after resizing')
 assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must not widen the video node')
