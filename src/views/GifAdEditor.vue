@@ -56,10 +56,10 @@
         <section class="asset-section">
           <div class="section-label">叠加素材</div>
           <button v-for="item in textTracks" :key="item.id" class="asset-item" :class="{ selected: selectedType === 'text' && selectedId === item.id }" type="button" @click="selectItem('text', item.id)">
-            <span class="asset-thumb text-thumb">T</span><span><b>{{ item.text }}</b><small>{{ item.start.toFixed(1) }}–{{ item.end.toFixed(1) }} 秒</small></span>
+            <span class="asset-thumb text-thumb">T</span><span><b>{{ item.text }}</b><small>{{ formatGifEditorTrackTime(item.start) }}–{{ formatGifEditorTrackTime(item.end) }} 秒</small></span>
           </button>
           <button v-for="item in imageTracks" :key="item.id" class="asset-item" :class="{ selected: selectedType === 'image' && selectedId === item.id }" type="button" @click="selectItem('image', item.id)">
-            <span class="asset-thumb image-thumb">▧</span><span><b>{{ item.name }}</b><small>{{ item.start.toFixed(1) }}–{{ item.end.toFixed(1) }} 秒</small></span>
+            <span class="asset-thumb image-thumb">▧</span><span><b>{{ item.name }}</b><small>{{ formatGifEditorTrackTime(item.start) }}–{{ formatGifEditorTrackTime(item.end) }} 秒</small></span>
           </button>
         </section>
 
@@ -140,10 +140,10 @@
                 <button v-for="(clip, index) in clips.slice(0, -1)" :key="`transition-${clip.id}`" class="transition-button" :style="transitionStyle(index)" type="button" :title="`转场：${clip.transition}`" @click="cycleTransition(index)">◇</button>
               </div>
               <div class="track-row overlay-track">
-                <button v-for="item in textTracks" :key="item.id" class="range-block text-range" :class="{ selected: selectedType === 'text' && selectedId === item.id }" :style="timelineRangeStyle(item.start, item.end, totalDuration)" type="button" @click="selectItem('text', item.id)">T · {{ item.text }}</button>
+                <button v-for="item in textTracks" :key="item.id" class="range-block text-range" :class="{ selected: selectedType === 'text' && selectedId === item.id }" :style="safeTimelineRangeStyle(item)" type="button" @click="selectItem('text', item.id)">T · {{ item.text }}</button>
               </div>
               <div class="track-row overlay-track">
-                <button v-for="item in imageTracks" :key="item.id" class="range-block image-range" :class="{ selected: selectedType === 'image' && selectedId === item.id }" :style="timelineRangeStyle(item.start, item.end, totalDuration)" type="button" @click="selectItem('image', item.id)">▧ · {{ item.name }}</button>
+                <button v-for="item in imageTracks" :key="item.id" class="range-block image-range" :class="{ selected: selectedType === 'image' && selectedId === item.id }" :style="safeTimelineRangeStyle(item)" type="button" @click="selectItem('image', item.id)">▧ · {{ item.name }}</button>
               </div>
               <div class="playhead" :style="{ left: `${playhead / totalDuration * 100}%` }"><span></span></div>
             </div>
@@ -158,7 +158,7 @@
           <div class="section-label">文字内容</div>
           <textarea v-model="selectedText.text" rows="3" maxlength="80"></textarea>
           <label>样式<select v-model="selectedText.style"><option v-for="styleName in textStyleNames" :key="styleName">{{ styleName }}</option></select></label>
-          <div class="field-pair"><label>开始（秒）<input v-model.number="selectedText.start" type="number" min="0" :max="totalDuration" step="0.1"></label><label>结束（秒）<input v-model.number="selectedText.end" type="number" min="0.1" :max="totalDuration" step="0.1"></label></div>
+          <div class="field-pair"><label>开始（秒）<input :value="trackTimeInputValue(selectedText, 'start')" type="number" min="0" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedText, 'start', $event)" @blur="commitTrackTimeInput(selectedText, 'start')"></label><label>结束（秒）<input :value="trackTimeInputValue(selectedText, 'end')" type="number" min="0.1" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedText, 'end', $event)" @blur="commitTrackTimeInput(selectedText, 'end')"></label></div>
           <label>字号 {{ selectedText.fontSize }} px<input v-model.number="selectedText.fontSize" type="range" min="14" max="72"></label>
           <label>横向位置 {{ selectedText.x }}%<input v-model.number="selectedText.x" type="range" min="5" max="95"></label>
           <label>纵向位置 {{ selectedText.y }}%<input v-model.number="selectedText.y" type="range" min="5" max="95"></label>
@@ -167,7 +167,7 @@
         <section v-else-if="selectedImage" class="inspector-section">
           <div class="section-label">图片 / Logo</div>
           <div class="selected-file">{{ selectedImage.name }}</div>
-          <div class="field-pair"><label>开始（秒）<input v-model.number="selectedImage.start" type="number" min="0" :max="totalDuration" step="0.1"></label><label>结束（秒）<input v-model.number="selectedImage.end" type="number" min="0.1" :max="totalDuration" step="0.1"></label></div>
+          <div class="field-pair"><label>开始（秒）<input :value="trackTimeInputValue(selectedImage, 'start')" type="number" min="0" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedImage, 'start', $event)" @blur="commitTrackTimeInput(selectedImage, 'start')"></label><label>结束（秒）<input :value="trackTimeInputValue(selectedImage, 'end')" type="number" min="0.1" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedImage, 'end', $event)" @blur="commitTrackTimeInput(selectedImage, 'end')"></label></div>
           <label>大小 {{ selectedImage.size }}%<input v-model.number="selectedImage.size" type="range" min="8" max="60"></label>
           <label>透明度 {{ selectedImage.opacity ?? 100 }}%<input v-model.number="selectedImage.opacity" type="range" min="10" max="100"></label>
           <label>横向位置 {{ selectedImage.x }}%<input v-model.number="selectedImage.x" type="range" min="5" max="95"></label>
@@ -240,7 +240,10 @@ import {
   GIF_TEXT_STYLE_PRESETS,
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
+  formatGifEditorTrackTime,
+  isGifEditorTrackActive,
   isWatermarkEditorJobTerminal,
+  normalizeGifEditorTrackRange,
   restoreWatermarkEditorProject,
   sanitizeWatermarkEditorProject
 } from '../utils/watermarkEditorProject.js'
@@ -295,6 +298,7 @@ const objectUrls = []
 const clips = ref(defaultEditorProject.clips)
 const textTracks = ref(defaultEditorProject.textTracks)
 const imageTracks = ref(defaultEditorProject.imageTracks)
+const trackTimeDrafts = ref({})
 
 const selectedType = ref('')
 const selectedId = ref('')
@@ -325,8 +329,36 @@ const saveStatus = computed(() => {
   if (!linkedReady.value) return '正在读取节点工程…'
   return saveState.value === 'saving' ? '正在保存到节点…' : '已保存到节点'
 })
-const activeTextTracks = computed(() => textTracks.value.filter(item => item.start <= playhead.value && item.end >= playhead.value))
-const activeImageTracks = computed(() => imageTracks.value.filter(item => item.start <= playhead.value && item.end >= playhead.value))
+const normalizedTrackRange = item => normalizeGifEditorTrackRange(item, totalDuration.value)
+const activeTextTracks = computed(() => textTracks.value.filter(item => isGifEditorTrackActive(item, playhead.value, totalDuration.value)))
+const activeImageTracks = computed(() => imageTracks.value.filter(item => isGifEditorTrackActive(item, playhead.value, totalDuration.value)))
+const safeTimelineRangeStyle = item => {
+  const range = normalizedTrackRange(item)
+  return timelineRangeStyle(range.start, range.end, totalDuration.value)
+}
+const trackTimeDraftKey = (item, field) => `${item?.id || 'track'}:${field}`
+const trackTimeInputValue = (item, field) => {
+  const key = trackTimeDraftKey(item, field)
+  return Object.hasOwn(trackTimeDrafts.value, key) ? trackTimeDrafts.value[key] : item?.[field] ?? ''
+}
+const handleTrackTimeInput = (item, field, event) => {
+  if (!item) return
+  trackTimeDrafts.value = {
+    ...trackTimeDrafts.value,
+    [trackTimeDraftKey(item, field)]: event?.target?.value ?? ''
+  }
+}
+const commitTrackTimeInput = (item, field) => {
+  if (!item) return
+  const key = trackTimeDraftKey(item, field)
+  const value = Object.hasOwn(trackTimeDrafts.value, key) ? trackTimeDrafts.value[key] : item[field]
+  const range = normalizeGifEditorTrackRange(item, totalDuration.value, { [field]: value })
+  item.start = range.start
+  item.end = range.end
+  const nextDrafts = { ...trackTimeDrafts.value }
+  delete nextDrafts[key]
+  trackTimeDrafts.value = nextDrafts
+}
 const rulerMarks = computed(() => Array.from({ length: 7 }, (_, index) => Number((totalDuration.value / 6 * index).toFixed(1))))
 
 const activeClip = computed(() => {
@@ -634,6 +666,8 @@ const runExport = async () => {
   outputMetadata.value = {}
   if (!clips.value[0]?.url) { exportError.value = '请先导入一段 GIF 或视频'; return }
   const watermark = exportWatermark.value
+  const watermarkRange = watermark ? normalizedTrackRange(watermark) : null
+  const normalizedTextTracks = textTracks.value.map(item => ({ ...item, ...normalizedTrackRange(item) }))
   let payload
   try {
     payload = buildGifEditorJobPayload({
@@ -646,11 +680,11 @@ const runExport = async () => {
             y: Number(watermark.y || 0),
             width: Number(watermark.size || 22),
             opacity: Number(watermark.opacity ?? 100) / 100,
-            start: Number(watermark.start || 0),
-            ...(Number(watermark.end) < totalDuration.value - 0.05 ? { end: Number(watermark.end) } : {})
+            start: watermarkRange.start,
+            ...(watermarkRange.end < totalDuration.value - 0.05 ? { end: watermarkRange.end } : {})
           }
         : null,
-      text_tracks: textTracks.value,
+      text_tracks: normalizedTextTracks,
       duration: totalDuration.value,
       output: {
         width: outputPreset.value.width,

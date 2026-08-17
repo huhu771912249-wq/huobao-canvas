@@ -6,6 +6,49 @@ const safeAssetUrl = value => {
 const cloneList = value => Array.isArray(value) ? value.map(item => ({ ...item })) : []
 const finiteNumber = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback
 const clamp = (value, min, max, fallback) => Math.min(max, Math.max(min, finiteNumber(value, fallback)))
+const finiteTrackTime = (value, fallback) => {
+  if (value === null || value === undefined || (typeof value === 'string' && !value.trim())) return fallback
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+const clampTrackTime = (value, min, max, fallback) => Math.min(max, Math.max(min, finiteTrackTime(value, fallback)))
+const roundTrackTime = value => Number(value.toFixed(3))
+
+export const formatGifEditorTrackTime = value => {
+  const time = finiteTrackTime(value, Number.NaN)
+  return Number.isFinite(time) ? time.toFixed(1) : '—'
+}
+
+export const normalizeGifEditorTrackRange = (track = {}, sourceDuration, updates = {}) => {
+  const duration = clampTrackTime(sourceDuration, 0.1, 3600, 3)
+  const hasStartUpdate = Object.hasOwn(updates, 'start')
+  const hasEndUpdate = Object.hasOwn(updates, 'end')
+  const currentStart = clampTrackTime(track.start, 0, duration, 0)
+  const currentEnd = clampTrackTime(track.end, 0, duration, duration)
+  let start = clampTrackTime(hasStartUpdate ? updates.start : track.start, 0, duration, currentStart)
+  let end = clampTrackTime(hasEndUpdate ? updates.end : track.end, 0, duration, currentEnd)
+  const minimumGap = Math.min(0.1, duration)
+
+  if (end - start < minimumGap) {
+    if (hasStartUpdate && !hasEndUpdate) {
+      start = Math.max(0, end - minimumGap)
+    } else {
+      end = Math.min(duration, start + minimumGap)
+      if (end - start < minimumGap) {
+        end = duration
+        start = Math.max(0, end - minimumGap)
+      }
+    }
+  }
+
+  return { start: roundTrackTime(start), end: roundTrackTime(end) }
+}
+
+export const isGifEditorTrackActive = (track, playhead, sourceDuration) => {
+  const currentTime = finiteTrackTime(playhead, -1)
+  const range = normalizeGifEditorTrackRange(track, sourceDuration)
+  return currentTime >= range.start && currentTime <= range.end
+}
 
 const sourceKind = (url, mime) => (
   String(mime || '').toLowerCase() === 'image/gif' || /\.gif(?:$|\?)/i.test(url) ? 'gif' : 'video'
@@ -28,14 +71,14 @@ export const GIF_TEXT_STYLE_PRESETS = Object.freeze({
 
 const DEFAULT_TEXT_STYLE = '爆款白字'
 
-const sanitizeTextTracks = value => cloneList(value).slice(0, 8).map(item => {
+const sanitizeTextTracks = (value, sourceDuration) => cloneList(value).slice(0, 8).map(item => {
   const track = { ...item }
+  const range = normalizeGifEditorTrackRange(item, sourceDuration)
   delete track.effect
   return {
     ...track,
     text: String(item.text || '').slice(0, 80),
-    start: clamp(item.start, 0, 3600, 0),
-    end: clamp(item.end, 0.1, 3600, 3),
+    ...range,
     x: clamp(item.x, 0, 100, 50),
     y: clamp(item.y, 0, 100, 50),
     fontSize: clamp(item.fontSize, 8, 200, 32),
@@ -125,17 +168,20 @@ export const sanitizeWatermarkEditorProject = value => {
     }))
     .filter(clip => clip.url)
     .slice(0, 1)
-  const imageTracks = cloneList(value?.imageTracks).map(item => ({
-    ...item,
-    url: safeAssetUrl(item.url),
-    start: clamp(item.start, 0, 3600, 0),
-    end: clamp(item.end, 0.1, 3600, 3),
-    size: clamp(item.size, 1, 100, 22),
-    opacity: clamp(item.opacity, 0, 100, 100),
-    x: clamp(item.x, 0, 100, 82),
-    y: clamp(item.y, 0, 100, 12)
-  })).filter(item => item.url)
-  const textTracks = sanitizeTextTracks(value?.textTracks)
+  const sourceDuration = clips.reduce((total, clip) => total + clip.duration, 0) || 3
+  const imageTracks = cloneList(value?.imageTracks).map(item => {
+    const range = normalizeGifEditorTrackRange(item, sourceDuration)
+    return {
+      ...item,
+      url: safeAssetUrl(item.url),
+      ...range,
+      size: clamp(item.size, 1, 100, 22),
+      opacity: clamp(item.opacity, 0, 100, 100),
+      x: clamp(item.x, 0, 100, 82),
+      y: clamp(item.y, 0, 100, 12)
+    }
+  }).filter(item => item.url)
+  const textTracks = sanitizeTextTracks(value?.textTracks, sourceDuration)
   const watermarkLibrary = imageTracks
     .filter(item => item.saved)
     .map(item => ({ id: item.id, name: item.name, kind: 'image', url: item.url }))

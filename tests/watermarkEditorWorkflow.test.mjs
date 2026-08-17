@@ -5,10 +5,14 @@ import {
   buildGifEditorTextTracks,
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
+  formatGifEditorTrackTime,
+  isGifEditorTrackActive,
   isWatermarkEditorJobTerminal,
+  normalizeGifEditorTrackRange,
   restoreWatermarkEditorProject,
   sanitizeWatermarkEditorProject
 } from '../src/utils/watermarkEditorProject.js'
+import { timelineRangeStyle } from '../src/utils/gifAdEditorPrototype.js'
 
 const project = createDefaultWatermarkEditorProject({ title: '品牌角标工程' })
 assert.equal(project.title, '品牌角标工程')
@@ -27,6 +31,44 @@ assert.equal(linkedProject.clips.length, 1)
 assert.equal(linkedProject.clips[0].url, '/public-assets/source.gif')
 assert.equal(linkedProject.clips[0].kind, 'gif')
 assert.equal(linkedProject.clips[0].duration, 6.4)
+
+for (const invalidTime of ['', Number.NaN, undefined]) {
+  assert.doesNotThrow(() => formatGifEditorTrackTime(invalidTime))
+  assert.equal(formatGifEditorTrackTime(invalidTime), '—')
+  assert.doesNotThrow(() => isGifEditorTrackActive({ start: invalidTime, end: '' }, 0.5, 2))
+  const safeRange = normalizeGifEditorTrackRange({ start: invalidTime, end: '' }, 2)
+  const rangeStyle = timelineRangeStyle(safeRange.start, safeRange.end, 2)
+  assert.doesNotMatch(`${rangeStyle.left} ${rangeStyle.width}`, /NaN|Infinity/)
+}
+assert.equal(formatGifEditorTrackTime('0.3'), '0.3')
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { start: '' }), { start: 0, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { start: '0.3' }), { start: 0.3, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0.3, end: 2 }, 2, { start: Number.NaN }), { start: 0.3, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0.3, end: 2 }, 2, { end: '' }), { start: 0.3, end: 2 })
+assert.deepEqual(normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { end: 8 }), { start: 0, end: 2 })
+const reversedStartRange = normalizeGifEditorTrackRange({ start: 0, end: 2 }, 2, { start: 2 })
+assert.ok(reversedStartRange.start >= 0 && reversedStartRange.start < reversedStartRange.end && reversedStartRange.end <= 2)
+const reversedEndRange = normalizeGifEditorTrackRange({ start: 1.5, end: 2 }, 2, { end: 1 })
+assert.ok(reversedEndRange.start >= 0 && reversedEndRange.start < reversedEndRange.end && reversedEndRange.end <= 2)
+const tinyLegacyRange = normalizeGifEditorTrackRange({ start: 0, end: 0.0001 }, 2)
+assert.ok(tinyLegacyRange.start >= 0 && tinyLegacyRange.start < tinyLegacyRange.end && tinyLegacyRange.end <= 2)
+
+const sanitizedTrackTimes = sanitizeWatermarkEditorProject({
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  textTracks: [{ id: 'text-time', text: '小数时间', start: '0.3', end: '' }],
+  imageTracks: [{ id: 'image-time', name: 'logo', url: '/public-assets/logo.png', start: Number.NaN, end: 8 }]
+})
+assert.deepEqual(
+  { start: sanitizedTrackTimes.textTracks[0].start, end: sanitizedTrackTimes.textTracks[0].end },
+  { start: 0.3, end: 2 },
+  '文字轨道持久化必须保留合法小数并清理空中间态'
+)
+assert.deepEqual(
+  { start: sanitizedTrackTimes.imageTracks[0].start, end: sanitizedTrackTimes.imageTracks[0].end },
+  { start: 0, end: 2 },
+  '图片轨道持久化必须清理 NaN 和超时长值'
+)
+assert.doesNotThrow(() => buildGifEditorTextTracks(sanitizedTrackTimes.textTracks, 2), '归一化后的文字轨道应可继续导出')
 
 const sanitized = sanitizeWatermarkEditorProject({
   ...project,
@@ -312,6 +354,18 @@ assert.match(editor, /startAssetDownload/)
 assert.match(editor, /@click="downloadExportResult"/)
 assert.doesNotMatch(editor, /:href="exportResultUrl"\s+download/)
 assert.match(editor, /text_tracks/)
+assert.doesNotMatch(editor, /item\.(?:start|end)\.toFixed\(/, '模板不得直接格式化未验证的轨道时间')
+assert.doesNotMatch(editor, /v-model\.number="selected(?:Text|Image)\.(?:start|end)"/, '时间输入中间态不得直接写入自动保存对象')
+assert.match(editor, /trackTimeDrafts/)
+assert.match(editor, /commitTrackTimeInput/)
+assert.match(editor, /safeTimelineRangeStyle/)
+const editorAutoSaveWatch = editor.match(
+  /watch\(\s*\[clips, textTracks, imageTracks,[\s\S]*?\{ deep: true \}\s*\)/
+)?.[0] || ''
+assert.ok(editorAutoSaveWatch, '必须保留编辑工程自动保存')
+assert.doesNotMatch(editorAutoSaveWatch, /trackTimeDrafts/, '输入中间态不得触发工程自动保存')
+assert.match(editor, /const normalizedTextTracks = textTracks\.value\.map\(item => \(\{ \.\.\.item, \.\.\.normalizedTrackRange\(item\) \}\)\)/)
+assert.match(editor, /const watermarkRange = watermark \? normalizedTrackRange\(watermark\) : null/)
 assert.doesNotMatch(editor, /弹入|淡入|上滑|品牌渐变/)
 assert.match(editor, /实时进度/)
 assert.match(editor, /restoreWatermarkEditorProject\(/)
