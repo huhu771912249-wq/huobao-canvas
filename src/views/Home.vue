@@ -10,11 +10,12 @@
   >
     <template #main>
       <section class="mb-6 rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5 p-5">
-        <div class="flex flex-wrap items-end justify-between gap-4"><div><div class="text-xs tracking-[0.25em] text-cyan-400">冠希 VIDEO</div><h2 class="mt-1 text-2xl font-semibold">视频创作中心</h2><p class="mt-2 text-sm text-[var(--text-secondary)]">文生图、文生图＋视频、小说成片和素材再创作。</p></div><n-button type="primary" :disabled="navigationPending" @click="openVideoCenter">{{ navigationPending ? '正在打开…' : '进入视频中心' }}</n-button></div>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><button v-for="entry in studioEntries" :key="entry.key" :disabled="navigationPending" :aria-busy="navigationPending" class="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 text-left hover:border-cyan-400 disabled:cursor-wait disabled:opacity-50" @click="openStudioEntry(entry)"><b>{{ entry.title }}</b><div class="mt-1 text-xs text-[var(--text-secondary)]">{{ entry.description }}</div></button></div>
+        <div class="flex flex-wrap items-end justify-between gap-4"><div><div class="text-xs tracking-[0.25em] text-cyan-400">冠希 VIDEO</div><h2 class="mt-1 text-2xl font-semibold">视频创作中心</h2><p class="mt-2 text-sm text-[var(--text-secondary)]">文生图、文生图＋视频、小说成片和素材再创作。</p></div><n-button type="primary" :aria-busy="navigationPending && navigationIntent === 'video-center'" @click="openVideoCenter">{{ navigationPending && navigationIntent === 'video-center' ? '正在打开…' : '进入视频中心' }}</n-button></div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><button v-for="entry in studioEntries" :key="entry.key" :aria-busy="navigationPending && navigationIntent === `studio:${entry.key}`" class="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 text-left hover:border-cyan-400" @click="openStudioEntry(entry)"><b>{{ entry.title }}</b><div class="mt-1 text-xs text-[var(--text-secondary)]">{{ entry.description }}</div></button></div>
       </section>
       <CreationLauncher
         :busy="navigationPending"
+        :pending-entry="launcherPendingEntry"
         :suggestions="suggestions"
         @launch="handleLaunch"
         @submit="handlePromptSubmit"
@@ -73,6 +74,7 @@ import {
 import { useModelStore } from '../stores/pinia'
 import { buildCanvasLaunch, WORKSPACE_LAUNCH_LABELS } from '../config/workspaceLaunch'
 import { nextSuggestionSetIndex } from '../utils/suggestions'
+import { createLatestNavigationRunner } from '../utils/navigationState'
 import ApiSettings from '../components/ApiSettings.vue'
 import CreationLauncher from '../components/home/CreationLauncher.vue'
 import RecentProjects from '../components/home/RecentProjects.vue'
@@ -88,23 +90,25 @@ const dialog = useDialog()
 const modelStore = useModelStore()
 const studioEntries = STUDIO_ENTRIES
 const navigationPending = ref(false)
+const navigationIntent = ref('')
 const projectsLoading = ref(true)
-const runNavigation = async action => {
-  if (navigationPending.value) return false
-  navigationPending.value = true
-  try {
-    return await action()
-  } finally {
-    navigationPending.value = false
+const latestNavigationRunner = createLatestNavigationRunner({
+  setPending: (pending, intent) => {
+    navigationPending.value = pending
+    navigationIntent.value = pending ? intent : ''
   }
-}
-const openVideoCenter = () => runNavigation(() => router.push('/video-studio'))
-const openStudioEntry = entry => runNavigation(() => {
+})
+const runNavigation = latestNavigationRunner
+const launcherPendingEntry = computed(() => navigationIntent.value.startsWith('launch:')
+  ? navigationIntent.value.slice('launch:'.length)
+  : '')
+const openVideoCenter = () => runNavigation('video-center', ({ commit }) => commit(() => router.push('/video-studio')))
+const openStudioEntry = entry => runNavigation(`studio:${entry.key}`, ({ commit }) => commit(() => {
   if (entry.route) return router.push(entry.route)
   if (entry.flow === 'video') return createVideoProject(videoEntries.video)
   if (entry.flow) return createFlowProject(entry.flow)
   return false
-})
+}))
 
 const showApiSettings = ref(false)
 const taskRailOpen = ref(false)
@@ -192,12 +196,12 @@ const checkApiKeyAndNavigate = (callback) => {
   return callback()
 }
 
-const createNewProject = () => runNavigation(() => (
+const createNewProject = () => runNavigation('new-project', ({ commit }) => commit(() => (
   checkApiKeyAndNavigate(() => {
     const id = createProject('未命名项目')
     return router.push(`/canvas/${id}`)
   })
-))
+)))
 
 const createPromptProject = (prompt = '') => {
   return checkApiKeyAndNavigate(() => {
@@ -300,12 +304,12 @@ const createFlowProject = (flow) => {
 }
 
 const handleLaunch = (flow) => {
-  return runNavigation(() => {
+  return runNavigation(`launch:${flow}`, ({ commit }) => commit(() => {
     if (flow === 'image') return createPromptProject()
     if (flow === 'video') return createVideoProject(videoEntries.video)
     if (flow === 'image-to-video') return createVideoProject(videoEntries['image-to-video'])
     return createFlowProject(flow)
-  })
+  }))
 }
 
 const handlePromptSubmit = (prompt) => {
@@ -313,7 +317,7 @@ const handlePromptSubmit = (prompt) => {
     window.$message?.warning('先写一句创意描述')
     return
   }
-  return runNavigation(() => createPromptProject(prompt))
+  return runNavigation('prompt', ({ commit }) => commit(() => createPromptProject(prompt)))
 }
 
 const handleWorkspaceNavigate = (item) => {
@@ -330,14 +334,16 @@ const handleWorkspaceNavigate = (item) => {
     return
   }
   if (item.id === 'recent') {
-    runNavigation(() => router.push('/recent-generations'))
+    runNavigation('recent', ({ commit }) => commit(() => router.push('/recent-generations')))
     return
   }
   handleLaunch(item.id)
 }
 
 const openProject = (project) => {
-  return runNavigation(() => checkApiKeyAndNavigate(() => router.push(`/canvas/${project.id}`)))
+  return runNavigation(`project:${project.id}`, ({ commit }) => commit(() => (
+    checkApiKeyAndNavigate(() => router.push(`/canvas/${project.id}`))
+  )))
 }
 
 const handleProjectAction = (key, project) => {

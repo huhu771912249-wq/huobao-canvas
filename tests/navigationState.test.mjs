@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import {
   AUTH_SESSION_CACHE_MS,
+  createLatestNavigationRunner,
   createLatestRequestGate,
   hasFreshAuthenticatedSession,
   normalizeStudioTab
@@ -24,6 +25,52 @@ assert.equal(requestGate.isCurrent(firstRequest), false)
 assert.equal(requestGate.isCurrent(secondRequest), true)
 requestGate.invalidate()
 assert.equal(requestGate.isCurrent(secondRequest), false)
+
+const createDeferred = () => {
+  let resolve
+  const promise = new Promise(resolvePromise => { resolve = resolvePromise })
+  return { promise, resolve }
+}
+
+const assertLatestNavigationWins = async completionOrder => {
+  const pendingUpdates = []
+  const committedIntents = []
+  let renderedDestination = null
+  const delays = { A: createDeferred(), B: createDeferred() }
+  const destinations = {
+    A: { url: '/gif-editor', title: '水印与 GIF 素材编辑', form: 'gif' },
+    B: { url: '/video-resize', title: '视频尺寸工作台', form: 'resize' }
+  }
+  const runNavigation = createLatestNavigationRunner({
+    setPending: (active, intent) => { pendingUpdates.push({ active, intent }) }
+  })
+  const start = intent => runNavigation(intent, async ({ commit }) => {
+    await delays[intent].promise
+    return commit(() => {
+      committedIntents.push(intent)
+      renderedDestination = destinations[intent]
+    })
+  })
+
+  const firstNavigation = start('A')
+  const secondNavigation = start('B')
+  for (const intent of completionOrder) {
+    delays[intent].resolve()
+    await Promise.resolve()
+  }
+  await Promise.all([firstNavigation, secondNavigation])
+
+  assert.deepEqual(committedIntents, ['B'], `latest intent must win when requests finish ${completionOrder.join(' then ')}`)
+  assert.deepEqual(renderedDestination, destinations.B, 'the latest shortcut must own the final URL, title, and form')
+  assert.deepEqual(pendingUpdates, [
+    { active: true, intent: 'A' },
+    { active: true, intent: 'B' },
+    { active: false, intent: 'B' }
+  ], 'only the latest intent may update or clear loading state')
+}
+
+await assertLatestNavigationWins(['A', 'B'])
+await assertLatestNavigationWins(['B', 'A'])
 
 assert.equal(normalizeStudioTab('novel'), 'novel')
 assert.equal(normalizeStudioTab('assets'), 'assets')
@@ -54,6 +101,10 @@ assert.match(studio, /computed\(\(\) => normalizeStudioTab\(route\.query\.tab\)\
 assert.match(studio, /route\.query\.job/)
 assert.match(home, /navigationPending/)
 assert.match(home, /createProject\(cleanPrompt \|\| entry\.title, \{/)
-assert.match(launcher, /:disabled="busy"/)
+const creationCardMarkup = launcher.match(/<div class="creation-grid">[\s\S]*?<\/div>\s*<div class="suggestion-row">/)?.[0] || ''
+assert.ok(creationCardMarkup, 'launcher must expose creation shortcuts')
+assert.doesNotMatch(creationCardMarkup, /:disabled="busy"/, 'pending navigation must not disable switching to another shortcut')
+assert.match(creationCardMarkup, /:aria-busy="busy && pendingEntry === entry\.id"/, 'shortcut loading must identify the latest intent')
+assert.doesNotMatch(home, /v-for="entry in studioEntries"[^>]*:disabled="navigationPending"/, 'studio shortcuts must remain selectable while another navigation is pending')
 
 console.log('navigationState.test.mjs passed')

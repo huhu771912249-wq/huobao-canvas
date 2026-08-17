@@ -16,6 +16,22 @@ export const createLatestRequestGate = () => {
   }
 }
 
+export const createLatestNavigationRunner = ({ setPending = () => {} } = {}) => {
+  const requestGate = createLatestRequestGate()
+
+  return async (intent, action) => {
+    const requestToken = requestGate.begin()
+    const isCurrent = () => requestGate.isCurrent(requestToken)
+    const commit = callback => isCurrent() ? callback() : false
+    setPending(true, intent)
+    try {
+      return await action({ isCurrent, commit })
+    } finally {
+      if (isCurrent()) setPending(false, intent)
+    }
+  }
+}
+
 const STUDIO_TABS = new Set(['quick', 'novel', 'assets'])
 
 export const normalizeStudioTab = value => {

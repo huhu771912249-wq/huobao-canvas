@@ -27,7 +27,7 @@
         v-for="entry in entries"
         :key="entry.id"
         type="button"
-        :disabled="busy"
+        :aria-busy="busy && pendingEntry === entry.id"
         class="creation-card workspace-panel"
         :class="`creation-card--${entry.accent}`"
         @click="$emit('launch', entry.id)"
@@ -75,6 +75,10 @@ defineProps({
   busy: {
     type: Boolean,
     default: false
+  },
+  pendingEntry: {
+    type: String,
+    default: ''
   }
 })
 
