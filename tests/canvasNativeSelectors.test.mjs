@@ -33,6 +33,26 @@ assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must no
 assert.match(h3DirectorSource, /overflow-wrap:anywhere/, 'compiled H3 prompts must wrap long tokens inside the node')
 const canvasSource = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
 const globalStyleSource = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8')
+const duplicateConnectionSource = canvasSource.match(
+  /const isDuplicateCanvasConnection = ([\s\S]*?)\n\nconst onConnect/
+)?.[1] || ''
+assert.ok(duplicateConnectionSource, 'canvas connections must expose an executable idempotency guard')
+const { default: isDuplicateCanvasConnection } = await import(
+  `data:text/javascript,${encodeURIComponent(`export default ${duplicateConnectionSource}`)}`
+)
+const connection = { source: 'node_0', target: 'node_1', sourceHandle: 'right', targetHandle: 'left' }
+let persistedConnections = []
+const receiveConnectionEvent = params => {
+  if (isDuplicateCanvasConnection(persistedConnections, params)) return
+  persistedConnections = [...persistedConnections, { id: `edge_${params.source}_${params.target}`, ...params }]
+}
+receiveConnectionEvent(connection) // drag connect
+receiveConnectionEvent({ ...connection }) // duplicate drag connect
+receiveConnectionEvent({ ...connection, id: 'edge_node_0_node_1' }) // interleaved click connect
+assert.equal(persistedConnections.length, 1, 'duplicate drag/click events must persist one unique edge')
+receiveConnectionEvent({ ...connection, target: 'node_2' })
+assert.equal(persistedConnections.length, 2, 'a different endpoint must remain connectable')
+assert.match(canvasSource, /const onConnect = \(params\) => \{\s*if \(isDuplicateCanvasConnection\(edges\.value, params\)\) return/, 'the executable guard must run before Canvas persists an edge')
 const collapsedDockCss = canvasSource.match(/\.canvas-prompt-dock--collapsed\s*\{[\s\S]*?\}/)?.[0] || ''
 assert.match(collapsedDockCss, /max-width:\s*180px/, 'collapsed H3 director must stay compact')
 assert.match(collapsedDockCss, /left:\s*180px/, 'collapsed H3 director must leave the center connection area clear')

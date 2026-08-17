@@ -746,7 +746,25 @@ const handleAddWorkflow = ({ workflow, options }) => {
 }
 
 // Handle connection | 处理连接
+const isDuplicateCanvasConnection = (existingEdges, params) => {
+  const source = String(params?.source || '')
+  const target = String(params?.target || '')
+  const sourceHandle = String(params?.sourceHandle || '')
+  const targetHandle = String(params?.targetHandle || '')
+  const edgeId = String(params?.id || `edge_${source}_${target}`)
+
+  return existingEdges.some(edge => {
+    if (String(edge?.id || '') === edgeId) return true
+    return String(edge?.source || '') === source &&
+      String(edge?.target || '') === target &&
+      String(edge?.sourceHandle || '') === sourceHandle &&
+      String(edge?.targetHandle || '') === targetHandle
+  })
+}
+
 const onConnect = (params) => {
+  if (isDuplicateCanvasConnection(edges.value, params)) return
+
   // Check connection types | 检查连接类型
   const sourceNode = nodes.value.find(n => n.id === params.source)
   const targetNode = nodes.value.find(n => n.id === params.target)
