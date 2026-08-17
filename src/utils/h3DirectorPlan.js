@@ -15,6 +15,23 @@ const compactList = value => (
   Array.isArray(value) ? value.map(item => text(item)).filter(Boolean) : []
 )
 
+const isEnglishDominant = value => {
+  const normalized = text(value)
+  const latinWords = normalized.match(/[A-Za-z]{2,}/g) ?? []
+  const chineseChars = normalized.match(/[\u3400-\u9fff]/g) ?? []
+  return latinWords.length >= 4 && latinWords.join('').length > chineseChars.length * 2
+}
+
+const visibleText = (value, fallback = '') => (
+  isEnglishDominant(value) ? text(fallback) : text(value, fallback)
+)
+
+const visibleList = (value, fallback = []) => {
+  const normalized = compactList(value)
+  if (!normalized.length || normalized.some(isEnglishDominant)) return fallback
+  return normalized
+}
+
 const inferRatio = input => /竖屏|纵向|portrait|9\s*[:：x×]\s*16/i.test(input) ? '9:16' : '16:9'
 
 const inferDuration = input => {
@@ -139,50 +156,53 @@ export const normalizeH3DirectorPlan = (rawValue = {}, userInput = '', source = 
   const duration = VALID_DURATIONS.has(durationCandidate) ? durationCandidate : inferDuration(input)
   const location = text(environmentRaw.location, inferLocation(input))
   const shotSize = text(cameraRaw.shot_size, inferShotSize(input))
+  const fallbackLocation = inferLocation(input)
+  const fallbackShotSize = inferShotSize(input)
+  const fallbackTimeline = [
+    `0-${Math.max(1, Math.floor(duration / 2))}秒：建立主体与环境，开始核心动作`,
+    `${Math.max(1, Math.floor(duration / 2))}-${duration}秒：镜头连续运动，核心动作完成并清晰收束`
+  ]
   const plan = {
     workflow_type: 'h3_video',
-    title: text(raw.title, input.slice(0, 22) || 'H3 专业视频'),
-    summary: text(raw.summary, input),
+    title: visibleText(raw.title, input.slice(0, 22) || 'H3 专业视频'),
+    summary: visibleText(raw.summary, input),
     model: 'minimax-h3',
     aspect_ratio: ratio,
     duration_seconds: duration,
     quality_mode: raw.quality_mode === 'fast' ? 'fast' : 'quality',
     requires_keyframe: Boolean(raw.requires_keyframe),
     character: {
-      identity: text(characterRaw.identity, characterFallback.identity),
-      appearance: text(characterRaw.appearance, characterFallback.appearance),
-      wardrobe: text(characterRaw.wardrobe, characterFallback.wardrobe),
-      accessories: text(characterRaw.accessories, characterFallback.accessories),
-      continuity: text(characterRaw.continuity, characterFallback.continuity)
+      identity: visibleText(characterRaw.identity, characterFallback.identity),
+      appearance: visibleText(characterRaw.appearance, characterFallback.appearance),
+      wardrobe: visibleText(characterRaw.wardrobe, characterFallback.wardrobe),
+      accessories: visibleText(characterRaw.accessories, characterFallback.accessories),
+      continuity: visibleText(characterRaw.continuity, characterFallback.continuity)
     },
     environment: {
-      location,
-      time: text(environmentRaw.time, '自然日间或与故事明确匹配的时段'),
-      weather: text(environmentRaw.weather, '天气连续，空气透视自然'),
-      set_dressing: text(environmentRaw.set_dressing, `在${location}加入服务叙事的家具、道具、材质纹理与前中后景装饰`),
-      spatial_layout: text(environmentRaw.spatial_layout, '主体与关键道具完整入镜，四周保留约 10% 安全边距')
+      location: visibleText(location, fallbackLocation),
+      time: visibleText(environmentRaw.time, '自然日间或与故事明确匹配的时段'),
+      weather: visibleText(environmentRaw.weather, '天气连续，空气透视自然'),
+      set_dressing: visibleText(environmentRaw.set_dressing, `在${fallbackLocation}加入服务叙事的家具、道具、材质纹理与前中后景装饰`),
+      spatial_layout: visibleText(environmentRaw.spatial_layout, '主体与关键道具完整入镜，四周保留约 10% 安全边距')
     },
     cinematography: {
-      shot_size: shotSize,
-      camera_angle: text(cameraRaw.camera_angle, '平视'),
-      lens: text(cameraRaw.lens, shotSize.includes('远') ? '24mm' : (shotSize.includes('特写') ? '85mm' : '50mm')),
-      composition: text(cameraRaw.composition, '三分法构图，主体清晰，前中后景层次明确'),
-      camera_movement: text(cameraRaw.camera_movement, inferCameraMovement(input)),
-      focus: text(cameraRaw.focus, '主体清晰并随动作自然跟焦')
+      shot_size: visibleText(shotSize, fallbackShotSize),
+      camera_angle: visibleText(cameraRaw.camera_angle, '平视'),
+      lens: visibleText(cameraRaw.lens, fallbackShotSize.includes('远') ? '24mm' : (fallbackShotSize.includes('特写') ? '85mm' : '50mm')),
+      composition: visibleText(cameraRaw.composition, '三分法构图，主体清晰，前中后景层次明确'),
+      camera_movement: visibleText(cameraRaw.camera_movement, inferCameraMovement(input)),
+      focus: visibleText(cameraRaw.focus, '主体清晰并随动作自然跟焦')
     },
     lighting: {
-      key_light: text(lightingRaw.key_light, '有明确方向的柔和主光与轮廓光'),
-      color_palette: text(lightingRaw.color_palette, '统一电影级色彩，肤色自然'),
-      mood: text(lightingRaw.mood, '情绪与故事一致')
+      key_light: visibleText(lightingRaw.key_light, '有明确方向的柔和主光与轮廓光'),
+      color_palette: visibleText(lightingRaw.color_palette, '统一电影级色彩，肤色自然'),
+      mood: visibleText(lightingRaw.mood, '情绪与故事一致')
     },
-    action_timeline: compactList(raw.action_timeline).length ? compactList(raw.action_timeline) : [
-      `0-${Math.max(1, Math.floor(duration / 2))}秒：建立主体与环境，开始核心动作`,
-      `${Math.max(1, Math.floor(duration / 2))}-${duration}秒：镜头连续运动，核心动作完成并清晰收束`
-    ],
-    audio_direction: text(raw.audio_direction, '匹配地点的环境声、关键动作拟音和克制音乐，人物对白需口型同步'),
-    image_prompt: text(raw.image_prompt, `${input}，电影级关键帧，${shotSize}，主体完整入镜，真实材质，四周 10% 安全边距，无文字无水印`),
-    negative_prompt: text(raw.negative_prompt, '避免身份漂移、脸部变形、多余肢体、手指错误、服装跳变、背景闪烁、物体穿模、镜头突跳、文字和水印'),
-    assumptions: compactList(raw.assumptions),
+    action_timeline: visibleList(raw.action_timeline, fallbackTimeline),
+    audio_direction: visibleText(raw.audio_direction, '匹配地点的环境声、关键动作拟音和克制音乐，人物对白需口型同步'),
+    image_prompt: visibleText(raw.image_prompt, `${input}，电影级关键帧，${fallbackShotSize}，主体完整入镜，真实材质，四周 10% 安全边距，无文字无水印`),
+    negative_prompt: visibleText(raw.negative_prompt, '避免身份漂移、脸部变形、多余肢体、手指错误、服装跳变、背景闪烁、物体穿模、镜头突跳、文字和水印'),
+    assumptions: visibleList(raw.assumptions),
     plan_source: source === 'rules' ? 'rules' : 'gemma'
   }
   plan.video_prompt = buildH3VideoPrompt({ ...plan, video_prompt: undefined })
