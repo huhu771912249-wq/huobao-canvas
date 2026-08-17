@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import {
   GIF_TEXT_STYLE_PRESETS,
   buildGifEditorTextTracks,
+  createGifEditorTrackTimeDraftStore,
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
   formatGifEditorTrackTime,
@@ -69,6 +70,65 @@ assert.deepEqual(
   '图片轨道持久化必须清理 NaN 和超时长值'
 )
 assert.doesNotThrow(() => buildGifEditorTextTracks(sanitizedTrackTimes.textTracks, 2), '归一化后的文字轨道应可继续导出')
+
+const sharedTextTrack = { id: 'shared-track', start: 0, end: 2 }
+const sharedImageTrack = { id: 'shared-track', start: 1, end: 2 }
+const timeDraftStore = createGifEditorTrackTimeDraftStore()
+timeDraftStore.set('text', sharedTextTrack, 'start', '0.3')
+timeDraftStore.set('image', sharedImageTrack, 'start', '1.2')
+assert.equal(timeDraftStore.get('text', sharedTextTrack, 'start'), '0.3', '文字和图片同 ID 不得共用 draft')
+assert.equal(timeDraftStore.get('image', sharedImageTrack, 'start'), '1.2', '图片轨道必须读取自己的 draft')
+timeDraftStore.clearTrack('text', sharedTextTrack)
+assert.equal(timeDraftStore.get('text', sharedTextTrack, 'start'), 0, '删除文字轨道应清理其 draft')
+assert.equal(timeDraftStore.get('image', sharedImageTrack, 'start'), '1.2', '删除文字轨道不得清理同 ID 图片 draft')
+
+const missingIdTrackA = { start: 0, end: 2 }
+const missingIdTrackB = { start: 1, end: 2 }
+timeDraftStore.set('text', missingIdTrackA, 'start', '0.4')
+timeDraftStore.set('text', missingIdTrackB, 'start', '1.4')
+assert.equal(timeDraftStore.get('text', missingIdTrackA, 'start'), '0.4', '缺 ID 轨道不得坍缩到共享 key')
+assert.equal(timeDraftStore.get('text', missingIdTrackB, 'start'), '1.4')
+
+const switchTrackA = { id: 'switch-a', start: 0, end: 2 }
+const switchTrackB = { id: 'switch-b', start: 1, end: 2 }
+timeDraftStore.set('text', switchTrackA, 'start', '0.3')
+assert.equal(timeDraftStore.get('text', switchTrackB, 'start'), 1, '切到 B 不得显示 A draft')
+timeDraftStore.set('text', switchTrackB, 'start', '1.3')
+assert.equal(timeDraftStore.get('text', switchTrackA, 'start'), '0.3', '回到 A 应继续显示 A 未提交 draft')
+
+timeDraftStore.clearAll()
+const restoredOwnTrack = { id: 'shared-track', start: 1, end: 2 }
+assert.equal(timeDraftStore.get('image', restoredOwnTrack, 'start'), 1, '恢复工程后必须显示新轨道自有值')
+assert.deepEqual(
+  normalizeGifEditorTrackRange(restoredOwnTrack, 2, { start: timeDraftStore.get('image', restoredOwnTrack, 'start') }),
+  { start: 1, end: 2 },
+  '恢复工程后失焦提交仍应保留自有 start=1'
+)
+
+const legacyTracksWithoutIds = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  textTracks: [
+    { text: '旧文字', start: 0, end: 2 },
+    { text: '第二条旧文字', start: 1, end: 2 }
+  ],
+  imageTracks: [{ name: '旧图片', url: '/public-assets/logo.png', start: 1, end: 2 }]
+}
+const firstLegacySanitize = sanitizeWatermarkEditorProject(legacyTracksWithoutIds)
+const secondLegacySanitize = sanitizeWatermarkEditorProject(legacyTracksWithoutIds)
+assert.match(firstLegacySanitize.textTracks[0].id, /^legacy-text-/)
+assert.match(firstLegacySanitize.imageTracks[0].id, /^legacy-image-/)
+assert.notEqual(firstLegacySanitize.textTracks[0].id, firstLegacySanitize.imageTracks[0].id)
+assert.notEqual(firstLegacySanitize.textTracks[0].id, firstLegacySanitize.textTracks[1].id, '缺 ID 同类轨道必须获得唯一 ID')
+assert.equal(firstLegacySanitize.textTracks[0].id, secondLegacySanitize.textTracks[0].id, '旧文字轨道 ID 必须稳定')
+assert.equal(firstLegacySanitize.imageTracks[0].id, secondLegacySanitize.imageTracks[0].id, '旧图片轨道 ID 必须稳定')
+const legacyRestoreDraftStore = createGifEditorTrackTimeDraftStore()
+legacyRestoreDraftStore.set('text', legacyTracksWithoutIds.textTracks[0], 'start', '0.7')
+legacyRestoreDraftStore.clearAll()
+assert.equal(
+  legacyRestoreDraftStore.get('text', firstLegacySanitize.textTracks[0], 'start'),
+  0,
+  '缺 ID 旧轨道恢复后不得继承恢复前 draft'
+)
 
 const sanitized = sanitizeWatermarkEditorProject({
   ...project,
@@ -358,6 +418,8 @@ assert.doesNotMatch(editor, /item\.(?:start|end)\.toFixed\(/, '模板不得直�
 assert.doesNotMatch(editor, /v-model\.number="selected(?:Text|Image)\.(?:start|end)"/, '时间输入中间态不得直接写入自动保存对象')
 assert.match(editor, /trackTimeDrafts/)
 assert.match(editor, /commitTrackTimeInput/)
+assert.match(editor, /trackTimeDrafts\.clearAll\(\)[\s\S]*?sanitizeWatermarkEditorProject\(value\)/, '恢复工程前必须清空所有 draft')
+assert.match(editor, /trackTimeDrafts\.clearTrack\(selectedType\.value, selectedItem\.value\)/, '删除轨道必须定向清理 draft')
 assert.match(editor, /safeTimelineRangeStyle/)
 const editorAutoSaveWatch = editor.match(
   /watch\(\s*\[clips, textTracks, imageTracks,[\s\S]*?\{ deep: true \}\s*\)/

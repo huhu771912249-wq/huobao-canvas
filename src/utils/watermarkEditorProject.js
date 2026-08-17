@@ -50,6 +50,64 @@ export const isGifEditorTrackActive = (track, playhead, sourceDuration) => {
   return currentTime >= range.start && currentTime <= range.end
 }
 
+export const createGifEditorTrackTimeDraftStore = ({ onChange = () => {} } = {}) => {
+  const drafts = new Map()
+  const runtimeIdentities = new WeakMap()
+  let runtimeSequence = 0
+
+  const trackIdentity = (type, track) => {
+    const trackType = String(type || 'track')
+    const trackId = String(track?.id || '').trim()
+    if (trackId) return `${trackType}:${trackId}`
+    if (track && typeof track === 'object') {
+      if (!runtimeIdentities.has(track)) runtimeIdentities.set(track, `runtime-${++runtimeSequence}`)
+      return `${trackType}:${runtimeIdentities.get(track)}`
+    }
+    return `${trackType}:missing`
+  }
+  const draftKey = (type, track, field) => `${trackIdentity(type, track)}:${field}`
+  const notify = () => onChange()
+
+  return {
+    get: (type, track, field) => {
+      const key = draftKey(type, track, field)
+      return drafts.has(key) ? drafts.get(key) : track?.[field] ?? ''
+    },
+    set: (type, track, field, value) => {
+      drafts.set(draftKey(type, track, field), value)
+      notify()
+    },
+    clearField: (type, track, field) => {
+      if (drafts.delete(draftKey(type, track, field))) notify()
+    },
+    clearTrack: (type, track) => {
+      const prefix = `${trackIdentity(type, track)}:`
+      let changed = false
+      for (const key of drafts.keys()) {
+        if (key.startsWith(prefix)) changed = drafts.delete(key) || changed
+      }
+      if (changed) notify()
+    },
+    clearAll: () => {
+      if (!drafts.size) return
+      drafts.clear()
+      notify()
+    }
+  }
+}
+
+const withStableTrackIds = (value, type) => {
+  const usedIds = new Set()
+  return cloneList(value).map((track, index) => {
+    const baseId = String(track.id || '').trim() || `legacy-${type}-${index + 1}`
+    let id = baseId
+    let suffix = 2
+    while (usedIds.has(id)) id = `${baseId}-${suffix++}`
+    usedIds.add(id)
+    return { ...track, id }
+  })
+}
+
 const sourceKind = (url, mime) => (
   String(mime || '').toLowerCase() === 'image/gif' || /\.gif(?:$|\?)/i.test(url) ? 'gif' : 'video'
 )
@@ -71,7 +129,7 @@ export const GIF_TEXT_STYLE_PRESETS = Object.freeze({
 
 const DEFAULT_TEXT_STYLE = '爆款白字'
 
-const sanitizeTextTracks = (value, sourceDuration) => cloneList(value).slice(0, 8).map(item => {
+const sanitizeTextTracks = (value, sourceDuration) => withStableTrackIds(cloneList(value).slice(0, 8), 'text').map(item => {
   const track = { ...item }
   const range = normalizeGifEditorTrackRange(item, sourceDuration)
   delete track.effect
@@ -169,7 +227,7 @@ export const sanitizeWatermarkEditorProject = value => {
     .filter(clip => clip.url)
     .slice(0, 1)
   const sourceDuration = clips.reduce((total, clip) => total + clip.duration, 0) || 3
-  const imageTracks = cloneList(value?.imageTracks).map(item => {
+  const imageTracks = withStableTrackIds(value?.imageTracks, 'image').map(item => {
     const range = normalizeGifEditorTrackRange(item, sourceDuration)
     return {
       ...item,

@@ -158,7 +158,7 @@
           <div class="section-label">文字内容</div>
           <textarea v-model="selectedText.text" rows="3" maxlength="80"></textarea>
           <label>样式<select v-model="selectedText.style"><option v-for="styleName in textStyleNames" :key="styleName">{{ styleName }}</option></select></label>
-          <div class="field-pair"><label>开始（秒）<input :value="trackTimeInputValue(selectedText, 'start')" type="number" min="0" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedText, 'start', $event)" @blur="commitTrackTimeInput(selectedText, 'start')"></label><label>结束（秒）<input :value="trackTimeInputValue(selectedText, 'end')" type="number" min="0.1" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedText, 'end', $event)" @blur="commitTrackTimeInput(selectedText, 'end')"></label></div>
+          <div class="field-pair"><label>开始（秒）<input :value="trackTimeInputValue('text', selectedText, 'start')" type="number" min="0" :max="totalDuration" step="0.1" @input="handleTrackTimeInput('text', selectedText, 'start', $event)" @blur="commitTrackTimeInput('text', selectedText, 'start')"></label><label>结束（秒）<input :value="trackTimeInputValue('text', selectedText, 'end')" type="number" min="0.1" :max="totalDuration" step="0.1" @input="handleTrackTimeInput('text', selectedText, 'end', $event)" @blur="commitTrackTimeInput('text', selectedText, 'end')"></label></div>
           <label>字号 {{ selectedText.fontSize }} px<input v-model.number="selectedText.fontSize" type="range" min="14" max="72"></label>
           <label>横向位置 {{ selectedText.x }}%<input v-model.number="selectedText.x" type="range" min="5" max="95"></label>
           <label>纵向位置 {{ selectedText.y }}%<input v-model.number="selectedText.y" type="range" min="5" max="95"></label>
@@ -167,7 +167,7 @@
         <section v-else-if="selectedImage" class="inspector-section">
           <div class="section-label">图片 / Logo</div>
           <div class="selected-file">{{ selectedImage.name }}</div>
-          <div class="field-pair"><label>开始（秒）<input :value="trackTimeInputValue(selectedImage, 'start')" type="number" min="0" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedImage, 'start', $event)" @blur="commitTrackTimeInput(selectedImage, 'start')"></label><label>结束（秒）<input :value="trackTimeInputValue(selectedImage, 'end')" type="number" min="0.1" :max="totalDuration" step="0.1" @input="handleTrackTimeInput(selectedImage, 'end', $event)" @blur="commitTrackTimeInput(selectedImage, 'end')"></label></div>
+          <div class="field-pair"><label>开始（秒）<input :value="trackTimeInputValue('image', selectedImage, 'start')" type="number" min="0" :max="totalDuration" step="0.1" @input="handleTrackTimeInput('image', selectedImage, 'start', $event)" @blur="commitTrackTimeInput('image', selectedImage, 'start')"></label><label>结束（秒）<input :value="trackTimeInputValue('image', selectedImage, 'end')" type="number" min="0.1" :max="totalDuration" step="0.1" @input="handleTrackTimeInput('image', selectedImage, 'end', $event)" @blur="commitTrackTimeInput('image', selectedImage, 'end')"></label></div>
           <label>大小 {{ selectedImage.size }}%<input v-model.number="selectedImage.size" type="range" min="8" max="60"></label>
           <label>透明度 {{ selectedImage.opacity ?? 100 }}%<input v-model.number="selectedImage.opacity" type="range" min="10" max="100"></label>
           <label>横向位置 {{ selectedImage.x }}%<input v-model.number="selectedImage.x" type="range" min="5" max="95"></label>
@@ -238,6 +238,7 @@ import {
 } from '../utils/gifAdEditorPrototype'
 import {
   GIF_TEXT_STYLE_PRESETS,
+  createGifEditorTrackTimeDraftStore,
   createWatermarkEditorProjectForSource,
   createDefaultWatermarkEditorProject,
   formatGifEditorTrackTime,
@@ -298,7 +299,7 @@ const objectUrls = []
 const clips = ref(defaultEditorProject.clips)
 const textTracks = ref(defaultEditorProject.textTracks)
 const imageTracks = ref(defaultEditorProject.imageTracks)
-const trackTimeDrafts = ref({})
+const trackTimeDrafts = createGifEditorTrackTimeDraftStore()
 
 const selectedType = ref('')
 const selectedId = ref('')
@@ -336,28 +337,18 @@ const safeTimelineRangeStyle = item => {
   const range = normalizedTrackRange(item)
   return timelineRangeStyle(range.start, range.end, totalDuration.value)
 }
-const trackTimeDraftKey = (item, field) => `${item?.id || 'track'}:${field}`
-const trackTimeInputValue = (item, field) => {
-  const key = trackTimeDraftKey(item, field)
-  return Object.hasOwn(trackTimeDrafts.value, key) ? trackTimeDrafts.value[key] : item?.[field] ?? ''
-}
-const handleTrackTimeInput = (item, field, event) => {
+const trackTimeInputValue = (type, item, field) => trackTimeDrafts.get(type, item, field)
+const handleTrackTimeInput = (type, item, field, event) => {
   if (!item) return
-  trackTimeDrafts.value = {
-    ...trackTimeDrafts.value,
-    [trackTimeDraftKey(item, field)]: event?.target?.value ?? ''
-  }
+  trackTimeDrafts.set(type, item, field, event?.target?.value ?? '')
 }
-const commitTrackTimeInput = (item, field) => {
+const commitTrackTimeInput = (type, item, field) => {
   if (!item) return
-  const key = trackTimeDraftKey(item, field)
-  const value = Object.hasOwn(trackTimeDrafts.value, key) ? trackTimeDrafts.value[key] : item[field]
+  const value = trackTimeDrafts.get(type, item, field)
   const range = normalizeGifEditorTrackRange(item, totalDuration.value, { [field]: value })
   item.start = range.start
   item.end = range.end
-  const nextDrafts = { ...trackTimeDrafts.value }
-  delete nextDrafts[key]
-  trackTimeDrafts.value = nextDrafts
+  trackTimeDrafts.clearField(type, item, field)
 }
 const rulerMarks = computed(() => Array.from({ length: 7 }, (_, index) => Number((totalDuration.value / 6 * index).toFixed(1))))
 
@@ -399,6 +390,7 @@ const editorSnapshot = () => sanitizeWatermarkEditorProject({
 })
 
 const applyEditorProject = value => {
+  trackTimeDrafts.clearAll()
   const project = sanitizeWatermarkEditorProject(value)
   projectName.value = project.title
   const resultDuration = Number(project.result.metadata?.duration)
@@ -549,6 +541,9 @@ const importFont = async event => {
 }
 
 const removeSelected = () => {
+  if (['text', 'image'].includes(selectedType.value) && selectedItem.value) {
+    trackTimeDrafts.clearTrack(selectedType.value, selectedItem.value)
+  }
   if (selectedType.value === 'clip') clips.value = clips.value.filter(item => item.id !== selectedId.value)
   if (selectedType.value === 'text') textTracks.value = textTracks.value.filter(item => item.id !== selectedId.value)
   if (selectedType.value === 'image') imageTracks.value = imageTracks.value.filter(item => item.id !== selectedId.value)
