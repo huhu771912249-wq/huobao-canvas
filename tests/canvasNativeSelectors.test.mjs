@@ -26,8 +26,61 @@ assert.match(videoSource, /modelStore\.allVideoModelOptions/, 'mixed-provider wo
 assert.match(videoSource, /activateModelProvider\(localModel\.value\)/, 'video generation must activate its own model provider')
 assert.match(imageSource, /activateModelProvider\(localModel\.value\)/, 'image generation must activate its own model provider')
 assert.match(videoSource, /data-testid="video-node-expand-toggle"/, 'the video node must expose a one-click expand control')
-assert.match(videoSource, /maxHeight:\s*'calc\(100vh - 96px\)'/, 'expanded video nodes must stay inside the viewport')
+const expandedViewportHelpersSource = videoSource.match(
+  /(const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = [\s\S]*?const createExpandedVideoNodeViewportLifecycle = [\s\S]*?\n})\n\n\/\/ 使用 Pinia/
+)?.[1] || ''
+assert.ok(expandedViewportHelpersSource, 'video nodes must expose executable viewport sizing helpers')
+const { getExpandedVideoNodeMaxHeight, createExpandedVideoNodeViewportLifecycle } = await import(
+  `data:text/javascript,${encodeURIComponent(`${expandedViewportHelpersSource}\nexport { getExpandedVideoNodeMaxHeight, createExpandedVideoNodeViewportLifecycle }`)}`
+)
+assert.equal(
+  getExpandedVideoNodeMaxHeight({ nodeTop: 100, viewportHeight: 900 }),
+  776,
+  'an upper node must use the viewport space below its real screen top'
+)
+assert.equal(
+  getExpandedVideoNodeMaxHeight({ nodeTop: 700, viewportHeight: 900 }),
+  176,
+  'a lower node must shrink its internal scroll shell to the remaining viewport space'
+)
+
+let measuredNodeTop = 100
+let measuredViewportHeight = 900
+let resizeHandler = null
+let resizeAdds = 0
+let resizeRemoves = 0
+const appliedMaxHeights = []
+const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
+  getNodeTop: () => measuredNodeTop,
+  getViewportHeight: () => measuredViewportHeight,
+  setMaxHeight: value => appliedMaxHeights.push(value),
+  addResizeListener: handler => {
+    resizeAdds += 1
+    resizeHandler = handler
+  },
+  removeResizeListener: handler => {
+    assert.equal(handler, resizeHandler, 'cleanup must remove the exact registered resize handler')
+    resizeRemoves += 1
+    resizeHandler = null
+  }
+})
+expandedViewportLifecycle.start()
+expandedViewportLifecycle.start()
+assert.equal(resizeAdds, 1, 'repeated expanded lifecycle starts must register one resize listener')
+assert.equal(appliedMaxHeights.at(-1), 776)
+measuredNodeTop = 700
+resizeHandler()
+assert.equal(appliedMaxHeights.at(-1), 176, 'resize must recalculate from the node current viewport top')
+expandedViewportLifecycle.stop()
+expandedViewportLifecycle.stop()
+assert.equal(resizeRemoves, 1, 'collapse and unmount cleanup must be idempotent')
+assert.equal(resizeHandler, null)
+assert.match(videoSource, /ref="nodeRootRef"/, 'viewport sizing must measure the rendered node root')
+assert.match(videoSource, /:style="expandedNodeStyle"/, 'expanded max height must be applied to the node scroll shell')
 assert.match(videoSource, /overflowY:\s*'auto'/, 'expanded video nodes must make every setting reachable by scrolling')
+assert.doesNotMatch(videoSource, /calc\(100vh - 96px\)/, 'fixed viewport height must not remain the sizing solution')
+assert.match(videoSource, /expandedViewportLifecycle\.stop\(\)[\s\S]*?await nextTick\(\)/, 'collapse must stop viewport resize tracking')
+assert.match(videoSource, /onBeforeUnmount\(\(\) => expandedViewportLifecycle\.stop\(\)\)/, 'unmount must clean up viewport resize tracking')
 assert.match(videoSource, /updateNodeInternals\(props\.id\)/, 'the video node must refresh its Vue Flow bounds after resizing')
 assert.match(videoSource, /w-\[560px\]\s+max-w-\[560px\]/, 'long prompts must not widen the video node')
 assert.match(h3DirectorSource, /overflow-wrap:anywhere/, 'compiled H3 prompts must wrap long tokens inside the node')

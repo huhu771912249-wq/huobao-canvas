@@ -2,9 +2,9 @@
   <!-- Video config node wrapper | 视频配置节点包裹层 -->
   <div class="video-config-node-wrapper relative" @mouseenter="showHandleMenu = true" @mouseleave="showHandleMenu = false">
     <!-- Video config node | 视频配置节点 -->
-    <div class="video-config-node canvas-node-scroll-shell nowheel w-[560px] max-w-[560px] bg-[var(--bg-secondary)] rounded-xl border transition-all duration-200"
+    <div ref="nodeRootRef" class="video-config-node canvas-node-scroll-shell nowheel w-[560px] max-w-[560px] bg-[var(--bg-secondary)] rounded-xl border transition-all duration-200"
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
-      :style="isExpanded ? { maxHeight: 'calc(100vh - 96px)', overflowY: 'auto' } : undefined">
+      :style="expandedNodeStyle">
       <!-- Header | 头部 -->
       <div class="flex items-center justify-between px-3 py-2 border-b border-[var(--border-color)]">
         <span
@@ -300,7 +300,7 @@
  * Video config node component | 视频配置节点组件
  * Configuration panel for video generation with API integration
  */
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { NIcon, NDropdown, NSpin } from 'naive-ui'
 import { ChevronForwardOutline, ChevronDownOutline, TrashOutline, VideocamOutline, CopyOutline, CreateOutline, ExpandOutline, ContractOutline } from '@vicons/ionicons5'
@@ -332,6 +332,48 @@ import {
   localizeGeneratedImageInput
 } from '../../utils/generatedImageHandoff'
 
+const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = 24
+const getExpandedVideoNodeMaxHeight = ({ nodeTop, viewportHeight, bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP } = {}) => {
+  const safeNodeTop = Number.isFinite(Number(nodeTop)) ? Math.max(0, Number(nodeTop)) : 0
+  const safeViewportHeight = Number.isFinite(Number(viewportHeight)) ? Math.max(0, Number(viewportHeight)) : 0
+  const safeBottomGap = Number.isFinite(Number(bottomGap)) ? Math.max(0, Number(bottomGap)) : VIDEO_NODE_VIEWPORT_BOTTOM_GAP
+  return Math.max(0, Math.floor(safeViewportHeight - safeNodeTop - safeBottomGap))
+}
+
+const createExpandedVideoNodeViewportLifecycle = ({
+  getNodeTop,
+  getViewportHeight,
+  setMaxHeight,
+  addResizeListener,
+  removeResizeListener
+}) => {
+  let listening = false
+  const recalculate = () => {
+    const nodeTop = getNodeTop()
+    const viewportHeight = getViewportHeight()
+    if (!Number.isFinite(Number(nodeTop)) || !Number.isFinite(Number(viewportHeight))) return null
+    const maxHeight = getExpandedVideoNodeMaxHeight({ nodeTop, viewportHeight })
+    setMaxHeight(maxHeight)
+    return maxHeight
+  }
+  const handleResize = () => recalculate()
+
+  return {
+    recalculate,
+    start: () => {
+      recalculate()
+      if (listening) return
+      addResizeListener(handleResize)
+      listening = true
+    },
+    stop: () => {
+      if (!listening) return
+      removeResizeListener(handleResize)
+      listening = false
+    }
+  }
+}
+
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
 
@@ -352,6 +394,25 @@ const { loading, error, status, video: generatedVideo, progress, createVideoTask
 // Local state | 本地状态
 const showHandleMenu = ref(false)
 const isExpanded = ref(Boolean(props.data?.expanded))
+const nodeRootRef = ref(null)
+const expandedNodeMaxHeight = ref(getExpandedVideoNodeMaxHeight({
+  nodeTop: 0,
+  viewportHeight: typeof window === 'undefined' ? 0 : window.innerHeight
+}))
+const expandedNodeStyle = computed(() => isExpanded.value
+  ? { maxHeight: `${expandedNodeMaxHeight.value}px`, overflowY: 'auto' }
+  : undefined)
+const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
+  getNodeTop: () => nodeRootRef.value?.getBoundingClientRect().top ?? Number.NaN,
+  getViewportHeight: () => window.innerHeight,
+  setMaxHeight: value => {
+    if (expandedNodeMaxHeight.value === value) return
+    expandedNodeMaxHeight.value = value
+    nextTick(() => updateNodeInternals(props.id))
+  },
+  addResizeListener: handler => window.addEventListener('resize', handler),
+  removeResizeListener: handler => window.removeEventListener('resize', handler)
+})
 const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
 const localRatio = ref(props.data?.ratio || '16:9')
@@ -707,7 +768,9 @@ const resolveAvailableVideoModel = () => {
 const toggleExpanded = async () => {
   isExpanded.value = !isExpanded.value
   updateNode(props.id, { expanded: isExpanded.value })
+  if (!isExpanded.value) expandedViewportLifecycle.stop()
   await nextTick()
+  if (isExpanded.value) expandedViewportLifecycle.start()
   updateNodeInternals(props.id)
 }
 
@@ -1186,13 +1249,20 @@ const handleDelete = () => {
 }
 
 // Initialize on mount | 挂载时初始化
-onMounted(() => {
+onMounted(async () => {
   const resolvedModel = resolveAvailableVideoModel()
   if (!localModel.value || localModel.value !== resolvedModel) {
     localModel.value = resolvedModel
     updateNode(props.id, { model: resolvedModel })
   }
+  if (isExpanded.value) {
+    await nextTick()
+    expandedViewportLifecycle.start()
+    updateNodeInternals(props.id)
+  }
 })
+
+onBeforeUnmount(() => expandedViewportLifecycle.stop())
 
 // Watch for model changes from props | 监听 props 中模型变化
 watch(() => props.data?.model, (newModel) => {
