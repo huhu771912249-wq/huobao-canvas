@@ -121,6 +121,111 @@ assert.notEqual(firstLegacySanitize.textTracks[0].id, firstLegacySanitize.imageT
 assert.notEqual(firstLegacySanitize.textTracks[0].id, firstLegacySanitize.textTracks[1].id, '缺 ID 同类轨道必须获得唯一 ID')
 assert.equal(firstLegacySanitize.textTracks[0].id, secondLegacySanitize.textTracks[0].id, '旧文字轨道 ID 必须稳定')
 assert.equal(firstLegacySanitize.imageTracks[0].id, secondLegacySanitize.imageTracks[0].id, '旧图片轨道 ID 必须稳定')
+
+const reservedReferenceProject = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  imageTracks: [
+    { name: 'missing-first', url: '/public-assets/missing-first.png', start: 0, end: 2 },
+    { id: 'legacy-image-1', name: 'referenced-logo', url: '/public-assets/referenced-logo.png', start: 0, end: 2 }
+  ],
+  quickSettings: { watermarkId: 'legacy-image-1' }
+}
+const sanitizedReservedReference = sanitizeWatermarkEditorProject(reservedReferenceProject)
+assert.equal(sanitizedReservedReference.imageTracks[1].id, 'legacy-image-1', '后续显式 ID 必须优先保留')
+assert.equal(
+  sanitizedReservedReference.imageTracks.find(item => item.id === sanitizedReservedReference.quickSettings.watermarkId)?.name,
+  'referenced-logo',
+  'quickSettings 引用必须继续指向原显式目标'
+)
+assert.notEqual(sanitizedReservedReference.imageTracks[0].id, 'legacy-image-1', '缺 ID 轨道不得抢占预留 ID')
+
+const allReservedIdsProject = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  imageTracks: [
+    { name: 'missing-one', url: '/public-assets/missing-one.png' },
+    { name: 'missing-two', url: '/public-assets/missing-two.png' },
+    { id: 'legacy-image-1', name: 'reserved-one', url: '/public-assets/reserved-one.png' },
+    { id: 'legacy-image-2', name: 'reserved-two', url: '/public-assets/reserved-two.png' },
+    { id: 'legacy-image-1-2', name: 'reserved-derived', url: '/public-assets/reserved-derived.png' }
+  ]
+}
+const sanitizedAllReservedIds = sanitizeWatermarkEditorProject(allReservedIdsProject)
+assert.deepEqual(
+  sanitizedAllReservedIds.imageTracks.slice(0, 2).map(item => item.id),
+  ['legacy-image-1-3', 'legacy-image-2-2'],
+  '多个缺 ID 轨道补位时必须跳过全部显式预留 ID'
+)
+assert.deepEqual(
+  sanitizedAllReservedIds.imageTracks.slice(2).map(item => item.id),
+  ['legacy-image-1', 'legacy-image-2', 'legacy-image-1-2'],
+  '显式 ID 不得因前置补位而漂移'
+)
+
+const duplicateExplicitProject = {
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  imageTracks: [
+    { id: 'duplicate-logo', name: 'first-owner', url: '/public-assets/first-owner.png' },
+    { id: 'duplicate-logo', name: 'duplicate-owner', url: '/public-assets/duplicate-owner.png' },
+    { id: 'duplicate-logo-2', name: 'reserved-suffix', url: '/public-assets/reserved-suffix.png' }
+  ],
+  quickSettings: { watermarkId: 'duplicate-logo' }
+}
+const sanitizedDuplicates = sanitizeWatermarkEditorProject(duplicateExplicitProject)
+assert.deepEqual(
+  sanitizedDuplicates.imageTracks.map(item => item.id),
+  ['duplicate-logo', 'duplicate-logo-3', 'duplicate-logo-2'],
+  '重复显式 ID 仅第一合法拥有者保留，后续获得稳定非冲突派生 ID'
+)
+assert.equal(
+  sanitizedDuplicates.imageTracks.find(item => item.id === sanitizedDuplicates.quickSettings.watermarkId)?.name,
+  'first-owner',
+  '重复 ID 的既有引用语义必须保持指向第一合法拥有者'
+)
+
+const typedReservedIds = sanitizeWatermarkEditorProject({
+  clips: [{ url: '/public-assets/source.mp4', duration: 2 }],
+  textTracks: [
+    { text: 'missing text' },
+    { id: 'legacy-text-1', text: 'explicit text' },
+    { id: 'shared-explicit', text: 'shared text' }
+  ],
+  imageTracks: [
+    { name: 'missing image', url: '/public-assets/missing-image.png' },
+    { id: 'legacy-image-1', name: 'explicit image', url: '/public-assets/explicit-image.png' },
+    { id: 'shared-explicit', name: 'shared image', url: '/public-assets/shared-image.png' }
+  ],
+  quickSettings: { watermarkId: 'shared-explicit' }
+})
+assert.equal(typedReservedIds.textTracks[1].id, 'legacy-text-1', '文字轨道必须独立预留显式 ID')
+assert.equal(typedReservedIds.imageTracks[1].id, 'legacy-image-1', '图片轨道必须独立预留显式 ID')
+assert.equal(typedReservedIds.textTracks[2].id, 'shared-explicit', '同一显式 ID 可分别存在于文字类型')
+assert.equal(typedReservedIds.imageTracks[2].id, 'shared-explicit', '同一显式 ID 可分别存在于图片类型')
+assert.equal(
+  typedReservedIds.imageTracks.find(item => item.id === typedReservedIds.quickSettings.watermarkId)?.name,
+  'shared image',
+  '跨类型同 ID 不得破坏图片 quickSettings 引用'
+)
+
+const sanitizedDuplicatesTwice = sanitizeWatermarkEditorProject(sanitizedDuplicates)
+assert.deepEqual(
+  sanitizedDuplicatesTwice.imageTracks.map(item => item.id),
+  sanitizedDuplicates.imageTracks.map(item => item.id),
+  'sanitize(sanitize(project)) 的 ID 必须完全稳定'
+)
+assert.deepEqual(sanitizedDuplicatesTwice.quickSettings, sanitizedDuplicates.quickSettings)
+const restoredStableIds = restoreWatermarkEditorProject({
+  savedProject: sanitizedDuplicates,
+  sourceProject: { clips: sanitizedDuplicates.clips },
+  nodeData: { editorStatus: 'draft', quickSettings: sanitizedDuplicates.quickSettings }
+}).project
+const sanitizedAfterRestore = sanitizeWatermarkEditorProject(restoredStableIds)
+assert.deepEqual(
+  sanitizedAfterRestore.imageTracks.map(item => item.id),
+  sanitizedDuplicates.imageTracks.map(item => item.id),
+  'restore 后再次 sanitize 的 ID 不得漂移'
+)
+assert.deepEqual(sanitizedAfterRestore.quickSettings, sanitizedDuplicates.quickSettings, 'restore 后引用不得漂移')
+
 const legacyRestoreDraftStore = createGifEditorTrackTimeDraftStore()
 legacyRestoreDraftStore.set('text', legacyTracksWithoutIds.textTracks[0], 'start', '0.7')
 legacyRestoreDraftStore.clearAll()

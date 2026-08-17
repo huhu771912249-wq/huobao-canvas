@@ -97,13 +97,20 @@ export const createGifEditorTrackTimeDraftStore = ({ onChange = () => {} } = {})
 }
 
 const withStableTrackIds = (value, type) => {
-  const usedIds = new Set()
-  return cloneList(value).map((track, index) => {
-    const baseId = String(track.id || '').trim() || `legacy-${type}-${index + 1}`
+  const tracks = cloneList(value)
+  const reservedIds = new Set(tracks.map(track => String(track.id || '').trim()).filter(Boolean))
+  const assignedIds = new Set()
+  return tracks.map((track, index) => {
+    const explicitId = String(track.id || '').trim()
+    if (explicitId && !assignedIds.has(explicitId)) {
+      assignedIds.add(explicitId)
+      return { ...track, id: explicitId }
+    }
+    const baseId = explicitId || `legacy-${type}-${index + 1}`
     let id = baseId
     let suffix = 2
-    while (usedIds.has(id)) id = `${baseId}-${suffix++}`
-    usedIds.add(id)
+    while (reservedIds.has(id) || assignedIds.has(id)) id = `${baseId}-${suffix++}`
+    assignedIds.add(id)
     return { ...track, id }
   })
 }
