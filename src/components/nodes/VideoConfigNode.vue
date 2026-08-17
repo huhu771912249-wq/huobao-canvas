@@ -6,7 +6,7 @@
       :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
       :style="expandedNodeStyle">
       <!-- Header | 头部 -->
-      <div data-testid="video-config-sticky-header" class="sticky top-0 z-20 flex shrink-0 items-center justify-between rounded-t-xl border-b border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
+      <div ref="nodeHeaderRef" data-testid="video-config-sticky-header" class="sticky top-0 z-20 flex shrink-0 items-center justify-between rounded-t-xl border-b border-[var(--border-color)] bg-[var(--bg-secondary)] px-3 py-2">
         <span
           v-if="!isEditingLabel"
           @dblclick="startEditLabel"
@@ -334,6 +334,7 @@ import {
 
 const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = 24
 const VIDEO_NODE_MIN_EXPANDED_HEIGHT = 160
+const VIDEO_NODE_MIN_CONTENT_HEIGHT = 48
 const getEffectiveVideoNodeZoom = value => {
   const zoom = Number(value)
   return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
@@ -343,22 +344,30 @@ const getExpandedVideoNodeViewportLayout = ({
   viewportHeight,
   zoom = 1,
   bottomGap = VIDEO_NODE_VIEWPORT_BOTTOM_GAP,
-  minimumHeight = VIDEO_NODE_MIN_EXPANDED_HEIGHT
+  minimumHeight = VIDEO_NODE_MIN_EXPANDED_HEIGHT,
+  minimumContentHeight = VIDEO_NODE_MIN_CONTENT_HEIGHT,
+  headerScreenHeight
 } = {}) => {
   const safeNodeTop = Number.isFinite(Number(nodeTop)) ? Number(nodeTop) : 0
   const safeViewportHeight = Number.isFinite(Number(viewportHeight)) ? Math.max(0, Number(viewportHeight)) : 0
   const safeBottomGap = Number.isFinite(Number(bottomGap)) ? Math.max(0, Number(bottomGap)) : VIDEO_NODE_VIEWPORT_BOTTOM_GAP
   const viewportContentHeight = Math.max(0, safeViewportHeight - safeBottomGap)
   const safeMinimumHeight = Number.isFinite(Number(minimumHeight)) ? Math.max(0, Number(minimumHeight)) : VIDEO_NODE_MIN_EXPANDED_HEIGHT
-  const operableMinimumHeight = Math.min(safeMinimumHeight, viewportContentHeight)
+  const safeMinimumContentHeight = Number.isFinite(Number(minimumContentHeight)) ? Math.max(0, Number(minimumContentHeight)) : VIDEO_NODE_MIN_CONTENT_HEIGHT
+  const effectiveZoom = getEffectiveVideoNodeZoom(zoom)
+  const safeHeaderScreenHeight = Number(headerScreenHeight)
+  const requiredMinimumScreenHeight = Number.isFinite(safeHeaderScreenHeight) && safeHeaderScreenHeight > 0
+    ? Math.max(safeMinimumHeight, safeHeaderScreenHeight + safeMinimumContentHeight * effectiveZoom)
+    : safeMinimumHeight
+  const operableMinimumHeight = Math.min(requiredMinimumScreenHeight, viewportContentHeight)
   const availableHeight = Math.max(0, viewportContentHeight - Math.max(0, safeNodeTop))
   const desiredScreenHeight = Math.min(viewportContentHeight, Math.max(operableMinimumHeight, availableHeight))
-  const effectiveZoom = getEffectiveVideoNodeZoom(zoom)
   const maxHeight = desiredScreenHeight / effectiveZoom
   const resolvedNodeTop = Math.min(safeNodeTop, viewportContentHeight - desiredScreenHeight)
   return {
     maxHeight,
     desiredScreenHeight,
+    requiredMinimumScreenHeight,
     effectiveZoom,
     screenOffsetY: Math.min(0, resolvedNodeTop - safeNodeTop),
     resolvedNodeTop,
@@ -374,6 +383,7 @@ const createExpandedVideoNodeViewportLifecycle = ({
   getNodeTop,
   getViewportHeight,
   getZoom = () => 1,
+  getHeaderScreenHeight = () => Number.NaN,
   setMaxHeight,
   moveNodeByScreenOffset = () => {},
   addResizeListener,
@@ -384,7 +394,12 @@ const createExpandedVideoNodeViewportLifecycle = ({
     const nodeTop = getNodeTop()
     const viewportHeight = getViewportHeight()
     if (!Number.isFinite(Number(nodeTop)) || !Number.isFinite(Number(viewportHeight))) return null
-    const layout = getExpandedVideoNodeViewportLayout({ nodeTop, viewportHeight, zoom: getZoom() })
+    const layout = getExpandedVideoNodeViewportLayout({
+      nodeTop,
+      viewportHeight,
+      zoom: getZoom(),
+      headerScreenHeight: getHeaderScreenHeight()
+    })
     setMaxHeight(layout.maxHeight)
     if (layout.screenOffsetY < 0) moveNodeByScreenOffset(layout.screenOffsetY, layout.effectiveZoom)
     return layout
@@ -517,6 +532,7 @@ const { loading, error, status, video: generatedVideo, progress, createVideoTask
 const showHandleMenu = ref(false)
 const isExpanded = ref(Boolean(props.data?.expanded))
 const nodeRootRef = ref(null)
+const nodeHeaderRef = ref(null)
 const expandedNodeMaxHeight = ref(getExpandedVideoNodeMaxHeight({
   nodeTop: 0,
   viewportHeight: typeof window === 'undefined' ? 0 : window.innerHeight,
@@ -529,6 +545,7 @@ const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   getNodeTop: () => nodeRootRef.value?.getBoundingClientRect().top ?? Number.NaN,
   getViewportHeight: () => window.innerHeight,
   getZoom: () => viewport.value.zoom,
+  getHeaderScreenHeight: () => nodeHeaderRef.value?.getBoundingClientRect().height ?? Number.NaN,
   setMaxHeight: value => {
     if (expandedNodeMaxHeight.value === value) return
     expandedNodeMaxHeight.value = value

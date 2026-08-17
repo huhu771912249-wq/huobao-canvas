@@ -73,19 +73,31 @@ for (const nodeTop of [850, 875, 876, 900]) {
   assert.ok(layout.viewportBottom <= 876, `extreme lower node at ${nodeTop}px must preserve the 24px bottom safety gap`)
 }
 const zoomHeightCases = new Map([
-  [0.8, 200],
-  [1, 160],
-  [1.25, 128],
-  [2, 80]
+  [0.8, { cssHeight: 200, headerScreenHeight: 36.8, minimumScreenHeight: 160 }],
+  [1, { cssHeight: 160, headerScreenHeight: 46, minimumScreenHeight: 160 }],
+  [1.25, { cssHeight: 128, headerScreenHeight: 57.5, minimumScreenHeight: 160 }],
+  [2, { cssHeight: 94, headerScreenHeight: 92, minimumScreenHeight: 188 }]
 ])
-for (const [zoom, expectedCssHeight] of zoomHeightCases) {
-  const layout = getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom })
+for (const [zoom, expectation] of zoomHeightCases) {
+  const layout = getExpandedVideoNodeViewportLayout({
+    nodeTop: 875,
+    viewportHeight: 900,
+    zoom,
+    headerScreenHeight: expectation.headerScreenHeight
+  })
   const renderedHeight = layout.maxHeight * zoom
   const renderedBottom = 875 + layout.screenOffsetY + renderedHeight
-  assert.equal(layout.maxHeight, expectedCssHeight, `zoom ${zoom} must convert the 160px screen shell into flow/CSS units`)
-  assert.ok(renderedHeight >= 160, `zoom ${zoom} rendered shell must remain at least 160px tall`)
+  assert.equal(layout.requiredMinimumScreenHeight, expectation.minimumScreenHeight, `zoom ${zoom} must reserve its real header and minimum content height`)
+  assert.equal(layout.maxHeight, expectation.cssHeight, `zoom ${zoom} must convert the required screen shell into flow/CSS units`)
+  assert.ok(renderedHeight >= expectation.minimumScreenHeight, `zoom ${zoom} rendered shell must satisfy its content-aware minimum`)
+  assert.ok(renderedHeight - expectation.headerScreenHeight >= 48 * zoom, `zoom ${zoom} must show at least 48 flow pixels below the sticky header`)
   assert.ok(renderedBottom <= 876, `zoom ${zoom} rendered shell must preserve the bottom safety gap`)
 }
+assert.equal(
+  getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom: 2, headerScreenHeight: Number.NaN }).requiredMinimumScreenHeight,
+  160,
+  'an invalid header rect must fall back to the baseline screen minimum'
+)
 assert.equal(getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom: 0 }).effectiveZoom, 1)
 assert.equal(getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom: -1 }).effectiveZoom, 1)
 assert.equal(getExpandedVideoNodeViewportLayout({ nodeTop: 875, viewportHeight: 900, zoom: Number.NaN }).effectiveZoom, 1)
@@ -102,6 +114,7 @@ const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   getNodeTop: () => measuredNodeTop,
   getViewportHeight: () => measuredViewportHeight,
   getZoom: () => measuredZoom,
+  getHeaderScreenHeight: () => 46 * measuredZoom,
   setMaxHeight: value => appliedMaxHeights.push(value),
   moveNodeByScreenOffset: (screenOffsetY, effectiveZoom) => appliedViewportMoves.push({ screenOffsetY, effectiveZoom }),
   addResizeListener: handler => {
@@ -129,8 +142,9 @@ assert.equal(appliedViewportMoves.at(-1).screenOffsetY / appliedViewportMoves.at
 measuredNodeTop = 716
 measuredZoom = 2
 resizeHandler()
-assert.equal(appliedMaxHeights.at(-1), 80, 'resize must recalculate CSS height when zoom changes')
-assert.equal(appliedViewportMoves.length, 1, 'the resolved viewport position must not keep moving upward')
+assert.equal(appliedMaxHeights.at(-1), 94, 'resize must reserve the scaled header and content minimum at 200%')
+assert.deepEqual(appliedViewportMoves.at(-1), { screenOffsetY: -28, effectiveZoom: 2 }, '200% sizing must move only enough to preserve the larger shell')
+assert.equal(appliedViewportMoves.length, 2, 'the larger 200% minimum must apply one additional real-coordinate adjustment')
 expandedViewportLifecycle.stop()
 expandedViewportLifecycle.stop()
 assert.equal(resizeRemoves, 1, 'collapse and unmount cleanup must be idempotent')
@@ -148,6 +162,7 @@ const restoredViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   getNodeTop: () => restoredNodeTop,
   getViewportHeight: () => 900,
   getZoom: () => 0.8,
+  getHeaderScreenHeight: () => 36.8,
   setMaxHeight: value => restoredMaxHeights.push(value),
   moveNodeByScreenOffset: () => {},
   addResizeListener: () => { restoredResizeAdds += 1 },
@@ -228,7 +243,12 @@ const expandedZoomLifecycle = createExpandedVideoNodeZoomLifecycle({
     if (pendingFrames.delete(frameId)) cancelledFrames += 1
   },
   recalculate: () => {
-    const layout = getExpandedVideoNodeViewportLayout({ nodeTop: zoomNodeTop, viewportHeight: 900, zoom: dynamicZoom.value })
+    const layout = getExpandedVideoNodeViewportLayout({
+      nodeTop: zoomNodeTop,
+      viewportHeight: 900,
+      zoom: dynamicZoom.value,
+      headerScreenHeight: 46 * dynamicZoom.value
+    })
     zoomNodeTop += layout.screenOffsetY
     dynamicZoomLayouts.push(layout)
   }
@@ -247,7 +267,9 @@ const flushDynamicZoom = async zoom => {
 for (const zoom of [0.8, 1.25, 2]) {
   const layout = await flushDynamicZoom(zoom)
   const renderedHeight = layout.maxHeight * zoom
-  assert.ok(renderedHeight >= 160, `dynamic zoom ${zoom} must keep at least 160 rendered pixels`)
+  const expectedMinimum = zoom === 2 ? 188 : 160
+  assert.ok(renderedHeight >= expectedMinimum, `dynamic zoom ${zoom} must keep its content-aware rendered minimum`)
+  assert.ok(renderedHeight - 46 * zoom >= 48 * zoom, `dynamic zoom ${zoom} must preserve the complete action area below the header`)
   assert.ok(zoomNodeTop + renderedHeight <= 876, `dynamic zoom ${zoom} must preserve the bottom safety gap`)
 }
 const dynamicRecalculationsBeforeCollapse = dynamicZoomLayouts.length
@@ -268,6 +290,8 @@ assert.equal(cancelledFrames, 1, 'collapse or unmount must cancel the pending fr
 assert.equal(pendingFrames.size, 0)
 stopDynamicZoomWatch()
 assert.match(videoSource, /ref="nodeRootRef"/, 'viewport sizing must measure the rendered node root')
+assert.match(videoSource, /ref="nodeHeaderRef"/, 'content-aware sizing must measure the real sticky header')
+assert.match(videoSource, /getHeaderScreenHeight:\s*\(\) => nodeHeaderRef\.value\?\.getBoundingClientRect\(\)\.height/, 'every viewport recalculation must read the sticky header screen height')
 assert.match(videoSource, /:style="expandedNodeStyle"/, 'expanded max height must be applied to the node scroll shell')
 assert.match(videoSource, /overflowY:\s*'auto'/, 'expanded video nodes must make every setting reachable by scrolling')
 assert.doesNotMatch(videoSource, /calc\(100vh - 96px\)/, 'fixed viewport height must not remain the sizing solution')
