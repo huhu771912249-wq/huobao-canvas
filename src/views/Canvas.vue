@@ -58,6 +58,10 @@
         :auto-pan-on-connect="true"
         :auto-pan-speed="18"
         @connect="onConnect"
+        @connect-start="handleConnectionStart"
+        @connect-end="handleConnectionEnd"
+        @click-connect-start="handleClickConnectionStart"
+        @click-connect-end="handleClickConnectionEnd"
         @node-click="onNodeClick"
         @node-drag-stop="handleNodeDragStop"
         @pane-click="onPaneClick"
@@ -184,7 +188,11 @@
       <!-- Bottom input panel (floating) | 底部输入面板（悬浮） -->
       <div
         class="canvas-prompt-dock absolute bottom-4 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20"
-        :class="{ 'canvas-prompt-dock--collapsed': !promptDockExpanded, 'canvas-prompt-dock--director': directorPlan }"
+        :class="{
+          'canvas-prompt-dock--collapsed': !promptDockExpanded,
+          'canvas-prompt-dock--director': directorPlan,
+          'canvas-prompt-dock--connection-active': connectionInProgress && promptDockExpanded
+        }"
       >
         <button
           v-if="!promptDockExpanded"
@@ -457,7 +465,7 @@ const router = useRouter()
 const route = useRoute()
 
 // Vue Flow instance | Vue Flow 实例
-const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals } = useVueFlow()
+const { viewport, zoomIn, zoomOut, fitView, updateNodeInternals, endConnection } = useVueFlow()
 
 // Register custom node types | 注册自定义节点类型
 const nodeTypes = {
@@ -498,6 +506,7 @@ const directorError = ref('')
 const directorStatusText = ref('')
 const promptDockExpanded = ref(false)
 const promptDockTouched = ref(false)
+const connectionInProgress = ref(false)
 const starterActions = buildCanvasStarterActions()
 
 watch(
@@ -514,6 +523,61 @@ const setPromptDockExpanded = (expanded) => {
   promptDockTouched.value = true
   promptDockExpanded.value = Boolean(expanded)
 }
+
+const createCanvasConnectionLifecycle = ({ setConnectionInProgress, resetClickConnection }) => {
+  let clickActive = false
+  let dragActive = false
+
+  const syncConnectionInProgress = () => setConnectionInProgress(clickActive || dragActive)
+  const handleConnectionStart = () => {
+    dragActive = true
+    syncConnectionInProgress()
+  }
+  const handleConnectionEnd = () => {
+    dragActive = false
+    syncConnectionInProgress()
+  }
+  const handleClickConnectionStart = () => {
+    clickActive = true
+    syncConnectionInProgress()
+  }
+  const handleClickConnectionEnd = () => {
+    clickActive = false
+    syncConnectionInProgress()
+  }
+  const cancelClickConnection = () => {
+    if (!clickActive) return false
+    resetClickConnection()
+    clickActive = false
+    syncConnectionInProgress()
+    return true
+  }
+  const handleConnectionKeydown = event => {
+    if (event.key === 'Escape') cancelClickConnection(event)
+  }
+
+  return {
+    handleConnectionStart,
+    handleConnectionEnd,
+    handleClickConnectionStart,
+    handleClickConnectionEnd,
+    cancelClickConnection,
+    handleConnectionKeydown
+  }
+}
+
+const connectionLifecycle = createCanvasConnectionLifecycle({
+  setConnectionInProgress: active => { connectionInProgress.value = active },
+  resetClickConnection: () => endConnection(undefined, true)
+})
+const {
+  handleConnectionStart,
+  handleConnectionEnd,
+  handleClickConnectionStart,
+  handleClickConnectionEnd,
+  cancelClickConnection,
+  handleConnectionKeydown
+} = connectionLifecycle
 
 // Flow key for forcing re-render on project switch | 项目切换时强制重新渲染的 key
 const flowKey = ref(Date.now())
@@ -729,7 +793,36 @@ const handleAddWorkflow = ({ workflow, options }) => {
 }
 
 // Handle connection | 处理连接
+const getCanvasConnectionId = params => {
+  if (params?.id) return String(params.id)
+  return `edge_${[
+    params?.source,
+    params?.target,
+    params?.sourceHandle,
+    params?.targetHandle
+  ].map(value => encodeURIComponent(String(value || ''))).join('|')}`
+}
+
+const isDuplicateCanvasConnection = (existingEdges, params) => {
+  const source = String(params?.source || '')
+  const target = String(params?.target || '')
+  const sourceHandle = String(params?.sourceHandle || '')
+  const targetHandle = String(params?.targetHandle || '')
+  const edgeId = getCanvasConnectionId(params)
+
+  return existingEdges.some(edge => {
+    if (String(edge?.id || '') === edgeId) return true
+    return String(edge?.source || '') === source &&
+      String(edge?.target || '') === target &&
+      String(edge?.sourceHandle || '') === sourceHandle &&
+      String(edge?.targetHandle || '') === targetHandle
+  })
+}
+
 const onConnect = (params) => {
+  const connectionParams = { ...params, id: getCanvasConnectionId(params) }
+  if (isDuplicateCanvasConnection(edges.value, connectionParams)) return
+
   // Check connection types | 检查连接类型
   const sourceNode = nodes.value.find(n => n.id === params.source)
   const targetNode = nodes.value.find(n => n.id === params.target)
@@ -737,7 +830,7 @@ const onConnect = (params) => {
   if (sourceNode?.type === 'image' && targetNode?.type === 'videoConfig') {
     // Use imageRole edge type | 使用图片角色边类型
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'imageRole',
       data: { imageRole: 'first_frame_image' } // Default to first frame | 默认首帧
     })
@@ -750,7 +843,7 @@ const onConnect = (params) => {
     const nextOrder = existingTextEdges.length + 1
     
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'promptOrder',
       data: { promptOrder: nextOrder }
     })
@@ -784,7 +877,7 @@ const onConnect = (params) => {
     const nextOrder = existingImageEdges.length + mentionedImageCount + 1
 
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'imageOrder',
       data: { imageOrder: nextOrder }
     })
@@ -796,19 +889,19 @@ const onConnect = (params) => {
     const nextOrder = existingTextEdges.length + 1
 
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'promptOrder',
       data: { promptOrder: nextOrder }
     })
   } else if (sourceNode?.type === 'llmConfig' && targetNode?.type === 'videoConfig') {
     // LLM output as prompt for video generation | LLM 输出作为视频生成提示词
     addEdge({
-      ...params,
+      ...connectionParams,
       type: 'promptOrder',
       data: { promptOrder: 1 }
     })
   } else {
-    addEdge(params)
+    addEdge(connectionParams)
   }
 }
 const onNodeClick = (event) => {
@@ -847,7 +940,8 @@ const onEdgesChange = (changes) => {
 }
 
 // Handle pane click | 处理画布点击
-const onPaneClick = () => {
+const onPaneClick = (event) => {
+  cancelClickConnection(event)
   showNodeMenu.value = false
   // Clear all selections | 清除所有选中
   // nodes.value = nodes.value.map(node => ({
@@ -1044,6 +1138,7 @@ watch(
 onMounted(async () => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  window.addEventListener('keydown', handleConnectionKeydown)
   
   // Initialize projects store | 初始化项目存储
   await initProjectsStore()
@@ -1066,6 +1161,7 @@ onMounted(async () => {
 // Cleanup on unmount | 卸载时清理
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('keydown', handleConnectionKeydown)
   projectLoadGate.invalidate()
   // Save project before leaving | 离开前保存项目
   if (loadedProjectId.value && currentProjectId.value === loadedProjectId.value) saveProject()
@@ -1323,6 +1419,12 @@ onUnmounted(() => {
   bottom: 18px !important;
   max-width: 760px !important;
   transition: max-width 180ms ease;
+}
+
+.canvas-prompt-dock--connection-active {
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 24px) scale(0.98) !important;
 }
 
 .canvas-prompt-dock--collapsed {
