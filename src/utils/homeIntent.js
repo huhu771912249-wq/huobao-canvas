@@ -13,6 +13,15 @@ const EXTENSION_KINDS = Object.freeze({
   mov: ['video', 'video/quicktime'],
   webm: ['video', 'video/webm']
 })
+const WORKFLOW_ATTACHMENT_CONSUMERS = Object.freeze({
+  gifEditor: Object.freeze({
+    image: Object.freeze({ targetType: 'watermarkEditor' }),
+    gif: Object.freeze({ targetType: 'watermarkEditor' }),
+    video: Object.freeze({ targetType: 'watermarkEditor' })
+  })
+})
+
+const workflowAttachmentConsumer = (flow, kind) => WORKFLOW_ATTACHMENT_CONSUMERS[flow]?.[kind] || null
 
 const humanFileSize = bytes => {
   const value = Math.max(0, Number(bytes) || 0)
@@ -173,7 +182,13 @@ export const createHomeIntentPlan = ({ prompt = '', attachment = null } = {}) =>
   const descriptor = safeAttachmentDescriptor(attachment)
   const { rule, reason } = matchIntentRule(cleanPrompt, descriptor)
   const quickDisabled = Boolean(descriptor)
-  const recommendation = descriptor ? 'workflow' : (rule.defaultDestination || 'quick')
+  const workflowConsumer = descriptor
+    ? workflowAttachmentConsumer(rule.workflow.flow, descriptor.kind)
+    : null
+  const workflowDisabled = Boolean(descriptor) && !workflowConsumer
+  const recommendation = workflowDisabled
+    ? 'unavailable'
+    : descriptor ? 'workflow' : (rule.defaultDestination || 'quick')
   const destinations = {
     quick: {
       id: 'quick',
@@ -188,18 +203,35 @@ export const createHomeIntentPlan = ({ prompt = '', attachment = null } = {}) =>
       id: 'workflow',
       title: '可编辑工作流',
       ...rule.workflow,
-      disabled: false,
-      explanation: descriptor
+      disabled: workflowDisabled,
+      explanation: workflowDisabled
+        ? `现有“${rule.workflow.label}”无法消费${descriptor.kindLabel}附件，请改用 GIF / 水印编辑需求或移除附件。`
+        : descriptor
         ? '确认后上传素材，并把公开 URL 与元数据放入画板。'
         : '确认后创建可继续调整节点的画板。'
-    }
+    },
+    ...(workflowDisabled ? {
+      unavailable: {
+        id: 'unavailable',
+        title: '暂无可用去向',
+        label: '请更换需求或移除附件',
+        disabled: true,
+        explanation: '当前两个去向都无法安全消费该附件。'
+      }
+    } : {})
   }
-  const steps = [
-    ...(descriptor ? [`上传 ${descriptor.name} 并只保留公开 URL / 元数据`] : []),
-    `按“${rule.label}”准备目标`,
-    recommendation === 'workflow' ? '创建可编辑画板并打开' : '打开推荐快捷工具',
-    '等待你在目标页手动提交（本步不执行付费生成）'
-  ]
+  const steps = workflowDisabled
+    ? [
+        `已识别为“${rule.label}”`,
+        `现有工作流没有可消费${descriptor.kindLabel}附件的目标节点`,
+        '更换需求或移除附件后再确认'
+      ]
+    : [
+        ...(descriptor ? [`上传 ${descriptor.name} 并只保留公开 URL / 元数据`] : []),
+        `按“${rule.label}”准备目标`,
+        recommendation === 'workflow' ? '创建可编辑画板并打开' : '打开推荐快捷工具',
+        '等待你在目标页手动提交（本步不执行付费生成）'
+      ]
   return {
     prompt: cleanPrompt,
     attachment: descriptor,
@@ -250,6 +282,11 @@ export const buildHomeIntentCanvas = ({ canvas, plan, asset } = {}) => {
   const result = cloneCanvas(canvas)
   if (!asset) return result
   const safeAsset = normalizeHomeIntentUploadedAsset(asset, plan?.attachment)
+  const workflowFlow = plan?.destinations?.workflow?.flow || ''
+  const consumer = workflowAttachmentConsumer(workflowFlow, safeAsset.kind)
+  if (!consumer) throw new Error('当前工作流无法消费该附件')
+  const targetNode = result.nodes.find(node => node.type === consumer.targetType)
+  if (!targetNode) throw new Error('当前工作流缺少可消费附件的目标节点')
   const occupied = new Set(result.nodes.map(node => node.id))
   let assetNodeId = 'home-intent-asset'
   let suffix = 2
@@ -297,17 +334,12 @@ export const buildHomeIntentCanvas = ({ canvas, plan, asset } = {}) => {
         }
       }
   result.nodes = [assetNode, ...result.nodes]
-  const watermarkTarget = safeAsset.kind !== 'image'
-    ? result.nodes.find(node => node.type === 'watermarkEditor')
-    : null
-  if (watermarkTarget) {
-    result.edges = [{
-      id: `edge_${assetNodeId}_${watermarkTarget.id}`,
-      source: assetNodeId,
-      target: watermarkTarget.id,
-      sourceHandle: 'right',
-      targetHandle: 'left'
-    }, ...result.edges]
-  }
+  result.edges = [{
+    id: `edge_${assetNodeId}_${targetNode.id}`,
+    source: assetNodeId,
+    target: targetNode.id,
+    sourceHandle: 'right',
+    targetHandle: 'left'
+  }, ...result.edges]
   return result
 }

@@ -120,29 +120,48 @@ assert.match(watermarkPlan.destinations.quick.explanation, /附件/)
 assert.equal(chooseHomeIntentDestination(watermarkPlan, 'quick').selectedDestination, 'workflow')
 assert.equal(chooseHomeIntentDestination(createHomeIntentPlan({ prompt: '调整尺寸' }), 'workflow').selectedDestination, 'workflow')
 
-const uploadedGif = normalizeHomeIntentUploadedAsset({
-  url: '/public-assets/material-input-a.gif',
-  mime: 'image/gif',
-  name: 'campaign.gif',
-  asset_name: 'material-input-a.gif',
-  width: 320,
-  height: 180,
-  bytes: 1024
-}, validateHomeIntentAttachment(gifAttachment).attachment)
-const intentCanvas = buildHomeIntentCanvas({
-  canvas: {
-    nodes: [{ id: 'watermark-editor', type: 'watermarkEditor', position: { x: 160, y: 100 }, data: { label: '水印与素材编辑' } }],
-    edges: [],
-    viewport: { x: 100, y: 80, zoom: 0.8 }
-  },
-  plan: watermarkPlan,
-  asset: uploadedGif
+const gifEditorCanvas = () => ({
+  nodes: [{ id: 'watermark-editor', type: 'watermarkEditor', position: { x: 160, y: 100 }, data: { label: '水印与素材编辑' } }],
+  edges: [],
+  viewport: { x: 100, y: 80, zoom: 0.8 }
 })
-assert.equal(intentCanvas.nodes[0].type, 'materialInput')
-assert.equal(intentCanvas.nodes[0].data.url, '/public-assets/material-input-a.gif')
-assert.equal(intentCanvas.edges[0].target, 'watermark-editor')
-const persistedIntentCanvas = JSON.stringify(intentCanvas)
-assert.doesNotMatch(persistedIntentCanvas, /data:|blob:|source_base64|base64/i, 'workflow project JSON must contain only published asset metadata')
+const gifEditorAttachmentCases = [
+  [imageAttachment, { url: '/public-assets/brand-watermark.png', mime: 'image/png', name: 'brand-watermark.png' }, 'image'],
+  [gifAttachment, { url: '/public-assets/campaign.gif', mime: 'image/gif', name: 'campaign.gif', asset_name: 'campaign.gif' }, 'materialInput'],
+  [videoAttachment, { url: '/public-assets/campaign.mp4', mime: 'video/mp4', name: 'campaign.mp4', asset_name: 'campaign.mp4' }, 'materialInput']
+]
+for (const [file, uploaded, expectedNodeType] of gifEditorAttachmentCases) {
+  const descriptor = validateHomeIntentAttachment(file).attachment
+  const plan = createHomeIntentPlan({ prompt: '加水印并导出 GIF', attachment: file })
+  const asset = normalizeHomeIntentUploadedAsset(uploaded, descriptor)
+  const canvas = buildHomeIntentCanvas({ canvas: gifEditorCanvas(), plan, asset })
+  const assetNode = canvas.nodes.find(node => node.id === 'home-intent-asset')
+  assert.equal(plan.destinations.workflow.disabled, false, `${file.type} must be consumable by gifEditor`)
+  assert.equal(assetNode.type, expectedNodeType)
+  assert.equal(assetNode.data.url, uploaded.url)
+  assert.deepEqual(canvas.edges[0], {
+    id: 'edge_home-intent-asset_watermark-editor',
+    source: 'home-intent-asset',
+    target: 'watermark-editor',
+    sourceHandle: 'right',
+    targetHandle: 'left'
+  }, `${file.type} must connect through the real watermark editor handles`)
+  assert.doesNotMatch(JSON.stringify(canvas), /data:|blob:|source_base64|base64/i, 'workflow project JSON must contain only published asset metadata')
+}
+
+for (const [prompt, file] of [['换背景', imageAttachment], ['做一条视频', videoAttachment]]) {
+  const plan = createHomeIntentPlan({ prompt, attachment: file })
+  assert.equal(plan.destinations.quick.disabled, true)
+  assert.equal(plan.destinations.workflow.disabled, true, `${plan.destinations.workflow.flow} must not accept an attachment without a proven consumer`)
+  assert.equal(plan.recommendation, 'unavailable', 'an unsupported attachment combination must not be presented as recommended')
+  assert.equal(plan.destinations.unavailable.disabled, true)
+  assert.match(plan.destinations.workflow.explanation, /无法消费|不支持/)
+  assert.throws(() => buildHomeIntentCanvas({
+    canvas: { nodes: [], edges: [] },
+    plan,
+    asset: normalizeHomeIntentUploadedAsset({ url: `/public-assets/${file.name}`, mime: file.type }, validateHomeIntentAttachment(file).attachment)
+  }), /无法消费/, 'unsupported workflow attachments must not create orphan nodes')
+}
 assert.throws(() => normalizeHomeIntentUploadedAsset({ url: 'data:image/png;base64,AAAA' }, validateHomeIntentAttachment(imageAttachment).attachment), /公开/)
 
 const assertLatestIntentConfirmationWins = async completionOrder => {
