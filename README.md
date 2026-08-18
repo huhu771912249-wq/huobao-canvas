@@ -12,12 +12,15 @@
 | `/huobao-canvas/canvas/:id?` | Vue Flow 无限画布 |
 | `/huobao-canvas/video-studio` | 视频创作中心 |
 | `/huobao-canvas/video-resize` | 多尺寸视频处理 |
+| `/huobao-canvas/gif-editor` | GIF 静态文字、图片水印与导出编辑器 |
 | `/huobao-canvas/test-assets` | 精确像素的测试素材生成与下载 |
+| `/huobao-canvas/recent-generations` | 最近生成的图片、视频、GIF 和音频 |
+| `/huobao-canvas/tasks` | 统一任务中心 |
 | `/huobao-canvas/login` | 会话登录 |
 
 ## 快速开始
 
-要求 Node.js 22 和 pnpm 10。
+要求 Node.js 22；CI 当前使用 pnpm 11.9.0。
 
 ```bash
 corepack enable
@@ -27,17 +30,15 @@ pnpm dev
 
 默认开发代理把 `/auth`、`/v1` 和 `/public-assets` 转发至本地后端。代理目标仅用于本地联调，不是生产配置。
 
-质量检查：
+完整质量检查：
 
 ```bash
-pnpm test
-pnpm build
+pnpm run ci
 ```
-
-治理分支会增加统一的 `pnpm lint` 与 `pnpm run ci` 命令。
 
 ## 文档
 
+- [开发接手指南](./HANDOFF.md)
 - [系统架构](./ARCHITECTURE.md)
 - [本地开发](./DEVELOPMENT.md)
 - [前端 API 契约](./API.md)

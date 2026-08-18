@@ -1,6 +1,6 @@
 # 前端 API 契约
 
-本文记录前端消费方式。接口的最终实现、鉴权和限制以后端仓库 `API.md` 为准：<https://github.com/huhu771912249-wq/guanxi-canvas-backend/blob/feature/dsp-h3-winner-upgrade-backend/API.md>。
+本文记录前端消费方式。接口的最终实现、鉴权和限制以后端仓库 `main` 分支的 `API.md` 为准：<https://github.com/huhu771912249-wq/guanxi-canvas-backend/blob/main/API.md>。
 
 ## 基础规则
 

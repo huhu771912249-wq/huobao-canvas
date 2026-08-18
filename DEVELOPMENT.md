@@ -3,7 +3,7 @@
 ## 环境
 
 - Node.js 22
-- pnpm 10（通过 Corepack）
+- pnpm 11.9.0（CI 版本，通过 Corepack）
 - 配套后端：<https://github.com/huhu771912249-wq/guanxi-canvas-backend>
 
 ## 安装与启动
@@ -25,7 +25,7 @@ pnpm build
 pnpm run ci
 ```
 
-在治理完成前，仓库可能只有 `test` 和 `build`；CI 提交会补齐 `lint` 与 `ci`。
+`pnpm run ci` 会依次运行 lint、完整测试和生产构建，提交前执行一次即可。
 
 ## 联调流程
 
@@ -44,3 +44,5 @@ pnpm run ci
 - 业务行为变化必须先有失败测试。
 - 不用格式化或 lint 修复顺带重写无关业务代码。
 - 前后端接口变更需同步更新两个仓库的 API 文档。
+
+首次接手的产品地图、阅读顺序和未完成方向见 [开发接手指南](./HANDOFF.md)。
