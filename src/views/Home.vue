@@ -15,10 +15,15 @@
       </section>
       <CreationLauncher
         :busy="navigationPending"
+        :intent-preview="intentPreview"
         :pending-entry="launcherPendingEntry"
         :suggestions="suggestions"
         @launch="handleLaunch"
-        @submit="handlePromptSubmit"
+        @review-intent="handleIntentReview"
+        @select-intent-destination="handleIntentDestinationSelect"
+        @confirm-intent="handleIntentConfirm"
+        @cancel-intent="clearIntentPreview"
+        @draft-change="clearIntentPreview"
         @refresh-suggestions="refreshSuggestions"
       />
       <section v-if="projectsLoading" id="projects" class="mx-auto max-w-[1180px] px-7 py-12" role="status" aria-live="polite">
@@ -75,6 +80,13 @@ import { useModelStore } from '../stores/pinia'
 import { buildCanvasLaunch, WORKSPACE_LAUNCH_LABELS } from '../config/workspaceLaunch'
 import { nextSuggestionSetIndex } from '../utils/suggestions'
 import { createGuardedUrlLaunchAction, createLatestNavigationRunner } from '../utils/navigationState'
+import {
+  buildHomeIntentCanvas,
+  chooseHomeIntentDestination,
+  createHomeIntentPlan,
+  normalizeHomeIntentUploadedAsset,
+  validateHomeIntentAttachment
+} from '../utils/homeIntent.js'
 import ApiSettings from '../components/ApiSettings.vue'
 import CreationLauncher from '../components/home/CreationLauncher.vue'
 import RecentProjects from '../components/home/RecentProjects.vue'
@@ -82,6 +94,8 @@ import TaskRail from '../components/workspace/TaskRail.vue'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { STUDIO_ENTRIES } from '../config/studioEntries'
 import { listTaskCenterTasks } from '../api/taskCenter'
+import { publishImageAsset } from '../api/image'
+import { createMaterialInput } from '../api/materialInput'
 import { resolveTaskDetailsTarget, withTaskCenterActions } from '../utils/taskCenter'
 
 const router = useRouter()
@@ -164,10 +178,65 @@ const suggestionSets = [
 ]
 const suggestionSetIndex = ref(0)
 const suggestions = computed(() => suggestionSets[suggestionSetIndex.value])
+const intentPreview = ref(null)
+const intentAttachment = ref(null)
+let intentReviewSequence = 0
 
 const refreshSuggestions = () => {
   suggestionSetIndex.value = nextSuggestionSetIndex(suggestionSetIndex.value, suggestionSets.length)
   window.$message?.success('已换一批推荐')
+}
+
+const cancelPendingIntentNavigation = () => {
+  if (!navigationIntent.value.startsWith('intent-confirm:')) return
+  runNavigation('intent-cancel', async () => false)
+}
+const clearIntentPreview = () => {
+  cancelPendingIntentNavigation()
+  intentPreview.value = null
+  intentAttachment.value = null
+}
+const handleIntentReview = ({ prompt = '', attachment = null } = {}) => {
+  cancelPendingIntentNavigation()
+  if (attachment) {
+    const validation = validateHomeIntentAttachment(attachment)
+    if (!validation.ok) {
+      intentPreview.value = null
+      intentAttachment.value = null
+      window.$message?.error(validation.message)
+      return
+    }
+  }
+  const plan = createHomeIntentPlan({ prompt, attachment })
+  intentReviewSequence += 1
+  intentPreview.value = { ...plan, requestId: intentReviewSequence }
+  intentAttachment.value = attachment
+}
+const handleIntentDestinationSelect = destination => {
+  if (!intentPreview.value) return
+  intentPreview.value = chooseHomeIntentDestination(intentPreview.value, destination)
+}
+
+const readFileAsDataUrl = file => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(String(reader.result || ''))
+  reader.onerror = () => reject(new Error('读取附件失败'))
+  reader.readAsDataURL(file)
+})
+
+const uploadIntentAttachment = async (file, descriptor) => {
+  const dataUrl = await readFileAsDataUrl(file)
+  if (descriptor.kind === 'image') {
+    const result = await publishImageAsset({ image: dataUrl, name: descriptor.name })
+    return normalizeHomeIntentUploadedAsset(result, descriptor)
+  }
+  const result = await createMaterialInput({
+    source_name: descriptor.name,
+    source_base64: dataUrl.split(',', 2)[1] || ''
+  })
+  const asset = Array.isArray(result?.assets) ? result.assets[0] : null
+  if (!asset) throw new Error('附件已上传，但没有返回可用素材')
+  return normalizeHomeIntentUploadedAsset(asset, descriptor)
 }
 
 const formatDate = (date) => {
@@ -310,18 +379,59 @@ const launchFlow = flow => {
   return createFlowProject(flow)
 }
 
+const createIntentWorkflowProject = (preview, asset) => {
+  const destination = preview.destinations.workflow
+  const flow = destination.flow
+  const baseCanvas = flow === 'gifEditor'
+    ? buildFlowProjectCanvas(flow)
+    : buildCanvasLaunch(flow, { prompt: preview.prompt })
+  const canvasData = buildHomeIntentCanvas({ canvas: baseCanvas, plan: preview, asset })
+  const id = createProject(preview.prompt || destination.label, { canvasData })
+  return router.push({ path: `/canvas/${id}`, query: { flow } })
+}
+
+const launchConfirmedIntent = (preview, asset) => {
+  const destination = preview.destinations[preview.selectedDestination]
+  if (preview.selectedDestination === 'workflow') {
+    return createIntentWorkflowProject(preview, asset)
+  }
+  if (destination.route) return router.push(destination.route)
+  return launchFlow(destination.flow)
+}
+
+const handleIntentConfirm = () => {
+  const preview = intentPreview.value
+  if (!preview) return false
+  const destination = preview.destinations[preview.selectedDestination]
+  if (!destination || destination.disabled) {
+    window.$message?.warning(destination?.explanation || '该去向暂不可用')
+    return false
+  }
+  if (preview.selectedDestination === 'workflow' && destination.flow !== 'gifEditor') {
+    const allowed = checkApiKeyAndNavigate(() => true)
+    if (!allowed) return false
+  }
+  const attachment = intentAttachment.value
+  const requestId = preview.requestId
+  return runNavigation(`intent-confirm:${requestId}:${preview.selectedDestination}`, async ({ isCurrent, commit }) => {
+    let asset = null
+    try {
+      if (attachment && preview.attachment) {
+        asset = await uploadIntentAttachment(attachment, preview.attachment)
+      }
+    } catch (error) {
+      if (isCurrent()) window.$message?.error(error?.response?.data?.error?.message || error?.message || '附件上传失败')
+      return false
+    }
+    if (!isCurrent()) return false
+    return commit(() => launchConfirmedIntent(preview, asset))
+  })
+}
+
 const handleLaunch = flow => runNavigation(
   `launch:${flow}`,
   ({ commit }) => commit(() => launchFlow(flow))
 )
-
-const handlePromptSubmit = (prompt) => {
-  if (!String(prompt || '').trim()) {
-    window.$message?.warning('先写一句创意描述')
-    return
-  }
-  return runNavigation('prompt', ({ commit }) => commit(() => createPromptProject(prompt)))
-}
 
 const handleWorkspaceNavigate = (item) => {
   if (item.id === 'home') {

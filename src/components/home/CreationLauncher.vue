@@ -6,21 +6,83 @@
       <p>输入创意，或直接选择工作流。生成、逆向、裂变和下载都在同一个任务链路里。</p>
     </div>
 
-    <form class="prompt-composer workspace-panel" @submit.prevent="$emit('submit', prompt)">
+    <form
+      class="prompt-composer workspace-panel"
+      :class="{ 'prompt-composer--dragging': dragActive }"
+      @submit.prevent="requestIntentReview"
+      @dragenter.prevent="dragActive = true"
+      @dragover.prevent="dragActive = true"
+      @dragleave.prevent="dragActive = false"
+      @drop.prevent="handleAttachmentDrop"
+    >
       <textarea
         v-model="prompt"
-        placeholder="描述你想生成的广告画面、人物、场景和动作…"
+        placeholder="说说你想处理什么，也可以拖入一个图片、视频或 GIF…"
         aria-label="创作提示词"
-        @keydown.ctrl.enter.prevent="$emit('submit', prompt)"
+        @input="notifyDraftChange"
+        @keydown.ctrl.enter.prevent="requestIntentReview"
       ></textarea>
+      <div class="prompt-composer__attachment-row">
+        <button type="button" class="attachment-picker" @click="attachmentInput?.click()">＋ 选择图片 / 视频 / GIF</button>
+        <input
+          ref="attachmentInput"
+          class="sr-only"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
+          @change="handleAttachmentInput"
+        />
+        <span class="attachment-help">支持单个素材；图片最大 20MB，视频 / GIF 最大 90MB</span>
+      </div>
+      <div v-if="attachmentSelection" class="attachment-chip">
+        <span><b>{{ attachmentSelection.attachment.name }}</b> · {{ attachmentSelection.attachment.kindLabel }} · {{ attachmentSelection.attachment.sizeLabel }}</span>
+        <button type="button" aria-label="移除附件" @click="removeAttachment">移除</button>
+      </div>
+      <p v-if="attachmentError" class="attachment-error" role="alert">{{ attachmentError }}</p>
       <div class="prompt-composer__footer">
-        <span>Ctrl + Enter 快速创建</span>
-        <button type="submit" :disabled="busy">
-          {{ busy ? '正在打开…' : '开始创作' }}
+        <span>Ctrl + Enter 识别需求；确认前不会创建项目</span>
+        <button type="submit">
+          {{ busy ? '识别最新需求' : '识别需求' }}
           <n-icon :size="18"><ArrowForwardOutline /></n-icon>
         </button>
       </div>
     </form>
+
+    <section v-if="intentPreview" class="intent-confirmation workspace-panel" aria-live="polite">
+      <div class="intent-confirmation__heading">
+        <div><span>需求确认</span><h2>{{ intentPreview.intent.label }}</h2></div>
+        <button type="button" @click="$emit('cancel-intent')">取消</button>
+      </div>
+      <div class="intent-summary-grid">
+        <div><small>素材摘要</small><b>{{ intentPreview.attachment ? `${intentPreview.attachment.name} · ${intentPreview.attachment.kindLabel} · ${intentPreview.attachment.sizeLabel}` : '未添加附件' }}</b></div>
+        <div><small>识别意图</small><b>{{ intentPreview.intent.label }}</b><span>{{ intentPreview.intent.reason }}</span></div>
+        <div><small>推荐去向</small><b>{{ intentPreview.destinations[intentPreview.recommendation].title }}</b><span>{{ intentPreview.destinations[intentPreview.recommendation].label }}</span></div>
+      </div>
+      <div class="intent-destinations">
+        <button
+          v-for="key in ['quick', 'workflow']"
+          :key="key"
+          type="button"
+          class="intent-destination"
+          :class="{ 'intent-destination--selected': intentPreview.selectedDestination === key }"
+          :disabled="intentPreview.destinations[key].disabled"
+          @click="$emit('select-intent-destination', key)"
+        >
+          <span>{{ intentPreview.destinations[key].title }}<em v-if="intentPreview.recommendation === key">推荐</em></span>
+          <b>{{ intentPreview.destinations[key].label }}</b>
+          <small>{{ intentPreview.destinations[key].explanation }}</small>
+        </button>
+      </div>
+      <div class="intent-steps"><small>将执行步骤</small><ol><li v-for="step in intentPreview.steps" :key="step">{{ step }}</li></ol></div>
+      <button
+        type="button"
+        class="intent-confirmation__confirm"
+        :aria-busy="busy && !intentConfirmationUnavailable"
+        :disabled="intentConfirmationUnavailable"
+        @click="confirmIntent"
+      >
+        {{ intentConfirmationUnavailable ? '请更换需求或移除附件' : busy ? '正在准备最新去向…' : '确认并继续' }}
+      </button>
+    </section>
 
     <div class="creation-grid">
       <button
@@ -45,7 +107,7 @@
 
     <div class="suggestion-row">
       <span>试试这些</span>
-      <button v-for="suggestion in suggestions" :key="suggestion" type="button" @click="prompt = suggestion">
+      <button v-for="suggestion in suggestions" :key="suggestion" type="button" @click="useSuggestion(suggestion)">
         {{ suggestion }}
       </button>
       <button type="button" aria-label="换一批推荐" @click="$emit('refresh-suggestions')">
@@ -56,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { NIcon } from 'naive-ui'
 import {
   ArrowForwardOutline,
@@ -66,8 +128,9 @@ import {
   SparklesOutline,
   VideocamOutline
 } from '@vicons/ionicons5'
+import { createHomeIntentAttachmentState } from '../../utils/homeIntent.js'
 
-defineProps({
+const props = defineProps({
   suggestions: {
     type: Array,
     default: () => []
@@ -79,12 +142,84 @@ defineProps({
   pendingEntry: {
     type: String,
     default: ''
+  },
+  intentPreview: {
+    type: Object,
+    default: null
   }
 })
 
-defineEmits(['launch', 'submit', 'refresh-suggestions'])
+const emit = defineEmits([
+  'launch',
+  'review-intent',
+  'select-intent-destination',
+  'confirm-intent',
+  'cancel-intent',
+  'draft-change',
+  'refresh-suggestions'
+])
 
 const prompt = ref('')
+const attachmentInput = ref(null)
+const attachmentSelection = ref(null)
+const attachmentError = ref('')
+const dragActive = ref(false)
+const intentConfirmationUnavailable = computed(() => {
+  const selectedDestination = props.intentPreview?.selectedDestination
+  if (!selectedDestination || selectedDestination === 'unavailable') return true
+  const destination = props.intentPreview?.destinations?.[selectedDestination]
+  return !destination || destination.disabled === true
+})
+const confirmIntent = () => {
+  if (intentConfirmationUnavailable.value) return
+  emit('confirm-intent')
+}
+const attachmentState = createHomeIntentAttachmentState({
+  onChange: ({ attachment, error }) => {
+    attachmentSelection.value = attachment
+    attachmentError.value = error
+  }
+})
+const notifyDraftChange = () => emit('draft-change')
+const applyAttachment = file => {
+  const result = attachmentState.select(file)
+  notifyDraftChange()
+  return result
+}
+const handleAttachmentInput = event => {
+  applyAttachment(event.target.files?.[0] || null)
+  event.target.value = ''
+}
+const handleAttachmentDrop = event => {
+  dragActive.value = false
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (files.length !== 1) {
+    attachmentState.clear()
+    attachmentError.value = '一次只能添加一个素材'
+    notifyDraftChange()
+    return
+  }
+  applyAttachment(files[0])
+}
+const removeAttachment = () => {
+  attachmentState.clear()
+  if (attachmentInput.value) attachmentInput.value.value = ''
+  notifyDraftChange()
+}
+const requestIntentReview = () => {
+  if (!prompt.value.trim() && !attachmentSelection.value) {
+    attachmentError.value = '请先输入需求或添加一个素材'
+    return
+  }
+  emit('review-intent', {
+    prompt: prompt.value,
+    attachment: attachmentSelection.value?.file || null
+  })
+}
+const useSuggestion = suggestion => {
+  prompt.value = suggestion
+  notifyDraftChange()
+}
 const entries = [
   { id: 'image', title: 'AI 作图', description: '中文提示词生成投放底图', accent: 'blue', icon: ImagesOutline },
   { id: 'video', title: '视频生成', description: '文生视频与图生视频', accent: 'violet', icon: VideocamOutline },
@@ -143,6 +278,11 @@ const entries = [
   box-shadow: 0 0 0 1px rgba(101, 230, 189, 0.12), 0 28px 70px rgba(0, 0, 0, 0.24);
 }
 
+.prompt-composer--dragging {
+  border-color: rgba(101, 230, 189, 0.75);
+  background: rgba(101, 230, 189, 0.08);
+}
+
 .prompt-composer textarea {
   width: 100%;
   min-height: 94px;
@@ -171,6 +311,157 @@ const entries = [
   gap: 8px;
   padding: 0 18px;
   border-radius: 14px;
+  color: #07110d;
+  background: linear-gradient(135deg, var(--accent-color), #7dd3fc);
+  font-weight: 700;
+}
+
+.prompt-composer__attachment-row,
+.attachment-chip,
+.intent-confirmation__heading,
+.intent-destination > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prompt-composer__attachment-row {
+  margin: 4px 0 12px;
+}
+
+.attachment-picker {
+  padding: 8px 11px;
+  border: 1px dashed rgba(101, 230, 189, 0.4);
+  border-radius: 10px;
+  color: #a7f3d0;
+  font-size: 12px;
+}
+
+.attachment-help,
+.intent-summary-grid span,
+.intent-destination small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.attachment-chip {
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border-radius: 12px;
+  background: rgba(101, 230, 189, 0.08);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.attachment-chip b {
+  color: var(--text-primary);
+}
+
+.attachment-chip button,
+.intent-confirmation__heading > button {
+  color: #fda4af;
+  font-size: 12px;
+}
+
+.attachment-error {
+  margin: -2px 0 10px;
+  color: #fda4af;
+  font-size: 12px;
+}
+
+.intent-confirmation {
+  margin-top: 16px;
+  padding: 20px;
+  border-radius: 22px;
+}
+
+.intent-confirmation__heading span,
+.intent-summary-grid small,
+.intent-steps > small {
+  color: var(--accent-color);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.intent-confirmation__heading h2 {
+  margin-top: 3px;
+  font-size: 20px;
+}
+
+.intent-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.intent-summary-grid > div,
+.intent-steps {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.intent-summary-grid b {
+  font-size: 13px;
+}
+
+.intent-destinations {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.intent-destination {
+  display: grid;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  text-align: left;
+}
+
+.intent-destination--selected {
+  border-color: rgba(101, 230, 189, 0.72);
+  background: rgba(101, 230, 189, 0.08);
+}
+
+.intent-destination:disabled {
+  cursor: not-allowed;
+}
+
+.intent-destination em {
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #07110d;
+  background: var(--accent-color);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.intent-steps {
+  margin-top: 12px;
+}
+
+.intent-steps ol {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  list-style: decimal;
+}
+
+.intent-confirmation__confirm {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 12px;
+  border-radius: 13px;
   color: #07110d;
   background: linear-gradient(135deg, var(--accent-color), #7dd3fc);
   font-weight: 700;
@@ -282,6 +573,16 @@ const entries = [
 
   .creation-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .intent-summary-grid,
+  .intent-destinations {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .prompt-composer__attachment-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .prompt-composer__footer span {
