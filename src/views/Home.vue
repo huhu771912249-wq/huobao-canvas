@@ -9,11 +9,8 @@
     @open-tasks="openTaskCenter"
   >
     <template #main>
-      <section class="mb-6 rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5 p-5">
-        <div class="flex flex-wrap items-end justify-between gap-4"><div><div class="text-xs tracking-[0.25em] text-cyan-400">冠希 VIDEO</div><h2 class="mt-1 text-2xl font-semibold">视频创作中心</h2><p class="mt-2 text-sm text-[var(--text-secondary)]">文生图、文生图＋视频、小说成片和素材再创作。</p></div><n-button type="primary" :aria-busy="navigationPending && navigationIntent === 'video-center'" @click="openVideoCenter">{{ navigationPending && navigationIntent === 'video-center' ? '正在打开…' : '进入视频中心' }}</n-button></div>
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><button v-for="entry in studioEntries" :key="entry.key" :aria-busy="navigationPending && navigationIntent === `studio:${entry.key}`" class="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 text-left hover:border-cyan-400" @click="openStudioEntry(entry)"><b>{{ entry.title }}</b><div class="mt-1 text-xs text-[var(--text-secondary)]">{{ entry.description }}</div></button></div>
-      </section>
       <CreationLauncher
+        id="creation-entry"
         :busy="navigationPending"
         :intent-preview="intentPreview"
         :pending-entry="launcherPendingEntry"
@@ -26,8 +23,29 @@
         @draft-change="clearIntentPreview"
         @refresh-suggestions="refreshSuggestions"
       />
+      <section id="quick-actions" class="mx-auto max-w-[1180px] px-7 py-7">
+        <div class="rounded-3xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/10 to-blue-500/5 p-5">
+          <div class="flex flex-wrap items-end justify-between gap-4"><div><div class="text-xs tracking-[0.25em] text-cyan-400">QUICK ACTIONS</div><h2 class="mt-1 text-2xl font-semibold">快捷操作</h2><p class="mt-2 text-sm text-[var(--text-secondary)]">复用已有工具入口，直接打开当前能力。</p></div><n-button type="primary" :aria-busy="navigationPending && navigationIntent === 'video-center'" @click="openVideoCenter">{{ navigationPending && navigationIntent === 'video-center' ? '正在打开…' : '进入视频中心' }}</n-button></div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><button v-for="entry in studioEntries" :key="entry.key" :aria-busy="navigationPending && navigationIntent === (entry.flow ? `launch:${entry.flow}` : `studio:${entry.key}`)" class="rounded-xl border border-[var(--border-color)] bg-[var(--bg-secondary)] p-3 text-left hover:border-cyan-400" @click="openStudioEntry(entry)"><b>{{ entry.title }}</b><div class="mt-1 text-xs text-[var(--text-secondary)]">{{ entry.description }}</div></button></div>
+        </div>
+      </section>
+      <WorkflowShelf
+        id="common-workflows"
+        :busy="navigationPending"
+        :pending-flow="navigationIntent"
+        @launch="handleLaunch"
+      />
+      <RecentGenerationStrip
+        id="recent-generations"
+        :assets="recentGenerationAssets"
+        :loading="recentGenerationsLoading"
+        :error="recentGenerationsError"
+        @retry="loadHomeRecentGenerations"
+        @view-all="openAllRecentGenerations"
+        @process-image="openRecentImageInCanvas"
+      />
       <section v-if="projectsLoading" id="projects" class="mx-auto max-w-[1180px] px-7 py-12" role="status" aria-live="polite">
-        <div class="workspace-panel grid min-h-[240px] place-content-center rounded-[22px] text-center text-[var(--text-secondary)]">正在读取最近项目…</div>
+        <div class="workspace-panel grid min-h-[240px] place-content-center rounded-[22px] text-center text-[var(--text-secondary)]"><h2 class="mb-2 text-xl text-[var(--text-primary)]">最近项目</h2><span>正在读取最近项目…</span></div>
       </section>
       <RecentProjects
         v-else
@@ -89,13 +107,17 @@ import {
 } from '../utils/homeIntent.js'
 import ApiSettings from '../components/ApiSettings.vue'
 import CreationLauncher from '../components/home/CreationLauncher.vue'
+import RecentGenerationStrip from '../components/home/RecentGenerationStrip.vue'
 import RecentProjects from '../components/home/RecentProjects.vue'
+import WorkflowShelf from '../components/home/WorkflowShelf.vue'
 import TaskRail from '../components/workspace/TaskRail.vue'
 import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import { STUDIO_ENTRIES } from '../config/studioEntries'
 import { listTaskCenterTasks } from '../api/taskCenter'
 import { publishImageAsset } from '../api/image'
 import { createMaterialInput } from '../api/materialInput'
+import { listRecentGenerations } from '../api/recentGenerations.js'
+import { buildRecentImageCanvas } from '../utils/recentGenerations.js'
 import { resolveTaskDetailsTarget, withTaskCenterActions } from '../utils/taskCenter'
 
 const router = useRouter()
@@ -117,17 +139,20 @@ const launcherPendingEntry = computed(() => navigationIntent.value.startsWith('l
   ? navigationIntent.value.slice('launch:'.length)
   : '')
 const openVideoCenter = () => runNavigation('video-center', ({ commit }) => commit(() => router.push('/video-studio')))
-const openStudioEntry = entry => runNavigation(`studio:${entry.key}`, ({ commit }) => commit(() => {
-  if (entry.route) return router.push(entry.route)
-  if (entry.flow === 'video') return createVideoProject(videoEntries.video)
-  if (entry.flow) return createFlowProject(entry.flow)
-  return false
-}))
+const openStudioEntry = entry => {
+  if (entry.flow) return handleLaunch(entry.flow)
+  return runNavigation(`studio:${entry.key}`, ({ commit }) => commit(() => (
+    entry.route ? router.push(entry.route) : false
+  )))
+}
 
 const showApiSettings = ref(false)
 const taskRailOpen = ref(false)
 const recentTasks = ref([])
 const taskLoadError = ref('')
+const recentGenerationAssets = ref([])
+const recentGenerationsLoading = ref(true)
+const recentGenerationsError = ref('')
 const showRenameModal = ref(false)
 const renameValue = ref('')
 const renameTargetId = ref(null)
@@ -170,6 +195,34 @@ const openTask = task => {
 const downloadTask = task => {
   if (task?.download_url) window.open(task.download_url, '_blank', 'noopener')
 }
+
+const loadHomeRecentGenerations = async () => {
+  recentGenerationsLoading.value = true
+  recentGenerationsError.value = ''
+  try {
+    recentGenerationAssets.value = await listRecentGenerations({ limit: 6 })
+  } catch (error) {
+    recentGenerationsError.value = error?.message || '请稍后重试'
+  } finally {
+    recentGenerationsLoading.value = false
+  }
+}
+const openAllRecentGenerations = () => runNavigation(
+  'recent-generations',
+  ({ commit }) => commit(() => router.push('/recent-generations'))
+)
+const openRecentImageInCanvas = asset => runNavigation(`recent-image:${asset?.id || asset?.url || ''}`, async ({ isCurrent, commit }) => {
+  await initProjectsStore()
+  if (!isCurrent()) return false
+  return commit(() => {
+    const nodeId = `recent-image-${Date.now()}`
+    const id = createProject(`图片处理 · ${asset?.name || '最近生成图片'}`, {
+      thumbnail: asset?.url || '',
+      canvasData: buildRecentImageCanvas(asset, { nodeId, now: Date.now() })
+    })
+    return router.push(`/canvas/${id}`)
+  })
+})
 
 const suggestionSets = [
   ['文生视频：赛博城市镜头推进', '图生视频：上传商品图后轻微运镜', '素材广告：高点击率开场', '人物口播：镜头缓慢拉近'],
@@ -494,10 +547,7 @@ const confirmRename = () => {
   renameValue.value = ''
 }
 
-onMounted(async () => {
-  await initProjectsStore()
-  projectsLoading.value = false
-  loadTaskCenter()
+const restoreHomeRoute = async () => {
   const launch = String(route.query.launch || '')
   const panel = String(route.query.panel || '')
   const section = String(route.query.section || '')
@@ -518,5 +568,20 @@ onMounted(async () => {
     await nextTick()
     document.getElementById('projects')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+}
+
+const initializeHomeProjects = async () => {
+  try {
+    await initProjectsStore()
+  } finally {
+    projectsLoading.value = false
+  }
+  await restoreHomeRoute()
+}
+
+onMounted(() => {
+  loadTaskCenter()
+  loadHomeRecentGenerations()
+  initializeHomeProjects()
 })
 </script>
