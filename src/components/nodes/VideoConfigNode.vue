@@ -337,6 +337,9 @@ import {
 const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = 24
 const VIDEO_NODE_MIN_EXPANDED_HEIGHT = 160
 const VIDEO_NODE_MIN_CONTENT_HEIGHT = 48
+// Collapsed nodes keep the shared `.canvas-node-scroll-shell` bound so a tall H3
+// panel can never grow past the viewport and cover neighbouring nodes.
+const VIDEO_NODE_COLLAPSED_MAX_HEIGHT = 'calc(100vh - 120px)'
 const getEffectiveVideoNodeZoom = value => {
   const zoom = Number(value)
   return Number.isFinite(zoom) && zoom > 0 ? zoom : 1
@@ -540,9 +543,9 @@ const expandedNodeMaxHeight = ref(getExpandedVideoNodeMaxHeight({
   viewportHeight: typeof window === 'undefined' ? 0 : window.innerHeight,
   zoom: viewport.value.zoom
 }))
-const expandedNodeStyle = computed(() => isExpanded.value
+const expandedNodeStyle = computed(() => (isExpanded.value
   ? { maxHeight: `${expandedNodeMaxHeight.value}px`, overflow: 'hidden' }
-  : undefined)
+  : { maxHeight: VIDEO_NODE_COLLAPSED_MAX_HEIGHT, overflow: 'hidden' }))
 const expandedViewportLifecycle = createExpandedVideoNodeViewportLifecycle({
   getNodeTop: () => nodeRootRef.value?.getBoundingClientRect().top ?? Number.NaN,
   getViewportHeight: () => window.innerHeight,
