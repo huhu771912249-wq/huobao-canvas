@@ -36,13 +36,10 @@ for (const component of [
   assert.match(read(`../src/components/nodes/${component}`), /canvas-node-scroll-shell/)
 }
 
-const videoConfig = read('../src/components/nodes/VideoConfigNode.vue')
-const videoRootTag = videoConfig.match(/<div ref="nodeRootRef"[^>]*>/)?.[0] || ''
-const videoScrollContentTag = videoConfig.match(/<div[^>]*data-testid="video-config-scroll-content"[^>]*>/)?.[0] || ''
-assert.match(videoRootTag, /class="[^"]*\bvideo-config-node\b[^"]*"/, 'H3 must expose its visible root shell')
-assert.doesNotMatch(videoRootTag, /\bnodrag\b/, 'H3 root shell must remain draggable')
-assert.doesNotMatch(videoRootTag, /overflow-y-auto|canvas-node-scroll-shell/, 'H3 root shell must not own internal scrolling')
-assert.match(videoScrollContentTag, /class="[^"]*\bnowheel\b[^"]*\boverflow-y-auto\b[^"]*"/, 'only H3 config content should scroll without zooming the canvas')
-assert.equal((videoConfig.match(/\boverflow-y-auto\b/g) || []).length, 1, 'H3 must expose exactly one internal vertical scroll region')
+// H3 节点自身的滚动布局契约（根壳可拖拽、根壳不自己滚、只有 config 内容行滚动且带
+// nowheel、全节点只有一个纵向滚动区）已经搬进 tests/component/canvasNodeOcclusion.spec.mjs
+// 和 tests/component/canvasNodeDragging.spec.mjs，改成对渲染后的 DOM 断言。
+// 这里原来那句 `overflow-y-auto 全文恰好出现 1 次` 是对 1600 行源文件的字符串计数，
+// 组件级拆分会无故变红；新断言数的是渲染树里的滚动区，拆文件不受影响。
 
 console.log('globalPageScroll.test.mjs passed')
