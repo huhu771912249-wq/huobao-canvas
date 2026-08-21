@@ -282,6 +282,37 @@ import {
   clearGeneratedImageForRegeneration,
   normalizeGeneratedImageResult
 } from '../../utils/generatedImageHandoff'
+import { getMaterialApiBase } from '../../utils/apiBase'
+
+// --- image reference contract ---
+// 后端只读「单张、绝对地址」的参考图：
+//   material_generation_api.py:1970 extract_image_url -> str(payload[key]).startswith(("http://","https://"))
+//   material_generation_api.py:4412 inline_image      -> str(payload["image"]).startswith("data:image/")
+// 传数组时 Python 的 str() 会得到 "['data:image/...']"，两个 startswith 都不命中，
+// image_url 留空 -> mode 静默变成 "text2image"：用户连了参考图，后端却按纯文生图出图且不报错。
+// 相对地址（例如生成结果的 /public-assets/xxx.png）同样不命中，必须先补全成绝对地址。
+const IMAGE_REFERENCE_UNSUPPORTED_MESSAGE = '参考图必须是图片 data URL 或 http(s) 地址，当前参考图无法用于图生图'
+
+const buildImageReferenceInput = (refImages, apiBase = '') => {
+  const candidates = (Array.isArray(refImages) ? refImages : [refImages])
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+  if (candidates.length === 0) return { image: '', ignored: 0, rejected: '' }
+
+  const [primary, ...rest] = candidates
+  const base = String(apiBase || '').trim().replace(/\/+$/, '')
+  let image = ''
+  if (/^data:image\//i.test(primary) || /^https?:\/\//i.test(primary)) {
+    image = primary
+  } else if (primary.startsWith('/') && base) {
+    image = `${base}${primary}`
+  }
+
+  return image
+    ? { image, ignored: rest.length, rejected: '' }
+    : { image: '', ignored: rest.length, rejected: primary }
+}
+// --- end image reference contract ---
 
 // 使用 Pinia store 获取模型选项（根据渠道过滤）
 const modelStore = useModelStore()
@@ -829,6 +860,19 @@ const handleGenerate = async (mode = 'auto') => {
     return
   }
 
+  // 后端图生图只接受一张、且必须能被解析的参考图，解析不了就当场报错，
+  // 而不是继续发一个后端会静默降级成文生图的请求。
+  const referenceInput = isBackgroundReplaceMode.value
+    ? { image: '', ignored: 0, rejected: '' }
+    : buildImageReferenceInput(refImages, getMaterialApiBase())
+  if (!isBackgroundReplaceMode.value && refImages.length > 0 && !referenceInput.image) {
+    window.$message?.error(IMAGE_REFERENCE_UNSUPPORTED_MESSAGE)
+    return
+  }
+  if (referenceInput.ignored > 0) {
+    window.$message?.warning(`后端图生图只支持 1 张参考图，已使用第 1 张，忽略其余 ${referenceInput.ignored} 张`)
+  }
+
   let imageNodeId = null
   
   if (mode === 'replace') {
@@ -909,28 +953,38 @@ const handleGenerate = async (mode = 'auto') => {
             scheduler: imageScheduler.value,
             seed: imageSeed.value
           } : {}),
-          ...(refImages.length > 0 ? { image: refImages } : {})
+          ...(referenceInput.image ? { image: referenceInput.image } : {})
         }
 
     const result = await generate(params)
 
-    // Update image node with generated URL | 更新图片节点 URL
-    if (result && result.length > 0) {
-      const generated = normalizeGeneratedImageResult(result[0])
+    // 空结果不能再当成功处理：节点会永远停在 loading，还会弹一个骗人的成功提示。
+    if (!result || result.length === 0) {
+      const emptyResultMessage = '生成服务没有返回图片，请重试'
       updateNode(imageNodeId, {
-        url: generated.url,
-        publicUrl: generated.publicUrl,
-        assetRole: generated.assetRole,
         loading: false,
-        label: isBackgroundReplaceMode.value ? '背景替换结果' : '文生图',
-        model: localModel.value,
-        editMode: isBackgroundReplaceMode.value ? 'background_replace' : undefined,
+        error: emptyResultMessage,
         updatedAt: Date.now()
       })
-      
-      // Mark this config node as executed | 标记配置节点已执行
-      updateNode(props.id, { executed: true, outputNodeId: imageNodeId })
+      window.$message?.error(emptyResultMessage)
+      return
     }
+
+    // Update image node with generated URL | 更新图片节点 URL
+    const generated = normalizeGeneratedImageResult(result[0])
+    updateNode(imageNodeId, {
+      url: generated.url,
+      publicUrl: generated.publicUrl,
+      assetRole: generated.assetRole,
+      loading: false,
+      label: isBackgroundReplaceMode.value ? '背景替换结果' : '文生图',
+      model: localModel.value,
+      editMode: isBackgroundReplaceMode.value ? 'background_replace' : undefined,
+      updatedAt: Date.now()
+    })
+
+    // Mark this config node as executed | 标记配置节点已执行
+    updateNode(props.id, { executed: true, outputNodeId: imageNodeId })
     window.$message?.success('图片生成成功')
   } catch (err) {
     // Update node to show error | 更新节点显示错误
