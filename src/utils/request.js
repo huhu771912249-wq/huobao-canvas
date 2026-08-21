@@ -10,10 +10,22 @@ import { isMaterialApiUrl } from './apiBase.js'
 // Base URL from environment or default
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.chatfire.site'
 
+/**
+ * Default timeout | 默认超时
+ * A backend that hangs instead of erroring must still fail fast enough for the
+ * UI to recover; an effectively infinite timeout turns any hang into a frozen
+ * screen. Calls that legitimately run longer (media uploads, media jobs,
+ * document parsing) override `timeout` per request — see src/api/materialInput.js,
+ * src/api/mediaComposition.js, src/api/videoTextOverlay.js, src/api/gifEditor.js
+ * and src/api/studioDocument.js.
+ * 后端挂起时必须尽快失败，否则界面会一直冻结；确实耗时的调用在各自请求上单独放宽超时。
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 120000
+
 // Create axios instance | 创建 axios 实例
 const instance = axios.create({
   baseURL: "/",
-  timeout: 30000000
+  timeout: DEFAULT_REQUEST_TIMEOUT_MS
 })
 
 // Request interceptor | 请求拦截器
