@@ -47,21 +47,13 @@ const result = await fetchComputeStatus({
 })
 assert.deepEqual(result, payload)
 
-const component = readFileSync(new URL('../src/components/ComputeStatusIndicator.vue', import.meta.url), 'utf8')
+// ComputeStatusIndicator.vue 自身的行为契约（折叠起步、停靠位置、Teleport、5 秒轮询、
+// 拖拽不落盘、抽屉与详情开关）已经全部搬进 tests/component/computeStatusIndicator.spec.mjs，
+// 用真组件断言，不再扫源码。下面只剩「两个外壳确实挂了这个组件」的接线守卫，
+// 转换它需要挂载整个 Canvas / WorkspaceShell，属于后续批次。
 const canvas = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
 const workspace = readFileSync(new URL('../src/components/workspace/WorkspaceShell.vue', import.meta.url), 'utf8')
 const login = readFileSync(new URL('../src/views/Login.vue', import.meta.url), 'utf8')
-assert.match(component, /fetchComputeStatus/)
-assert.match(component, /GPU利用率/)
-assert.match(component, /当前任务/)
-assert.match(component, /window\.setInterval\(refresh, 5000\)/)
-assert.match(component, /@pointerdown="startDrag"/)
-assert.match(component, /<Teleport to="body">/)
-assert.match(component, /const collapsed = ref\(true\)/, 'GPU monitor must start compact so it cannot cover primary actions')
-assert.match(component, /\{ right: '18px', top: '84px' \}/, 'GPU monitor must stay away from bottom action bars')
-assert.doesNotMatch(component, /localStorage\.setItem\(POSITION_KEY/)
-assert.match(component, /compute-task-drawer/)
-assert.match(component, /查看详细状态/)
 assert.match(canvas, /<ComputeStatusIndicator/)
 assert.match(workspace, /<ComputeStatusIndicator/)
 assert.doesNotMatch(login, /GPU 5090 ONLINE/)

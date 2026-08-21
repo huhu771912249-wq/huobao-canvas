@@ -4,10 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "pretest": "node tests/projectPersistence.test.mjs && node tests/projectsStoreMigration.test.mjs && node tests/releaseManifest.test.mjs && node tests/novelTaskCenter.test.mjs && node tests/storyboardReset.test.mjs && node tests/canvasNativeSelectors.test.mjs && node tests/canvasLayout.test.mjs && node tests/canvasNodeDragging.test.mjs && node tests/canvasNodeOcclusion.test.mjs && node tests/globalPageScroll.test.mjs && node tests/imageModelUpgrade.test.mjs && node tests/testAssetGenerator.test.mjs && node tests/gifAdEditorPrototype.test.mjs && node tests/watermarkEditorWorkflow.test.mjs && node tests/canvasPerformance.test.mjs && node tests/navigationState.test.mjs && node tests/videoAdapterFieldContract.test.mjs && node tests/sessionGuard.test.mjs && node tests/pollingBudget.test.mjs && node tests/chatStream.test.mjs && node tests/projectsStoreRetry.test.mjs && node tests/imageReferenceContract.test.mjs && node tests/videoRatioOutputSizeContract.test.mjs && node tests/nodeGenerationFailureFeedback.test.mjs && node tests/videoQueueVisibility.test.mjs",
     "dev": "vite",
-    "lint": "eslint src tests scripts vite.config.js --max-warnings=0",
-    "test": "node tests/h3DirectorPlan.test.mjs && node tests/h3DirectorWiring.test.mjs && node tests/h3DirectorPrompt.test.mjs && node tests/h3DirectorUiWiring.test.mjs && node tests/h3SpeedQualityWorkflow.test.mjs && node tests/computeStatus.test.mjs && node tests/global1080Quality.test.mjs && node tests/providerVideoQuality.test.mjs && node tests/novelVideoWorkspace.test.mjs && node tests/videoInputCapabilities.test.mjs && node tests/videoInputActions.test.mjs && node tests/videoStudioWiring.test.mjs && node tests/studioProjectFlow.test.mjs && node tests/guanxiBrandContract.test.mjs && node tests/legacyFeatureContract.test.mjs && node tests/videoSize.test.mjs && node tests/videoOutputSizes.test.mjs && node tests/globalVideoSizeWiring.test.mjs && node tests/videoQualityProfile.test.mjs && node tests/novelVideoApi.test.mjs && node tests/studioIntent.test.mjs && node tests/subtitleTimeline.test.mjs && node tests/apiSettingsVisibility.test.mjs && node tests/videoTaskStatus.test.mjs && node tests/videoBatch.test.mjs && node tests/videoWorkflowTemplates.test.mjs && node tests/workspaceLaunch.test.mjs && node tests/generatedImageHandoff.test.mjs && node tests/routerRecovery.test.mjs && node tests/promptPolicy.test.mjs && node tests/materialVariation.test.mjs && node tests/backgroundReplace.test.mjs && node tests/dspCreativeLibrary.test.mjs && node tests/dspH3UpgradeSourceContract.test.mjs && node tests/appInteractionBridge.test.mjs && node tests/projectActions.test.mjs && node tests/visibilityPolling.test.mjs && node tests/workspaceUi.test.mjs && node tests/recentGenerations.test.mjs && node tests/taskCenter.test.mjs && node tests/videoResizeWorkbench.test.mjs && node tests/videoTextOverlay.test.mjs && node tests/textOverlayVideoSourceContract.test.mjs && node tests/materialInputNode.test.mjs && node tests/canvasMediaNodes.test.mjs && node tests/authSignOut.test.mjs && node tests/serviceHealth.test.mjs && node tests/canvasNodeRegistry.test.mjs && node tests/scail2ActionTransfer.test.mjs",
+    "lint": "eslint src tests scripts vite.config.js vitest.config.js --max-warnings=0",
+    "test": "node scripts/run-tests.mjs",
+    "test:component": "vitest run",
+    "test:watch": "vitest",
     "build": "vite build",
     "ci": "pnpm lint && pnpm test && pnpm build",
     "preview": "vite preview"
@@ -26,12 +27,15 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.4.11",
     "autoprefixer": "^10.5.4",
     "eslint": "^9.39.5",
     "eslint-plugin-vue": "^10.10.0",
     "globals": "^16.0.0",
+    "jsdom": "^28.1.0",
     "postcss": "^8.5.23",
     "tailwindcss": "^3.4.0",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "vitest": "^4.1.11"
   }
 }

@@ -20,12 +20,23 @@ Vite 基础路径是 `/huobao-canvas`。本地代理把 `/auth`、`/v1`、`/publ
 
 ```bash
 pnpm lint
-pnpm test
+pnpm test            # scripts/run-tests.mjs：glob 发现两条泳道并全部执行
+pnpm test:component  # 只跑 tests/component/*.spec.mjs（vitest + jsdom）
+pnpm test:watch      # 组件测试 watch 模式
 pnpm build
 pnpm run ci
 ```
 
 `pnpm run ci` 会依次运行 lint、完整测试和生产构建，提交前执行一次即可。
+
+测试分两条泳道，都由 `scripts/run-tests.mjs` **glob 自动发现**，
+`package.json` 里不再有手写清单，新建测试文件立刻会被执行：
+
+- `tests/**/*.test.mjs` —— 存量 node 断言脚本，每个文件单独进程执行。
+- `tests/component/**/*.spec.mjs` —— vitest + jsdom + `@vue/test-utils` 的真组件测试。
+
+新写测试优先放第二条泳道。把存量 grep 型测试改写成组件测试的分类方法、
+工具函数和分批计划见 [`docs/testing-migration.md`](docs/testing-migration.md)。
 
 ## 联调流程
 
