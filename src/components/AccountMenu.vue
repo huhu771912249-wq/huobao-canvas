@@ -26,9 +26,11 @@ import { NIcon } from 'naive-ui'
 import { LogOutOutline } from '@vicons/ionicons5'
 import { logout } from '../api/auth'
 import { currentUser, invalidateSessionCache, markSessionAuthenticated } from '../stores/auth'
+import { useModelStore } from '../stores/pinia'
 import { performSignOut } from '../utils/authSession'
 
 const router = useRouter()
+const modelStore = useModelStore()
 const pending = ref(false)
 const signedInAs = computed(() => (
   currentUser.value ? `退出登录（当前账号：${currentUser.value}）` : '退出登录'
@@ -37,6 +39,10 @@ const signedInAs = computed(() => (
 const clearLocalSession = () => {
   markSessionAuthenticated(null)
   invalidateSessionCache()
+  // 第三方渠道密钥不能活过一次登出：同一个标签页换个人登录，不该继承上一个人的 Key。
+  // Provider keys must not outlive the session — the next account on this tab would
+  // otherwise inherit the previous user's third-party credentials.
+  modelStore.clearAllApiKeys()
 }
 
 const signOut = async () => {

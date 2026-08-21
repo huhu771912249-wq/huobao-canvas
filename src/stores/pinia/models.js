@@ -14,8 +14,11 @@ import {
   DEFAULT_VIDEO_MODEL
 } from '@/config/models'
 import { PROVIDERS, getProviderList, getDefaultProvider, getProviderConfig, getDefaultBaseUrl, normalizeProviderKey } from '@/config/providers'
+import { replaceApiKeys, snapshotApiKeys } from '@/utils/apiKeyVault'
 
 // 存储键名
+// API Key 不在这里：它只存在于 `@/utils/apiKeyVault` 的内存里，绝不落 localStorage。
+// Provider API keys are deliberately absent — they live in the in-memory vault only.
 const STORAGE_KEYS = {
   PROVIDER: 'api-provider',
   CUSTOM_CHAT_MODELS: 'custom-chat-models',
@@ -27,7 +30,6 @@ const STORAGE_KEYS = {
   CUSTOM_CHAT_MODELS_BY_PROVIDER: 'custom-chat-models-by-provider',
   CUSTOM_IMAGE_MODELS_BY_PROVIDER: 'custom-image-models-by-provider',
   CUSTOM_VIDEO_MODELS_BY_PROVIDER: 'custom-video-models-by-provider',
-  API_KEYS_BY_PROVIDER: 'api-keys-by-provider',
   BASE_URLS_BY_PROVIDER: 'base-urls-by-provider'
 }
 
@@ -167,7 +169,10 @@ export const useModelStore = defineStore('model', () => {
   const selectedVideoModel = ref(getStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, DEFAULT_VIDEO_MODEL))
 
   // 按渠道存储的 API 配置
-  const apiKeysByProvider = ref(withProviderDefaultApiKeys(getStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, {})))
+  // API Key 从内存保管处读取（其中可能含刚从旧版明文存储抢救出来的值），只有 Base URL 落盘。
+  // API keys come from the in-memory vault (possibly rescued from the pre-fix clear-text
+  // storage on boot); only the non-secret base URLs are persisted.
+  const apiKeysByProvider = ref(withProviderDefaultApiKeys(snapshotApiKeys()))
   const baseUrlsByProvider = ref(getStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, {}))
 
   // 当前渠道的 API Key 和 Base URL
@@ -194,6 +199,16 @@ export const useModelStore = defineStore('model', () => {
   const clearApiConfigByProvider = (provider) => {
     delete apiKeysByProvider.value[provider]
     delete baseUrlsByProvider.value[provider]
+  }
+
+  /**
+   * 丢掉所有渠道的 API Key（退出登录时调用）。
+   * Drop every provider key. Called on sign-out so the next account on this tab does not
+   * inherit the previous user's third-party credentials. Base URLs are not secrets and stay.
+   */
+  const clearAllApiKeys = () => {
+    apiKeysByProvider.value = {}
+    replaceApiKeys({})
   }
 
   // ============ Computed: All Models (built-in + custom + by provider) ============
@@ -536,8 +551,11 @@ export const useModelStore = defineStore('model', () => {
   watch(selectedImageModel, (val) => setStored(STORAGE_KEYS.SELECTED_IMAGE_MODEL, val))
   watch(selectedVideoModel, (val) => setStored(STORAGE_KEYS.SELECTED_VIDEO_MODEL, val))
 
-  // 监听并持久化 API 配置
-  watch(apiKeysByProvider, (val) => setStoredJson(STORAGE_KEYS.API_KEYS_BY_PROVIDER, val), { deep: true })
+  // API Key 同步到内存保管处 —— 这里不写 localStorage，写了就是把用户的第三方密钥留在设备上。
+  // API keys are mirrored into the in-memory vault, never persisted. `src/utils/request.js`
+  // and `src/api/chat.js` read the vault, so this watcher is what keeps outgoing requests
+  // authenticated after the user edits a key in the settings dialog.
+  watch(apiKeysByProvider, (val) => replaceApiKeys(val), { deep: true })
   watch(baseUrlsByProvider, (val) => setStoredJson(STORAGE_KEYS.BASE_URLS_BY_PROVIDER, val), { deep: true })
 
   return {
@@ -627,6 +645,7 @@ export const useModelStore = defineStore('model', () => {
     baseUrlsByProvider,
     setApiKeyByProvider,
     setBaseUrlByProvider,
-    clearApiConfigByProvider
+    clearApiConfigByProvider,
+    clearAllApiKeys
   }
 })

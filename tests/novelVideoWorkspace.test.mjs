@@ -58,7 +58,18 @@ assert.match(studio, /key: 'assets', label: '素材再创作'/)
 assert.match(studio, /原 DSP 素材库继续保留独立入口/)
 assert.match(studio, /buildStudioCanvas/)
 
-const helperScript = workspace.match(/<script>\s*([\s\S]*?)<\/script>/)?.[1]
+// Pull the plain `<script>` block (the exported behavior helpers) out of the SFC — not the
+// `<script setup>` block that follows it. This used to be a regex, which CodeQL flagged as
+// js/bad-tag-filter: a regex that looks like an HTML tag filter but only matches one casing
+// is exactly the shape that lets `<SCRIPT>` slip past a sanitizer. Nothing here sanitizes
+// anything, but a fragile hand-rolled tag regex is not worth defending, and the SFC block
+// delimiters are fixed strings anyway. Scanning for them directly is both exact and
+// case-explicit: `<script setup>` cannot match `<script>`, so the same block is extracted.
+const helperOpen = workspace.indexOf('<script>')
+const helperClose = helperOpen === -1 ? -1 : workspace.indexOf('</script>', helperOpen)
+const helperScript = helperOpen === -1 || helperClose === -1
+  ? undefined
+  : workspace.slice(helperOpen + '<script>'.length, helperClose).trim()
 assert.ok(helperScript, 'workspace must expose testable behavior helpers')
 const helpers = await import(`data:text/javascript,${encodeURIComponent(helperScript)}`)
 
