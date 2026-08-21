@@ -16,6 +16,7 @@ import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
 import { extractVideoTaskProgress, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
 import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from '@/config/studioProjectFlow'
+import { collectChatStream, isChatAbortError } from '@/utils/chatStream'
 import { createPollingBudget } from '@/utils/pollingBudget'
 
 /**
@@ -98,34 +99,51 @@ export const useChat = (options = {}) => {
         messages: msgList
       })
 
-      if (stream) {
-        status.value = 'streaming'
-        abortController = new AbortController()
-        let fullResponse = ''
+      status.value = stream ? 'streaming' : 'running'
+      abortController = new AbortController()
 
-        // 使用 modelStore 获取完整 URL
-        const chatUrl = modelStore.getChatEndpoint()
-        const endpoint = new URL(chatUrl).pathname
+      // 使用 modelStore 获取完整 URL
+      const chatUrl = modelStore.getChatEndpoint()
+      const endpoint = new URL(chatUrl).pathname
 
-        for await (const chunk of streamChatCompletions(
+      // Both modes read the same stream; `stream = false` only means the caller
+      // does not want incremental updates. It must never fall through and
+      // return undefined with `loading` stuck on.
+      // 非流式只是不需要增量更新,同样要走完整流程并返回结果。
+      const outcome = await collectChatStream(
+        streamChatCompletions(
           adaptedParams,
           abortController.signal,
           { baseUrl: new URL(chatUrl).origin, endpoint }
-        )) {
-          fullResponse += chunk
-          currentResponse.value = fullResponse
-        }
+        ),
+        stream ? { onProgress: text => { currentResponse.value = text } } : {}
+      )
 
-        messages.value.push({ role: 'user', content })
-        messages.value.push({ role: 'assistant', content: fullResponse })
-        setSuccess()
-        return fullResponse
+      if (outcome.aborted) {
+        // A user-initiated stop still has to release `loading`, and the caller
+        // has to be able to tell "stopped" apart from "got an answer".
+        // 用户主动停止也必须释放 loading,并让调用方能区分"已停止"和"有结果"。
+        currentResponse.value = outcome.text
+        reset()
+        return null
       }
+
+      currentResponse.value = outcome.text
+      messages.value.push({ role: 'user', content })
+      messages.value.push({ role: 'assistant', content: outcome.text })
+      setSuccess()
+      return outcome.text
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        setError(err)
-        throw err
+      // An abort raised outside the stream still must not be reported as an
+      // error, but it must never leave `loading` on either.
+      if (isChatAbortError(err)) {
+        reset()
+        return null
       }
+      setError(err)
+      throw err
+    } finally {
+      abortController = null
     }
   }
 
