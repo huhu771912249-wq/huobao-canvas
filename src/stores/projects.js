@@ -411,48 +411,56 @@ const mergeProjectSummaries = summaries => {
  * Load the server index and migrate the old all-projects localStorage record.
  * The legacy key is removed only after every project has reached the backend.
  */
+const bootstrapProjects = async legacy => {
+  let response = await listCanvasProjects()
+  let summaries = Array.isArray(response?.projects) ? response.projects : []
+  const remoteById = new Map(summaries.map(project => [project.id, project]))
+
+  if (legacy.length) {
+    for (const project of legacy) {
+      const remote = remoteById.get(project.id)
+      const localTime = new Date(project.updatedAt || 0).getTime()
+      const remoteTime = new Date(remote?.updatedAt || 0).getTime()
+      if (!remote || localTime > remoteTime) await persistProject(project.id)
+    }
+    const storage = browserStorage()
+    storage?.removeItem?.(LEGACY_PROJECTS_STORAGE_KEY)
+    response = await listCanvasProjects()
+    summaries = Array.isArray(response?.projects) ? response.projects : []
+  }
+
+  mergeProjectSummaries(summaries)
+  if (projects.value.length === 0) {
+    const id = createProject('示例项目')
+    const project = projects.value.find(item => item.id === id)
+    if (project) {
+      project.canvasData = sampleCanvasData()
+      project.updatedAt = new Date()
+      await persistProject(id)
+    }
+  }
+  persistClientState(new Date().toISOString())
+  return projects.value
+}
+
 export const initProjectsStore = () => {
   if (initializationPromise) return initializationPromise
   const legacy = loadProjects()
 
-  initializationPromise = (async () => {
-    try {
-      let response = await listCanvasProjects()
-      let summaries = Array.isArray(response?.projects) ? response.projects : []
-      const remoteById = new Map(summaries.map(project => [project.id, project]))
+  // `bootstrapProjects` is async, so this handler can only run after
+  // `initializationPromise` has been assigned below.
+  const pending = bootstrapProjects(legacy).catch(error => {
+    reportPersistenceError(error)
+    // A failed bootstrap must never stay memoized. Caching it pins every later
+    // caller to the empty list, so a backend outage reads as "你没有任何项目"
+    // and only a full page reload can ever recover.
+    // 失败结果不能被永久缓存,否则后端故障会被显示成"账号里没有项目"。
+    if (initializationPromise === pending) initializationPromise = null
+    return projects.value
+  })
 
-      if (legacy.length) {
-        for (const project of legacy) {
-          const remote = remoteById.get(project.id)
-          const localTime = new Date(project.updatedAt || 0).getTime()
-          const remoteTime = new Date(remote?.updatedAt || 0).getTime()
-          if (!remote || localTime > remoteTime) await persistProject(project.id)
-        }
-        const storage = browserStorage()
-        storage?.removeItem?.(LEGACY_PROJECTS_STORAGE_KEY)
-        response = await listCanvasProjects()
-        summaries = Array.isArray(response?.projects) ? response.projects : []
-      }
-
-      mergeProjectSummaries(summaries)
-      if (projects.value.length === 0) {
-        const id = createProject('示例项目')
-        const project = projects.value.find(item => item.id === id)
-        if (project) {
-          project.canvasData = sampleCanvasData()
-          project.updatedAt = new Date()
-          await persistProject(id)
-        }
-      }
-      persistClientState(new Date().toISOString())
-      return projects.value
-    } catch (error) {
-      reportPersistenceError(error)
-      return projects.value
-    }
-  })()
-
-  return initializationPromise
+  initializationPromise = pending
+  return pending
 }
 
 // Export for debugging | 导出用于调试
