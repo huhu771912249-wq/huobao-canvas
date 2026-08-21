@@ -333,6 +333,40 @@ import {
   isReadyVideoImageNode,
   localizeGeneratedImageInput
 } from '../../utils/generatedImageHandoff'
+import { normalizeVideoOutputSize } from '../../utils/videoOutputSizes'
+
+// --- video ratio/output-size contract ---
+// 后端 material_generation_api.py:6509 完全按输出尺寸推导比例，前端发的 ratio/size 被忽略：
+//   ratio = "9:16" if target_height > target_width else "16:9"
+// 而 :6524 又要求 image_alignment 的宽高精确等于该 ratio 对应的模型原生输入尺寸，否则 400。
+// 所以：(1) 选比例必须真的改写 output_width/height，否则 UI 上的 9:16 永远到不了后端；
+//      (2) image_alignment 必须由输出尺寸推导，而不是由 localRatio 推导，才能保证两边一致。
+const VIDEO_PORTRAIT_RATIO = '9:16'
+const VIDEO_LANDSCAPE_RATIO = '16:9'
+
+const getVideoRatioFromOutputSize = (width, height) => (
+  Number(height) > Number(width) ? VIDEO_PORTRAIT_RATIO : VIDEO_LANDSCAPE_RATIO
+)
+
+// 用户手动挑过的分辨率不该被切比例粗暴清空：只在朝向和新比例冲突时翻转宽高，
+// 保留原来的分辨率档位（1280x720 -> 720x1280）。正方形没有朝向可翻，回落到该比例的默认档。
+const resolveVideoOutputSizeForRatio = (ratio, current = {}, ratioDefault = {}) => {
+  const fallback = {
+    width: Number(ratioDefault.width) || 1920,
+    height: Number(ratioDefault.height) || 1080
+  }
+  const width = Number(current.width)
+  const height = Number(current.height)
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) return fallback
+
+  const wantedRatio = String(ratio || '').replace('x', ':') === VIDEO_PORTRAIT_RATIO
+    ? VIDEO_PORTRAIT_RATIO
+    : VIDEO_LANDSCAPE_RATIO
+  if (getVideoRatioFromOutputSize(width, height) === wantedRatio) return { width, height }
+  if (width === height) return fallback
+  return { width: height, height: width }
+}
+// --- end video ratio/output-size contract ---
 
 const VIDEO_NODE_VIEWPORT_BOTTOM_GAP = 24
 const VIDEO_NODE_MIN_EXPANDED_HEIGHT = 160
@@ -594,9 +628,32 @@ const expandedRestoreLifecycle = createExpandedVideoNodeRestoreLifecycle({
 watch(() => viewport.value.zoom, () => expandedZoomLifecycle.handleZoomChange())
 const isGenerating = ref(false)  // 任务创建中状态
 const localModel = ref(props.data?.model || DEFAULT_VIDEO_MODEL)
-const localRatio = ref(props.data?.ratio || '16:9')
-const outputWidth = ref(Number(props.data?.outputWidth || 1920))
-const outputHeight = ref(Number(props.data?.outputHeight || 1080))
+// 持久化的尺寸也要过一遍 normalizeVideoOutputSize：历史脏数据（奇数、超界、只存了一半）
+// 否则会原样发到后端被拒。校验失败就回落到该比例的默认档。
+const restoreVideoOutputSize = (data = {}) => {
+  const ratio = data.ratio || '16:9'
+  try {
+    return normalizeVideoOutputSize({
+      output_width: data.outputWidth ?? null,
+      output_height: data.outputHeight ?? null,
+      ratio
+    })
+  } catch {
+    return normalizeVideoOutputSize({ ratio })
+  }
+}
+const restoredOutputSize = restoreVideoOutputSize(props.data || {})
+const outputWidth = ref(restoredOutputSize.width)
+const outputHeight = ref(restoredOutputSize.height)
+// 输出尺寸是唯一被后端采纳的事实源，所以历史数据里方向和尺寸打架时以尺寸为准，
+// 免得下拉框显示 9:16、实际却按 16:9 出片。方向不冲突的比例（1:1 等）原样保留。
+const restoredRatio = props.data?.ratio || '16:9'
+const restoredSizeRatio = getVideoRatioFromOutputSize(restoredOutputSize.width, restoredOutputSize.height)
+const localRatio = ref(
+  (String(restoredRatio).replace('x', ':') === VIDEO_PORTRAIT_RATIO) === (restoredSizeRatio === VIDEO_PORTRAIT_RATIO)
+    ? restoredRatio
+    : restoredSizeRatio
+)
 const localDuration = ref(props.data?.dur || 5)
 const allowedQualityModes = new Set(['fast', 'auto', 'quality'])
 const localQualityMode = ref(allowedQualityModes.has(props.data?.qualityMode) ? props.data.qualityMode : 'fast')
@@ -641,8 +698,11 @@ const qualityOptions = [
   { mode: 'auto', label: '智能判断', description: '小图才超分' },
   { mode: 'quality', label: 'AI 高清', description: '强制 SeedVR2' }
 ]
-const nativeVideoSize = computed(() => getModelNativeVideoSize(localModel.value, localRatio.value))
-const imageAlignment = computed(() => getImageAlignmentSpec(localModel.value, localRatio.value))
+// 后端按 output_width/height 推导比例再校验 image_alignment，所以这里必须用同一个推导，
+// 用 localRatio 推导过 image_alignment 就是 9:16 直接 400 的根因。
+const effectiveRatio = computed(() => getVideoRatioFromOutputSize(outputWidth.value, outputHeight.value))
+const nativeVideoSize = computed(() => getModelNativeVideoSize(localModel.value, effectiveRatio.value))
+const imageAlignment = computed(() => getImageAlignmentSpec(localModel.value, effectiveRatio.value))
 const connectedQualityResult = computed(() => {
   const outputEdge = edges.value.find(edge => edge.source === props.id)
   return nodes.value.find(node => node.id === outputEdge?.target)?.data || {}
@@ -897,6 +957,18 @@ const durationOptions = computed(() => {
   return getModelDurationOptions(localModel.value)
 })
 
+// 比例只改 localRatio 是没用的：后端只看 output_width/height，UI 上的 9:16 根本传不下去。
+const applyRatioToOutputSize = (key) => {
+  const resolved = resolveVideoOutputSizeForRatio(
+    key,
+    { width: outputWidth.value, height: outputHeight.value },
+    normalizeVideoOutputSize({ ratio: key })
+  )
+  outputWidth.value = resolved.width
+  outputHeight.value = resolved.height
+  return resolved
+}
+
 // Handle model selection | 处理模型选择
 const handleModelSelect = (key) => {
   localModel.value = key
@@ -907,6 +979,9 @@ const handleModelSelect = (key) => {
   if (config?.defaultParams?.ratio) {
     localRatio.value = config.defaultParams.ratio
     updates.ratio = config.defaultParams.ratio
+    const resolved = applyRatioToOutputSize(config.defaultParams.ratio)
+    updates.outputWidth = resolved.width
+    updates.outputHeight = resolved.height
   }
   if (config?.defaultParams?.duration) {
     localDuration.value = config.defaultParams.duration
@@ -972,8 +1047,31 @@ const handleDuplicate = () => {
 // Handle ratio selection | 处理比例选择
 const handleRatioSelect = (key) => {
   localRatio.value = key
-  updateNode(props.id, { ratio: key, qualityProfile: qualityProfile.value, imageAlignment: imageAlignment.value })
+  const resolved = applyRatioToOutputSize(key)
+  updateNode(props.id, {
+    ratio: key,
+    outputWidth: resolved.width,
+    outputHeight: resolved.height,
+    qualityProfile: qualityProfile.value,
+    imageAlignment: imageAlignment.value
+  })
 }
+
+// 尺寸选择器直接改 outputWidth/outputHeight，之前既不落盘也不同步比例，
+// 刷新后回到 1920x1080，且下拉框的比例和实际出片方向对不上。
+watch([outputWidth, outputHeight], ([width, height]) => {
+  const sizeRatio = getVideoRatioFromOutputSize(width, height)
+  if ((String(localRatio.value).replace('x', ':') === VIDEO_PORTRAIT_RATIO) !== (sizeRatio === VIDEO_PORTRAIT_RATIO)) {
+    localRatio.value = sizeRatio
+  }
+  updateNode(props.id, {
+    ratio: localRatio.value,
+    outputWidth: width,
+    outputHeight: height,
+    qualityProfile: qualityProfile.value,
+    imageAlignment: imageAlignment.value
+  })
+})
 
 const handleQualitySelect = (mode) => {
   if (mode !== 'fast' && qualityUnavailableReason.value) {
@@ -1388,6 +1486,16 @@ const handleGenerate = async () => {
       window.$message?.success('视频任务已创建')
       // Mark this config node as executed | 标记配置节点已执行
       updateNode(props.id, { executed: true, outputNodeId: videoNodeId, qualityResult: result || {}, ...qualityMetadata })
+    } else {
+      // 既没有 URL 也没有 taskId：以前这里没有 else，节点会永远停在「视频生成中...」。
+      const emptyTaskMessage = '生成服务既没有返回视频地址也没有返回任务 ID，请重试'
+      updateNode(videoNodeId, {
+        loading: false,
+        error: emptyTaskMessage,
+        label: '生成失败',
+        updatedAt: Date.now()
+      })
+      window.$message?.error(emptyTaskMessage)
     }
   } catch (err) {
     const message = getErrorMessage(err)
@@ -1398,6 +1506,7 @@ const handleGenerate = async () => {
       label: '生成失败',
       updatedAt: Date.now()
     })
+    window.$message?.error(message)
   } finally {
     isGenerating.value = false
   }
