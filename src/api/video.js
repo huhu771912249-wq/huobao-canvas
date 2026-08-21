@@ -3,7 +3,7 @@
  */
 
 import { request } from '@/utils'
-import { buildVideoTaskStatusUrl, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
+import { buildVideoTaskCancelUrl, buildVideoTaskStatusUrl, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
 import { buildVideoBatchRetryUrl } from '@/utils/videoBatch'
 
 // 创建视频任务
@@ -25,6 +25,16 @@ export const getVideoTaskStatus = (taskId, options = {}) => {
   return request({
     url: buildVideoTaskStatusUrl(endpoint, taskId),
     method: 'get'
+  })
+}
+
+// 取消视频任务 | 后端 material_generation_api.py 早就实现了这个端点，前端一直没有入口
+export const cancelVideoTask = (taskId, options = {}) => {
+  const { endpoint = '/videos' } = options
+  return request({
+    url: buildVideoTaskCancelUrl(endpoint, taskId),
+    method: 'post',
+    data: {}
   })
 }
 

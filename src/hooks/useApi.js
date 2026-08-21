@@ -6,6 +6,7 @@
 import { ref, reactive, onUnmounted } from 'vue'
 import {
   generateImage,
+  cancelVideoTask as cancelVideoTaskRequest,
   createVideoTask,
   getVideoTaskStatus,
   streamChatCompletions
@@ -15,6 +16,7 @@ import { useApiConfig } from './useApiConfig'
 import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
 import { extractVideoTaskProgress, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
+import { readVideoTaskQueueState } from '@/utils/videoQueueState'
 import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from '@/config/studioProjectFlow'
 import { collectChatStream, isChatAbortError } from '@/utils/chatStream'
 import { createPollingBudget } from '@/utils/pollingBudget'
@@ -323,16 +325,50 @@ export const useVideoGeneration = () => {
   }
 
   /**
-   * Poll video task | 轮询视频任务
+   * Cancel video task | 取消视频任务
+   * 后端 POST /v1/video/task/{id}/cancel 早已实现，这里只是把它接到端点解析上，
+   * 让取消和状态查询用同一个 provider 端点，不会打到另一个渠道去。
    */
-  const pollVideoTask = async (pollTaskId, onProgress = () => {}) => {
+  const cancelVideoTask = async (cancelTaskId) => {
+    if (!cancelTaskId) throw new Error('缺少任务 ID，无法取消')
+    return cancelVideoTaskRequest(cancelTaskId, { endpoint: modelStore.getVideoTaskEndpoint() })
+  }
+
+  /**
+   * Poll video task | 轮询视频任务
+   * @param {AbortSignal} [options.signal] 用户点「取消」后立刻中止轮询，
+   *        不用再等最多一个 5 秒间隔才收摊。
+   */
+  const pollVideoTask = async (pollTaskId, onProgress = () => {}, options = {}) => {
     const interval = 5000
+    const signal = options?.signal || null
+    const cancelledError = () => Object.assign(new Error('任务已取消'), {
+      videoTaskCancelled: true,
+      videoTaskTerminal: false
+    })
+    // 可中止的等待：取消时立刻 resolve，避免用户看着按钮空转五秒。
+    const waitForNextPoll = () => new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(cancelledError())
+        return
+      }
+      const timer = setTimeout(() => {
+        signal?.removeEventListener?.('abort', onAbort)
+        resolve()
+      }, interval)
+      function onAbort() {
+        clearTimeout(timer)
+        reject(cancelledError())
+      }
+      signal?.addEventListener?.('abort', onAbort, { once: true })
+    })
     // Long renders stay supported, but a lost task must eventually surface a
     // readable error instead of spinning forever.
     // 长时间渲染依旧支持,但任务丢失时必须最终报出可读错误而不是一直转圈。
     const budget = createPollingBudget({ label: '视频任务' })
 
     for (;;) {
+      if (signal?.aborted) throw cancelledError()
       const attempt = budget.nextAttempt()
       // 获取任务查询端点，支持 {taskId} 占位符替换
       let taskEndpoint = modelStore.getVideoTaskEndpoint()
@@ -348,7 +384,7 @@ export const useVideoGeneration = () => {
       } catch (err) {
         if (isTaskNotReadyError(err)) {
           budget.markNotReady()
-          await new Promise(resolve => setTimeout(resolve, interval))
+          await waitForNextPoll()
           continue
         }
         throw err
@@ -358,7 +394,12 @@ export const useVideoGeneration = () => {
 
       // 适配轮询响应
       const adaptedResult = adaptResponse('video', result)
-      const progressInfo = extractVideoTaskProgress(result, adaptedResult)
+      // 队列字段单独读：extractVideoTaskProgress 的返回形状被 videoTaskStatus.test.mjs
+      // 逐字锁死，往里加字段会红，而且队列信息本来就不属于「进度」。
+      const progressInfo = {
+        ...extractVideoTaskProgress(result, adaptedResult),
+        ...readVideoTaskQueueState(result, adaptedResult)
+      }
       onProgress(attempt, progressInfo.percent, progressInfo)
 
       const taskState = getVideoTaskPollingState(result, adaptedResult)
@@ -388,7 +429,7 @@ export const useVideoGeneration = () => {
       }
 
       // Wait before next poll | 等待下次轮询
-      await new Promise(resolve => setTimeout(resolve, interval))
+      await waitForNextPoll()
     }
   }
 
@@ -433,7 +474,7 @@ export const useVideoGeneration = () => {
     }
   }
 
-  return { loading, error, status, video, taskId, progress, generate, reset, createVideoTaskOnly, pollVideoTask }
+  return { loading, error, status, video, taskId, progress, generate, reset, createVideoTaskOnly, pollVideoTask, cancelVideoTask }
 }
 
 /**

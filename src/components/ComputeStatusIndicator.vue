@@ -24,6 +24,25 @@
         </div>
       </header>
 
+      <!-- Queue bar | 队列条 -->
+      <!-- 顶栏原本只报硬件，队列长度只能进抽屉才看得到。折叠态也保留这一条，
+           让「现在排队几个、要不要等」在一眼之内能回答。 -->
+      <div class="compute-monitor__queue-bar">
+        <span class="compute-monitor__memory">显存 {{ summary.memoryLabel }}</span>
+        <span
+          v-if="queueBadgeLabel"
+          data-testid="compute-queue-badge"
+          class="compute-monitor__queue-badge"
+        >⏱ {{ queueBadgeLabel }}</span>
+        <button
+          type="button"
+          data-testid="compute-queue-link"
+          class="compute-monitor__queue-link"
+          @pointerdown.stop
+          @click.stop="openQueue"
+        >查看队列</button>
+      </div>
+
       <template v-if="!collapsed">
         <div v-if="error" class="compute-monitor__error">{{ error }}</div>
 
@@ -83,6 +102,8 @@
       <div class="compute-task-drawer__summary">
         <span>运行 {{ summary.running }}</span>
         <span>等待 {{ summary.waiting }}</span>
+        <span v-if="queue.workers !== null">执行位 {{ queue.workers }}</span>
+        <span v-if="queueEstimateLabel">整队 {{ queueEstimateLabel }}</span>
         <span>{{ summary.gpuName }}</span>
       </div>
       <div v-if="!summary.tasks.length" class="compute-task-drawer__empty">当前没有GPU任务</div>
@@ -111,12 +132,18 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { fetchComputeStatus } from '../api/computeStatus.js'
 import {
   computeTaskStageLabel,
   formatElapsedSeconds,
   summarizeComputeStatus
 } from '../utils/computeStatus.js'
+import {
+  formatQueueEstimateLabel,
+  formatQueueWaitingLabel,
+  readComputeQueueSnapshot
+} from '../utils/videoQueueState.js'
 
 const COLLAPSED_KEY = 'huobao-compute-monitor-collapsed-v1'
 const monitorRef = ref(null)
@@ -146,6 +173,23 @@ const updatedLabel = computed(() => {
   return Number.isNaN(date.getTime()) ? summary.value.updatedAt : date.toLocaleTimeString()
 })
 const taskElapsedLabel = task => formatElapsedSeconds(task?.elapsed_seconds)
+
+// 队列快照：优先读新契约的 video_queue / queue_estimate_seconds，
+// 后端还没合并时退回今天已有的 queues.total_waiting，两边都没有就整块不渲染。
+const queue = computed(() => readComputeQueueSnapshot(status.value))
+const queueEstimateLabel = computed(() => formatQueueEstimateLabel(queue.value.estimateSeconds))
+const queueBadgeLabel = computed(() => {
+  if (!queue.value.waiting) return ''
+  const waiting = formatQueueWaitingLabel(queue.value.waiting)
+  return queueEstimateLabel.value ? `${waiting} · ${queueEstimateLabel.value}` : waiting
+})
+
+const router = useRouter()
+const openQueue = () => {
+  // 任务中心是队列的正式视图；拿不到 router 时至少把抽屉打开，别让按钮点了没反应。
+  if (router?.push) router.push('/tasks')
+  else tasksOpen.value = true
+}
 
 const readStoredState = () => {
   try {
@@ -217,5 +261,5 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.compute-monitor-host{display:contents}.compute-monitor{position:fixed;z-index:3000;width:310px;padding:14px;border:1px solid rgba(101,230,189,.24);border-radius:18px;color:var(--text-primary);background:rgba(8,13,22,.94);box-shadow:0 20px 70px rgba(0,0,0,.45);backdrop-filter:blur(22px)}.compute-monitor--collapsed{width:210px;padding:9px 11px}.compute-monitor__drag{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:grab;touch-action:none}.compute-monitor__drag:active{cursor:grabbing}.compute-monitor__identity{display:flex;align-items:center;gap:9px}.compute-monitor__identity>div{display:grid;gap:3px}.compute-monitor__identity small,.compute-task-drawer header small{color:#65e6bd;font:600 9px/1 ui-monospace;letter-spacing:.14em}.compute-monitor__identity strong{font-size:14px}.compute-monitor__dot{width:9px;height:9px;border-radius:99px;background:#718096}.compute-monitor--online .compute-monitor__dot{background:#65e6bd;box-shadow:0 0 12px rgba(101,230,189,.8)}.compute-monitor--degraded .compute-monitor__dot{background:#fbbf24}.compute-monitor--offline .compute-monitor__dot{background:#fb7185}.compute-monitor__actions{display:flex;gap:5px}.compute-monitor__actions button{width:25px;height:25px;border-radius:8px;color:var(--text-secondary);background:rgba(255,255,255,.06);font-size:14px}.compute-monitor__actions button:hover{color:var(--text-primary);background:rgba(255,255,255,.1)}.compute-monitor__error{margin-top:9px;padding:7px;border-radius:9px;color:#fda4af;background:rgba(244,63,94,.1);font-size:10px}.compute-monitor__health{display:flex;flex-wrap:wrap;gap:5px;margin:11px 0}.compute-monitor__health span{padding:4px 6px;border-radius:99px;color:var(--text-secondary);background:rgba(255,255,255,.05);font-size:9px}.compute-monitor__health .tone-online{color:#65e6bd}.compute-monitor__health .tone-degraded{color:#fbbf24}.compute-monitor__health .tone-offline{color:#fb7185}.compute-monitor__meter{margin-top:9px}.compute-monitor__meter>div:first-child{display:flex;justify-content:space-between;font-size:10px}.compute-monitor__meter b{font-family:ui-monospace,monospace}.compute-monitor__track{height:5px;margin-top:5px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.08)}.compute-monitor__track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#65e6bd,#6ea8ff);transition:width .3s}.compute-monitor__queue-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:11px}.compute-monitor__queue-row>*{display:grid;gap:3px;padding:8px;border:1px solid var(--border-color);border-radius:10px;text-align:left}.compute-monitor__queue-row button:hover{border-color:rgba(101,230,189,.45)}.compute-monitor__queue-row small{color:var(--text-secondary);font-size:9px}.compute-monitor__queue-row b{font:700 11px/1 ui-monospace}.compute-monitor__current{display:flex;align-items:flex-start;gap:8px;margin-top:9px;padding:8px;border-radius:10px;background:rgba(101,230,189,.07)}.compute-monitor__current>span{padding:3px 5px;border-radius:99px;color:#65e6bd;background:rgba(101,230,189,.1);font-size:8px}.compute-monitor__current div{min-width:0;display:grid;gap:3px}.compute-monitor__current b{font-size:10px}.compute-monitor__current small{overflow:hidden;color:var(--text-secondary);font:8px/1.2 ui-monospace;text-overflow:ellipsis;white-space:nowrap}.compute-monitor__details-toggle{width:100%;margin-top:9px;color:var(--text-secondary);font-size:9px;text-align:center}.compute-monitor__details-toggle:hover{color:#65e6bd}.compute-monitor__details{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}.compute-monitor__details div{display:flex;justify-content:space-between;padding:6px 7px;border-radius:8px;background:rgba(255,255,255,.035);font-size:8px}.compute-monitor__details span{color:var(--text-secondary)}.compute-task-drawer{position:fixed;z-index:3100;top:76px;right:16px;bottom:16px;width:min(420px,calc(100vw - 24px));display:flex;flex-direction:column;padding:18px;border:1px solid rgba(110,168,255,.25);border-radius:22px;color:var(--text-primary);background:rgba(7,12,21,.98);box-shadow:0 25px 90px rgba(0,0,0,.55);backdrop-filter:blur(24px)}.compute-task-drawer header{display:flex;align-items:center;justify-content:space-between}.compute-task-drawer header>div{display:grid;gap:5px}.compute-task-drawer header strong{font-size:16px}.compute-task-drawer header button{padding:6px 9px;border-radius:9px;color:var(--text-secondary);background:rgba(255,255,255,.06);font-size:10px}.compute-task-drawer__summary{display:flex;gap:6px;margin-top:14px}.compute-task-drawer__summary span{padding:5px 8px;border-radius:99px;color:var(--text-secondary);background:rgba(255,255,255,.05);font-size:9px}.compute-task-drawer__list{min-height:0;margin-top:12px;overflow:auto}.compute-task-drawer__list article{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;padding:11px;border:1px solid var(--border-color);border-radius:13px;background:rgba(255,255,255,.03)}.compute-task-drawer__list article>span{flex:0 0 auto;padding:4px 6px;border-radius:99px;font-size:8px}.compute-task-drawer__list .running{color:#65e6bd;background:rgba(101,230,189,.1)}.compute-task-drawer__list .queued{color:#fbbf24;background:rgba(251,191,36,.1)}.compute-task-drawer__list article>div{min-width:0;display:grid;gap:4px}.compute-task-drawer__list b{font-size:11px}.compute-task-drawer__list small{overflow:hidden;color:var(--text-secondary);font:9px/1.2 ui-monospace;text-overflow:ellipsis;white-space:nowrap}.compute-task-drawer__list p{color:var(--text-secondary);font-size:9px}.compute-task-drawer__meta{display:flex;flex-wrap:wrap;gap:5px}.compute-task-drawer__meta span{padding:3px 5px;border-radius:6px;color:var(--text-secondary);background:rgba(255,255,255,.04);font-size:8px}.compute-task-drawer__empty{margin-top:16px;padding:28px;border:1px dashed var(--border-color);border-radius:14px;color:var(--text-secondary);font-size:11px;text-align:center}.compute-task-drawer footer{margin-top:auto;padding-top:12px;color:var(--text-secondary);font-size:9px}@media(max-width:760px){.compute-monitor{width:280px}.compute-task-drawer{top:62px;right:8px;bottom:8px}.compute-monitor__details{grid-template-columns:1fr}}
+.compute-monitor-host{display:contents}.compute-monitor{position:fixed;z-index:3000;width:310px;padding:14px;border:1px solid rgba(101,230,189,.24);border-radius:18px;color:var(--text-primary);background:rgba(8,13,22,.94);box-shadow:0 20px 70px rgba(0,0,0,.45);backdrop-filter:blur(22px)}.compute-monitor--collapsed{width:256px;padding:9px 11px}.compute-monitor__drag{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:grab;touch-action:none}.compute-monitor__drag:active{cursor:grabbing}.compute-monitor__identity{display:flex;align-items:center;gap:9px}.compute-monitor__identity>div{display:grid;gap:3px}.compute-monitor__identity small,.compute-task-drawer header small{color:#65e6bd;font:600 9px/1 ui-monospace;letter-spacing:.14em}.compute-monitor__identity strong{font-size:14px}.compute-monitor__dot{width:9px;height:9px;border-radius:99px;background:#718096}.compute-monitor--online .compute-monitor__dot{background:#65e6bd;box-shadow:0 0 12px rgba(101,230,189,.8)}.compute-monitor--degraded .compute-monitor__dot{background:#fbbf24}.compute-monitor--offline .compute-monitor__dot{background:#fb7185}.compute-monitor__actions{display:flex;gap:5px}.compute-monitor__actions button{width:25px;height:25px;border-radius:8px;color:var(--text-secondary);background:rgba(255,255,255,.06);font-size:14px}.compute-monitor__actions button:hover{color:var(--text-primary);background:rgba(255,255,255,.1)}.compute-monitor__queue-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid var(--border-color)}.compute-monitor__memory{color:var(--text-secondary);font:10px/1.2 ui-monospace,monospace}.compute-monitor__queue-badge{padding:3px 7px;border:1px solid rgba(240,185,90,.45);border-radius:99px;color:var(--warning-color);background:rgba(240,185,90,.12);font-size:9px;white-space:nowrap}.compute-monitor__queue-link{margin-left:auto;padding:3px 8px;border:1px solid var(--border-color);border-radius:8px;color:var(--text-secondary);font-size:9px;white-space:nowrap}.compute-monitor__queue-link:hover{border-color:rgba(101,230,189,.45);color:#65e6bd}.compute-monitor__error{margin-top:9px;padding:7px;border-radius:9px;color:#fda4af;background:rgba(244,63,94,.1);font-size:10px}.compute-monitor__health{display:flex;flex-wrap:wrap;gap:5px;margin:11px 0}.compute-monitor__health span{padding:4px 6px;border-radius:99px;color:var(--text-secondary);background:rgba(255,255,255,.05);font-size:9px}.compute-monitor__health .tone-online{color:#65e6bd}.compute-monitor__health .tone-degraded{color:#fbbf24}.compute-monitor__health .tone-offline{color:#fb7185}.compute-monitor__meter{margin-top:9px}.compute-monitor__meter>div:first-child{display:flex;justify-content:space-between;font-size:10px}.compute-monitor__meter b{font-family:ui-monospace,monospace}.compute-monitor__track{height:5px;margin-top:5px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.08)}.compute-monitor__track i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#65e6bd,#6ea8ff);transition:width .3s}.compute-monitor__queue-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:11px}.compute-monitor__queue-row>*{display:grid;gap:3px;padding:8px;border:1px solid var(--border-color);border-radius:10px;text-align:left}.compute-monitor__queue-row button:hover{border-color:rgba(101,230,189,.45)}.compute-monitor__queue-row small{color:var(--text-secondary);font-size:9px}.compute-monitor__queue-row b{font:700 11px/1 ui-monospace}.compute-monitor__current{display:flex;align-items:flex-start;gap:8px;margin-top:9px;padding:8px;border-radius:10px;background:rgba(101,230,189,.07)}.compute-monitor__current>span{padding:3px 5px;border-radius:99px;color:#65e6bd;background:rgba(101,230,189,.1);font-size:8px}.compute-monitor__current div{min-width:0;display:grid;gap:3px}.compute-monitor__current b{font-size:10px}.compute-monitor__current small{overflow:hidden;color:var(--text-secondary);font:8px/1.2 ui-monospace;text-overflow:ellipsis;white-space:nowrap}.compute-monitor__details-toggle{width:100%;margin-top:9px;color:var(--text-secondary);font-size:9px;text-align:center}.compute-monitor__details-toggle:hover{color:#65e6bd}.compute-monitor__details{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:8px}.compute-monitor__details div{display:flex;justify-content:space-between;padding:6px 7px;border-radius:8px;background:rgba(255,255,255,.035);font-size:8px}.compute-monitor__details span{color:var(--text-secondary)}.compute-task-drawer{position:fixed;z-index:3100;top:76px;right:16px;bottom:16px;width:min(420px,calc(100vw - 24px));display:flex;flex-direction:column;padding:18px;border:1px solid rgba(110,168,255,.25);border-radius:22px;color:var(--text-primary);background:rgba(7,12,21,.98);box-shadow:0 25px 90px rgba(0,0,0,.55);backdrop-filter:blur(24px)}.compute-task-drawer header{display:flex;align-items:center;justify-content:space-between}.compute-task-drawer header>div{display:grid;gap:5px}.compute-task-drawer header strong{font-size:16px}.compute-task-drawer header button{padding:6px 9px;border-radius:9px;color:var(--text-secondary);background:rgba(255,255,255,.06);font-size:10px}.compute-task-drawer__summary{display:flex;gap:6px;margin-top:14px}.compute-task-drawer__summary span{padding:5px 8px;border-radius:99px;color:var(--text-secondary);background:rgba(255,255,255,.05);font-size:9px}.compute-task-drawer__list{min-height:0;margin-top:12px;overflow:auto}.compute-task-drawer__list article{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;padding:11px;border:1px solid var(--border-color);border-radius:13px;background:rgba(255,255,255,.03)}.compute-task-drawer__list article>span{flex:0 0 auto;padding:4px 6px;border-radius:99px;font-size:8px}.compute-task-drawer__list .running{color:#65e6bd;background:rgba(101,230,189,.1)}.compute-task-drawer__list .queued{color:#fbbf24;background:rgba(251,191,36,.1)}.compute-task-drawer__list article>div{min-width:0;display:grid;gap:4px}.compute-task-drawer__list b{font-size:11px}.compute-task-drawer__list small{overflow:hidden;color:var(--text-secondary);font:9px/1.2 ui-monospace;text-overflow:ellipsis;white-space:nowrap}.compute-task-drawer__list p{color:var(--text-secondary);font-size:9px}.compute-task-drawer__meta{display:flex;flex-wrap:wrap;gap:5px}.compute-task-drawer__meta span{padding:3px 5px;border-radius:6px;color:var(--text-secondary);background:rgba(255,255,255,.04);font-size:8px}.compute-task-drawer__empty{margin-top:16px;padding:28px;border:1px dashed var(--border-color);border-radius:14px;color:var(--text-secondary);font-size:11px;text-align:center}.compute-task-drawer footer{margin-top:auto;padding-top:12px;color:var(--text-secondary);font-size:9px}@media(max-width:760px){.compute-monitor{width:280px}.compute-task-drawer{top:62px;right:8px;bottom:8px}.compute-monitor__details{grid-template-columns:1fr}}
 </style>
