@@ -162,6 +162,12 @@
         <div v-if="taskView.etaLabel" data-testid="video-task-eta" class="text-xs text-[var(--text-secondary)]">
           {{ taskView.etaLabel }}
         </div>
+        <div v-if="taskView.completionEtaLabel" data-testid="video-task-completion-eta" class="text-xs text-[var(--text-secondary)]">
+          {{ taskView.completionEtaLabel }}
+        </div>
+        <div v-if="taskView.state === 'cancelled' && data.cancelNote" data-testid="video-task-cancel-note" class="text-[11px] leading-relaxed text-[var(--text-secondary)]">
+          {{ data.cancelNote }}
+        </div>
         <div v-if="taskView.durationLabel" data-testid="video-task-duration" class="text-xs text-[var(--text-secondary)]">
           用时 {{ taskView.durationLabel }}
         </div>
@@ -224,7 +230,7 @@ import { useVideoGeneration } from '../../hooks/useApi'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { startAssetDownload } from '../../utils/assetDownload'
 import { extractVideoCompletionMetadata, extractVideoTaskProgress, isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
-import { describeVideoNodeTask } from '../../utils/videoQueueState'
+import { describeVideoNodeTask, readCancelOutcome } from '../../utils/videoQueueState'
 
 const props = defineProps({
   id: String,
@@ -352,6 +358,7 @@ const startPolling = async (taskId) => {
         upscale_status: progressInfo?.upscale_status || props.data?.upscale_status || '',
         queuePosition: progressInfo?.queuePosition ?? null,
         etaSeconds: progressInfo?.etaSeconds ?? null,
+        etaCompletionSeconds: progressInfo?.etaCompletionSeconds ?? null,
         currentSegment: progressInfo?.currentSegment ?? null,
         totalSegments: progressInfo?.totalSegments ?? null
       })
@@ -370,6 +377,7 @@ const startPolling = async (taskId) => {
       durationSeconds: elapsedSecondsSinceStart(),
       queuePosition: null,
       etaSeconds: null,
+      etaCompletionSeconds: null,
       label: verified1080p ? '高质量 1080p 视频' : '视频结果',
       taskId: null  // 清除 taskId
     })
@@ -410,7 +418,14 @@ const handleCancel = async () => {
   if (!taskId || cancelling.value) return
   cancelling.value = true
   try {
-    await cancelVideoTask(taskId)
+    const outcome = readCancelOutcome(await cancelVideoTask(taskId))
+    if (!outcome.cancelled) {
+      // HTTP 200 不等于取消成功：后端对已经 completed 的任务会原样返回、状态不变。
+      // 这时绝不能把节点擦成「已取消」，否则刚跑完的片子就被这一下丢掉了。
+      // 轮询没有中止，结果会照常落到节点上。
+      window.$message?.warning(outcome.message)
+      return
+    }
     pollAbortController?.abort()
     updateNode(props.id, {
       loading: false,
@@ -420,16 +435,17 @@ const handleCancel = async () => {
       currentStep: '',
       status: 'cancelled',
       cancelledAt: Date.now(),
+      cancelNote: outcome.message,
       queuePosition: null,
       etaSeconds: null,
+      etaCompletionSeconds: null,
       currentSegment: null,
       totalSegments: null,
       pollingInterrupted: false,
       label: '已取消'
     })
-    window.$message?.success('任务已取消')
+    window.$message?.success(outcome.message)
   } catch (err) {
-    // 后端可能已经跑完或已经取消过；这时报错但不要把节点擦成取消态。
     window.$message?.error(err?.message || '取消失败，任务可能已经开始或已经结束')
   } finally {
     cancelling.value = false
@@ -455,9 +471,11 @@ const handleRetry = () => {
     status: '',
     currentStep: '',
     cancelledAt: null,
+    cancelNote: null,
     durationSeconds: null,
     queuePosition: null,
     etaSeconds: null,
+    etaCompletionSeconds: null,
     currentSegment: null,
     totalSegments: null,
     pollingInterrupted: false
