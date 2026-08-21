@@ -16,6 +16,7 @@ import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
 import { extractVideoTaskProgress, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
 import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from '@/config/studioProjectFlow'
+import { createPollingBudget } from '@/utils/pollingBudget'
 
 /**
  * Base API state hook | 基础 API 状态 Hook
@@ -308,10 +309,13 @@ export const useVideoGeneration = () => {
    */
   const pollVideoTask = async (pollTaskId, onProgress = () => {}) => {
     const interval = 5000
-    let attempt = 0
+    // Long renders stay supported, but a lost task must eventually surface a
+    // readable error instead of spinning forever.
+    // 长时间渲染依旧支持,但任务丢失时必须最终报出可读错误而不是一直转圈。
+    const budget = createPollingBudget({ label: '视频任务' })
 
-    while (true) {
-      attempt += 1
+    for (;;) {
+      const attempt = budget.nextAttempt()
       // 获取任务查询端点，支持 {taskId} 占位符替换
       let taskEndpoint = modelStore.getVideoTaskEndpoint()
       if (taskEndpoint.includes('{taskId}')) {
@@ -325,11 +329,14 @@ export const useVideoGeneration = () => {
         })
       } catch (err) {
         if (isTaskNotReadyError(err)) {
+          budget.markNotReady()
           await new Promise(resolve => setTimeout(resolve, interval))
           continue
         }
         throw err
       }
+
+      budget.markReady()
 
       // 适配轮询响应
       const adaptedResult = adaptResponse('video', result)
