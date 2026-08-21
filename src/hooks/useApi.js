@@ -12,7 +12,6 @@ import {
   streamChatCompletions
 } from '@/api'
 import { getModelByName } from '@/config/models'
-import { useApiConfig } from './useApiConfig'
 import { useProvider } from './useProvider'
 import { useModelStore } from '@/stores/pinia'
 import { extractVideoTaskProgress, getVideoTaskPollingState } from '@/utils/videoTaskStatus'
@@ -477,14 +476,8 @@ export const useVideoGeneration = () => {
   return { loading, error, status, video, taskId, progress, generate, reset, createVideoTaskOnly, pollVideoTask, cancelVideoTask }
 }
 
-/**
- * Combined API composable | 综合 API 组合式函数
- */
-export const useApi = () => {
-  const config = useApiConfig()
-  const chat = useChat()
-  const image = useImageGeneration()
-  const videoGen = useVideoGeneration()
-
-  return { config, chat, image, video: videoGen }
-}
+// 这里原来有个 `useApi()` 聚合器，唯一作用是把 `useApiConfig()`（明文存 API Key、且无人读取）
+// 暴露出去；没有任何组件调用过它。随 useApiConfig 一并删除。
+// The former `useApi()` aggregate existed only to expose `useApiConfig()` — the hook that
+// stored the API key in clear text and that nothing ever read back. No component called it;
+// it was removed together with the hook. Components use the individual composables above.

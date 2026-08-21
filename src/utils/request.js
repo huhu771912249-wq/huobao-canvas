@@ -6,6 +6,7 @@
 import axios from 'axios'
 import { getDefaultProvider, getProviderConfig, normalizeProviderKey } from '@/config/providers'
 import { isMaterialApiUrl } from './apiBase.js'
+import { getApiKey } from './apiKeyVault.js'
 
 // Base URL from environment or default
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.chatfire.site'
@@ -34,16 +35,11 @@ instance.interceptors.request.use(
     // Get current provider | 获取当前渠道
     const currentProvider = normalizeProviderKey(localStorage.getItem('api-provider') || getDefaultProvider())
 
-    // Get API keys from new storage | 从新存储结构获取 API Keys
-    let apiKey = ''
-    try {
-      const apiKeysJson = localStorage.getItem('api-keys-by-provider')
-      const apiKeys = apiKeysJson ? JSON.parse(apiKeysJson) : {}
-      apiKey = apiKeys[currentProvider] || ''
-    } catch (e) {
-      apiKey = ''
-    }
-    apiKey = apiKey || getProviderConfig(currentProvider).defaultApiKey || ''
+    // Get the API key from the in-memory vault | 从内存保管处获取 API Key
+    // 这里以前直接读 localStorage['api-keys-by-provider']，等于把用户的第三方密钥长期留在设备上。
+    // See src/utils/apiKeyVault.js for why the key is never persisted, and what that does
+    // and does not protect against.
+    const apiKey = getApiKey(currentProvider) || getProviderConfig(currentProvider).defaultApiKey || ''
 
     // Skip auth for certain endpoints | 跳过某些端点的认证
     const noAuthEndpoints = ['/model/page', '/model/fullName', '/model/types']

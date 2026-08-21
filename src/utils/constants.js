@@ -47,9 +47,12 @@ export const DEFAULT_CHAT_CONFIG = {
 }
 
 // Local Storage Keys | 本地存储键
+// 这里**不再有** API_KEY / BASE_URL。`apiKey` 那个键就是 CodeQL
+// js/clear-text-storage-of-sensitive-data 报的那处明文存储；渠道密钥现在只活在
+// `@/utils/apiKeyVault` 的内存里，不落任何浏览器存储。别把它加回来。
+// There is deliberately no API_KEY entry: the `apiKey` key was the clear-text store CodeQL
+// flagged. Provider keys now live in the in-memory vault only — do not re-add one here.
 export const STORAGE_KEYS = {
-  API_KEY: 'apiKey',
-  BASE_URL: 'apiBaseUrl',
   CUSTOM_CHAT_MODELS: 'customChatModels',
   CUSTOM_IMAGE_MODELS: 'customImageModels',
   CUSTOM_VIDEO_MODELS: 'customVideoModels',

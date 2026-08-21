@@ -40,6 +40,7 @@ Browser
 - 画布项目通过 `/v1/projects` 按项目保存到后端，项目列表只读取摘要，进入画布后再读取完整节点 JSON。
 - 图片、视频和音频二进制不进入项目 JSON；内嵌图片会先发布到 `/public-assets/`，项目只保存素材 URL、任务 ID 和必要元数据。
 - `localStorage` 只保存当前项目 ID、同步时间等轻量客户端状态。旧版 `ai-canvas-projects` 会在首次成功同步后自动迁移并删除。
+- 用户配置的渠道 API Key **不进任何浏览器存储**，只活在 `src/utils/apiKeyVault.js` 的内存里；旧版留在 `api-keys-by-provider` / `apiKey` 的明文会在启动时读入内存并删除。详见 `SECURITY.md`。
 - 项目自动保存失败时保留当前页面内存，不再通过删除旧项目或截断画布来规避浏览器配额。
 
 ## 外部处理器

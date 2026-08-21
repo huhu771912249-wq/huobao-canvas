@@ -3,17 +3,21 @@
  */
 
 import { request, getBaseUrl } from '@/utils'
+import { getApiKey } from '@/utils/apiKeyVault'
 import { getDefaultProvider, getProviderConfig, normalizeProviderKey } from '@/config/providers'
 
+// 流式请求绕过 axios 拦截器，所以这里要自己取 Key —— 但取的是内存保管处，不是 localStorage。
+// The streaming path bypasses the axios interceptor, so it resolves the key itself; it must
+// use the same in-memory vault instead of re-reading clear-text storage.
 const getCurrentApiKey = () => {
-  const currentProvider = normalizeProviderKey(localStorage.getItem('api-provider') || getDefaultProvider())
+  let storedProvider = ''
   try {
-    const apiKeysJson = localStorage.getItem('api-keys-by-provider')
-    const apiKeys = apiKeysJson ? JSON.parse(apiKeysJson) : {}
-    return apiKeys[currentProvider] || getProviderConfig(currentProvider).defaultApiKey || ''
+    storedProvider = localStorage.getItem('api-provider') || ''
   } catch {
-    return getProviderConfig(currentProvider).defaultApiKey || ''
+    storedProvider = ''
   }
+  const currentProvider = normalizeProviderKey(storedProvider || getDefaultProvider())
+  return getApiKey(currentProvider) || getProviderConfig(currentProvider).defaultApiKey || ''
 }
 
 // 对话补全
