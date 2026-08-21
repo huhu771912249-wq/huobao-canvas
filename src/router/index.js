@@ -2,8 +2,9 @@
  * Router configuration | 路由配置
  */
 import { createRouter, createWebHistory } from 'vue-router'
-import { refreshSession } from '@/stores/auth'
+import { currentUser, refreshSession } from '@/stores/auth'
 import { clearDynamicImportRecovery, recoverFromDynamicImportFailure } from './recovery.js'
+import { createSessionProbe, resolveSessionRoute } from './sessionGuard.js'
 import { resolveLegacyCanvasRoute } from '../config/workspaceLaunch.js'
 
 const routes = [
@@ -55,10 +56,16 @@ const router = createRouter({
   routes
 })
 
+// Bounded session probe: navigation must never depend on an unbounded promise.
+// 有界的会话探测：导航不能依赖一个永不 resolve 的 promise。
+const probeSession = createSessionProbe({
+  refreshSession,
+  readCachedUser: () => currentUser.value
+})
+
 router.beforeEach(async (to) => {
-  const authenticated = await refreshSession()
-  if (!to.meta.public && !authenticated) return { name: 'Login', query: { redirect: to.fullPath } }
-  if (to.name === 'Login' && authenticated) return { name: 'Home' }
+  const sessionRoute = resolveSessionRoute(await probeSession(), to)
+  if (sessionRoute !== true) return sessionRoute
   if (to.name === 'Canvas') {
     const legacyTarget = resolveLegacyCanvasRoute({
       id: to.params.id,

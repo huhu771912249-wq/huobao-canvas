@@ -32,9 +32,17 @@ assert.match(videoNodeSource, /taskStage/)
 assert.match(videoNodeSource, /data\.progress !== null/)
 assert.match(videoNodeSource, /progressLabel/)
 
+// Long-running video tasks must stay recoverable: the poll loop may not cut
+// them off after a handful of minutes. It must still terminate though, so the
+// contract is "a generous bound", not "no bound" — the bound itself is checked
+// in pollingBudget.test.mjs.
+// 长任务必须可恢复，轮询不能几分钟就放弃；但也必须有终点，所以契约是"上限足够宽"
+// 而不是"没有上限"，具体数值由 pollingBudget.test.mjs 校验。
 const useApiSource = readFileSync(new URL('../src/hooks/useApi.js', import.meta.url), 'utf8')
 assert.doesNotMatch(useApiSource, /const maxAttempts = 120/)
-assert.match(useApiSource, /while \(true\)/)
+assert.match(useApiSource, /createPollingBudget\(/)
+const { POLL_TIMEOUT_MS } = await import('../src/utils/pollingBudget.js')
+assert.ok(POLL_TIMEOUT_MS >= 60 * 60 * 1000, '视频任务轮询上限必须远宽于十分钟')
 
 const pollingStart = videoNodeSource.indexOf('const startPolling = async')
 const pollingCatch = videoNodeSource.indexOf('} catch (err) {', pollingStart)
