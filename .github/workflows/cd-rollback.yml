@@ -1,0 +1,183 @@
+# 前端回滚 (Frontend CD Rollback)
+#
+# 不可变 release 目录的好处: 回滚就是把软链指回上一个已验证的 release,
+# 不重新构建、不重新上传。目标 release 的 manifest 和校验值会先被重新验证。
+#
+# ROLLBACK.md: 前后端必须成对回退。跑完这个还要跑后端的 Backend CD Rollback。
+name: Frontend CD Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "部署环境 (承载 secrets 与 required reviewers)"
+        type: environment
+        required: true
+      release_id:
+        description: "要回滚到的 release id (必须是服务器上已存在且验证过的)"
+        type: string
+        required: true
+      dry_run:
+        description: "演练: 只验证目标 release, 不切换"
+        type: boolean
+        required: true
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-cd-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    name: rollback ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate release id
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$RELEASE_ID" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+            echo "::error::release_id 只能包含 A-Z a-z 0-9 . _ - (最长 64)"; exit 1
+          fi
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_SSH_PRIVATE_KEY:-}" ] || [ -z "${DEPLOY_SSH_KNOWN_HOSTS:-}" ]; then
+            echo "::error::缺少 DEPLOY_SSH_PRIVATE_KEY 或 DEPLOY_SSH_KNOWN_HOSTS"; exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Fetch the rollback target's manifest
+        id: target
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          APP_ROOT: ${{ secrets.APP_ROOT }}
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER APP_ROOT; do
+            if [ -z "${!name:-}" ]; then echo "::error::缺少 secret $name"; exit 1; fi
+          done
+          port="${DEPLOY_PORT:-22}"
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh_opts=(-i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes
+                    -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+                    -o BatchMode=yes -o ConnectTimeout=15)
+          shq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+          # The manifest in the release directory is the version source of truth
+          # for a directory that deliberately has no .git.
+          ssh "${ssh_opts[@]}" -p "$port" "$target" \
+            "cat $(shq "$APP_ROOT")/releases/$(shq "$RELEASE_ID")/release-manifest.json" \
+            > target-manifest.json
+          cat target-manifest.json
+          node -e '
+            const m = require("./target-manifest.json")
+            const out = ["release_id", "frontend_commit_sha", "backend_commit_sha", "build_time"]
+            for (const key of out) {
+              if (!m[key]) { console.error(`manifest 缺少 ${key}`); process.exit(1) }
+              console.log(`${key}=${m[key]}`)
+            }
+          ' >> "$GITHUB_OUTPUT"
+
+      - name: Roll back
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          APP_ROOT: ${{ secrets.APP_ROOT }}
+          RELOAD_COMMAND: ${{ secrets.RELOAD_COMMAND }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh_opts=(-i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes
+                    -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+                    -o BatchMode=yes -o ConnectTimeout=15)
+          shq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+          remote_env="APP_ROOT=$(shq "$APP_ROOT") RELEASE_ID=$(shq "$RELEASE_ID")"
+          remote_env="$remote_env DRY_RUN=$(shq "$DRY_RUN") RELOAD_COMMAND=$(shq "${RELOAD_COMMAND:-}")"
+          ssh "${ssh_opts[@]}" -p "$port" "$target" "$remote_env bash -s" < scripts/remote_rollback.sh
+
+      - name: Verify the rollback from outside
+        if: ${{ !inputs.dry_run }}
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          HEALTH_URL: ${{ secrets.HEALTH_URL }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          APP_ROOT: ${{ secrets.APP_ROOT }}
+          RELEASE_ID: ${{ inputs.release_id }}
+          FRONTEND_SHA: ${{ steps.target.outputs.frontend_commit_sha }}
+          BACKEND_SHA: ${{ steps.target.outputs.backend_commit_sha }}
+          BUILD_TIME: ${{ steps.target.outputs.build_time }}
+        run: |
+          set -euo pipefail
+          port="${DEPLOY_PORT:-22}"
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh_opts=(-i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes
+                    -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+                    -o BatchMode=yes -o ConnectTimeout=15)
+          shq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+          # We do not have the rolled-back build locally, so pull that release's
+          # index.html down and check the live site serves *its* hashed assets.
+          mkdir -p rollback-target
+          ssh "${ssh_opts[@]}" -p "$port" "$target" \
+            "cat $(shq "$APP_ROOT")/releases/$(shq "$RELEASE_ID")/dist/index.html" \
+            > rollback-target/index.html
+
+          # After a paired rollback the backend reports the old pair again, so the
+          # pairing check is strict here.
+          node scripts/verify-release-health.mjs \
+            --site-url "$SITE_URL" --health-url "$HEALTH_URL" \
+            --index rollback-target/index.html \
+            --release-id "$RELEASE_ID" --frontend-sha "$FRONTEND_SHA" \
+            --backend-sha "$BACKEND_SHA" --build-time "$BUILD_TIME" \
+          || {
+            echo "::warning::静态资源已回滚，但 /health 还没报出目标 release。"
+            echo "::warning::如果后端尚未回滚，这是预期的 —— 请立即跑 Backend CD Rollback，然后重跑本工作流验证。"
+            exit 1
+          }
+
+      - name: Summary
+        if: always()
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          BACKEND_SHA: ${{ steps.target.outputs.backend_commit_sha }}
+          OUTCOME: ${{ job.status }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "## 前端回滚演练完成 — 线上未改动"
+              echo ""
+              echo "目标 \`$RELEASE_ID\` 的 manifest 与产物校验值均已通过。"
+            else
+              echo "## 前端回滚到 \`$RELEASE_ID\` ($OUTCOME)"
+              echo ""
+              echo "**必须成对回滚**: 用 backend_sha \`${BACKEND_SHA:-见目标 manifest}\` 跑 Backend CD Rollback，"
+              echo "否则 \`/health\` 会继续报着已经不在线上的前端 SHA。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,307 @@
+# 前端发布 (Frontend CD)
+#
+# 手动触发。构建产物 -> 不可变 release 目录 -> 原子软链切换 -> 线上读回验证。
+# 详见 docs/cd-pipeline.md。真实主机、路径、域名和凭据只存在于 GitHub
+# Environment 的 secrets 里，本文件只出现名字。
+name: Frontend CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "部署环境 (承载 secrets 与 required reviewers)"
+        type: environment
+        required: true
+      release_id:
+        description: "release id, 前后端必须用同一个 (例: 20260821-01)"
+        type: string
+        required: true
+      backend_sha:
+        description: "配套后端 commit SHA (40 位)"
+        type: string
+        required: true
+      build_time:
+        description: "留空=用当前时间。要两仓 manifest 完全一致时才手填"
+        type: string
+        required: false
+        default: ""
+      dry_run:
+        description: "演练: 只做只读预检, 不上传/不切换"
+        type: boolean
+        required: true
+        default: true
+      require_paired_health:
+        description: "要求 /health 已经报出本次双仓 SHA (后端已发布后再勾)"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-cd-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build release artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      release_id: ${{ steps.inputs.outputs.release_id }}
+      frontend_sha: ${{ steps.inputs.outputs.frontend_sha }}
+      backend_sha: ${{ steps.inputs.outputs.backend_sha }}
+      build_time: ${{ steps.inputs.outputs.build_time }}
+      artifact_sha256: ${{ steps.package.outputs.artifact_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Validate before doing any work, and never interpolate inputs straight
+      # into a shell: everything arrives through env.
+      - name: Validate release inputs
+        id: inputs
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          BACKEND_SHA: ${{ inputs.backend_sha }}
+          BUILD_TIME_INPUT: ${{ inputs.build_time }}
+          FRONTEND_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$RELEASE_ID" | grep -Eq '^[A-Za-z0-9._-]{1,64}$'; then
+            echo "::error::release_id 只能包含 A-Z a-z 0-9 . _ - (最长 64)"; exit 1
+          fi
+          backend_sha="$(printf '%s' "$BACKEND_SHA" | tr '[:upper:]' '[:lower:]')"
+          if ! printf '%s' "$backend_sha" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::backend_sha 必须是 40 位十六进制完整 commit SHA"; exit 1
+          fi
+          build_time="$BUILD_TIME_INPUT"
+          if [ -z "$build_time" ]; then
+            build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          fi
+          {
+            echo "release_id=$RELEASE_ID"
+            echo "frontend_sha=$FRONTEND_SHA"
+            echo "backend_sha=$backend_sha"
+            echo "build_time=$build_time"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # corepack ships with node, so pnpm needs no third-party action and no apt.
+      # This is also the exact command DEPLOYMENT.md documents.
+      - name: Enable pnpm via corepack
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@11.9.0 --activate
+          pnpm --version
+
+      - run: pnpm install --frozen-lockfile
+
+      # The repo's own CI entry point is the release gate. It runs on this exact
+      # commit, so a green run here IS the "CI passed on this commit" evidence.
+      - name: Run the repository CI gate
+        run: pnpm run ci
+
+      - name: Generate release manifest
+        env:
+          RELEASE_ID: ${{ steps.inputs.outputs.release_id }}
+          FRONTEND_COMMIT_SHA: ${{ steps.inputs.outputs.frontend_sha }}
+          BACKEND_COMMIT_SHA: ${{ steps.inputs.outputs.backend_sha }}
+          BUILD_TIME: ${{ steps.inputs.outputs.build_time }}
+        run: |
+          set -euo pipefail
+          mkdir -p staging
+          cp -R dist staging/dist
+          node scripts/generate-release-manifest.mjs --output staging/release-manifest.json
+          cat staging/release-manifest.json
+
+      - name: Package and checksum the release
+        id: package
+        run: |
+          set -euo pipefail
+          # "产物校验值": every file the server will publish is covered, and the
+          # manifest itself is covered too.
+          ( cd staging && find . -type f ! -name SHA256SUMS -print0 | sort -z \
+              | xargs -0 sha256sum > SHA256SUMS )
+          tar -czf release.tar.gz -C staging .
+          artifact_sha256="$(sha256sum release.tar.gz | cut -d' ' -f1)"
+          echo "artifact_sha256=$artifact_sha256" >> "$GITHUB_OUTPUT"
+          echo "files in release: $(wc -l < staging/SHA256SUMS)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-release-${{ steps.inputs.outputs.release_id }}
+          path: release.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Build summary
+        env:
+          RELEASE_ID: ${{ steps.inputs.outputs.release_id }}
+          FRONTEND_SHA: ${{ steps.inputs.outputs.frontend_sha }}
+          BACKEND_SHA: ${{ steps.inputs.outputs.backend_sha }}
+          BUILD_TIME: ${{ steps.inputs.outputs.build_time }}
+          ARTIFACT_SHA256: ${{ steps.package.outputs.artifact_sha256 }}
+        run: |
+          {
+            echo "## 前端 release 已构建"
+            echo ""
+            echo "| 字段 | 值 |"
+            echo "| --- | --- |"
+            echo "| release_id | \`$RELEASE_ID\` |"
+            echo "| frontend_commit_sha | \`$FRONTEND_SHA\` |"
+            echo "| backend_commit_sha | \`$BACKEND_SHA\` |"
+            echo "| build_time | \`$BUILD_TIME\` |"
+            echo "| artifact sha256 | \`$ARTIFACT_SHA256\` |"
+            echo ""
+            echo "### 下一步"
+            echo "用**完全相同的 release_id 和 build_time** 跑后端 CD，"
+            echo "\`/health\` 才会报出本次双仓 SHA。把上面的 build_time 原样填进后端的 \`build_time\` 输入。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: deploy to ${{ inputs.environment }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Environment protection lives here: required reviewers, wait timers and the
+    # deploy secrets are all attached to this environment.
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-release-${{ needs.build.outputs.release_id }}
+
+      - name: Verify the artifact survived the round trip
+        env:
+          EXPECTED_SHA256: ${{ needs.build.outputs.artifact_sha256 }}
+        run: |
+          set -euo pipefail
+          echo "$EXPECTED_SHA256  release.tar.gz" | sha256sum -c -
+          mkdir -p artifact && tar -xzf release.tar.gz -C artifact
+          test -f artifact/dist/index.html
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_SSH_PRIVATE_KEY:-}" ] || [ -z "${DEPLOY_SSH_KNOWN_HOSTS:-}" ]; then
+            echo "::error::缺少 DEPLOY_SSH_PRIVATE_KEY 或 DEPLOY_SSH_KNOWN_HOSTS，见 docs/cd-pipeline.md"; exit 1
+          fi
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Pinned host keys: StrictHostKeyChecking stays on, no blind trust.
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy
+        id: deploy
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          APP_ROOT: ${{ secrets.APP_ROOT }}
+          RELOAD_COMMAND: ${{ secrets.RELOAD_COMMAND }}
+          RELEASE_ID: ${{ needs.build.outputs.release_id }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: |
+          set -euo pipefail
+          for name in DEPLOY_HOST DEPLOY_USER APP_ROOT; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::缺少 secret $name，见 docs/cd-pipeline.md"; exit 1
+            fi
+          done
+          port="${DEPLOY_PORT:-22}"
+          target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh_opts=(-i "$HOME/.ssh/deploy_key" -o IdentitiesOnly=yes
+                    -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+                    -o BatchMode=yes -o ConnectTimeout=15)
+
+          # POSIX-safe single quoting; the remote login shell is not assumed to be bash.
+          shq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+          remote_tarball=""
+          if [ "$DRY_RUN" = "0" ]; then
+            staging="$(ssh "${ssh_opts[@]}" -p "$port" "$target" 'mktemp -d')"
+            scp "${ssh_opts[@]}" -P "$port" release.tar.gz "$target:$staging/release.tar.gz"
+            remote_tarball="$staging/release.tar.gz"
+            echo "artifact uploaded"
+          fi
+
+          # Record what we are about to replace, so a failed health check has a
+          # concrete rollback target to name.
+          previous="$(ssh "${ssh_opts[@]}" -p "$port" "$target" \
+            "if [ -L $(shq "$APP_ROOT")/current ]; then basename \"\$(readlink -f $(shq "$APP_ROOT")/current)\"; fi" || true)"
+          echo "previous_release=${previous}" >> "$GITHUB_OUTPUT"
+          echo "previous release: ${previous:-<none>}"
+
+          remote_env="APP_ROOT=$(shq "$APP_ROOT") RELEASE_ID=$(shq "$RELEASE_ID")"
+          remote_env="$remote_env DRY_RUN=$(shq "$DRY_RUN") TARBALL=$(shq "$remote_tarball")"
+          remote_env="$remote_env RELOAD_COMMAND=$(shq "${RELOAD_COMMAND:-}")"
+
+          # The server-side script is streamed over stdin; nothing is left behind.
+          ssh "${ssh_opts[@]}" -p "$port" "$target" "$remote_env bash -s" < scripts/remote_deploy.sh
+
+      - name: Verify the release from outside
+        if: ${{ !inputs.dry_run }}
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          HEALTH_URL: ${{ secrets.HEALTH_URL }}
+          RELEASE_ID: ${{ needs.build.outputs.release_id }}
+          FRONTEND_SHA: ${{ needs.build.outputs.frontend_sha }}
+          BACKEND_SHA: ${{ needs.build.outputs.backend_sha }}
+          BUILD_TIME: ${{ needs.build.outputs.build_time }}
+          REQUIRE_PAIRED_HEALTH: ${{ inputs.require_paired_health }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SITE_URL:-}" ] || [ -z "${HEALTH_URL:-}" ]; then
+            echo "::error::缺少 SITE_URL 或 HEALTH_URL secret"; exit 1
+          fi
+          args=(--site-url "$SITE_URL" --health-url "$HEALTH_URL"
+                --index artifact/dist/index.html
+                --release-id "$RELEASE_ID" --frontend-sha "$FRONTEND_SHA"
+                --backend-sha "$BACKEND_SHA" --build-time "$BUILD_TIME")
+          if [ "$REQUIRE_PAIRED_HEALTH" = "true" ]; then
+            args+=(--require-paired-health)
+          fi
+          node scripts/verify-release-health.mjs "${args[@]}"
+
+      - name: Summary
+        if: always()
+        env:
+          RELEASE_ID: ${{ needs.build.outputs.release_id }}
+          PREVIOUS_RELEASE: ${{ steps.deploy.outputs.previous_release }}
+          OUTCOME: ${{ job.status }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          {
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "## 前端演练完成 (dry run) — 线上未改动"
+              echo ""
+              echo "预检通过说明 SSH、目录结构和 release id 都没问题。"
+              echo "取消勾选 \`dry_run\` 再跑一次即可真正发布。"
+            elif [ "$OUTCOME" = "success" ]; then
+              echo "## 前端 \`$RELEASE_ID\` 已上线并通过线上读回"
+              echo ""
+              echo "接着用同一个 release_id 跑后端 CD，\`/health\` 才会报出本次双仓 SHA。"
+            else
+              echo "## 前端 \`$RELEASE_ID\` 发布失败"
+              echo ""
+              echo "上一个 release: \`${PREVIOUS_RELEASE:-未知}\`"
+              echo ""
+              echo "排查见 docs/cd-pipeline.md。需要回滚就跑 **Frontend CD Rollback**，"
+              echo "release_id 填 \`${PREVIOUS_RELEASE:-<上一个可用 release>}\`，"
+              echo "并按 ROLLBACK.md 成对回滚后端。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
