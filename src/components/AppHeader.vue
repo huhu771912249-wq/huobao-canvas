@@ -38,6 +38,9 @@
       
       <!-- Right slot | 右侧插槽 -->
       <slot name="right"></slot>
+
+      <!-- Sign out | 退出登录 -->
+      <AccountMenu />
     </div>
   </header>
 </template>
@@ -54,6 +57,7 @@ import {
   LogoGithub
 } from '@vicons/ionicons5'
 import { isDark, toggleTheme } from '../stores/theme'
+import AccountMenu from './AccountMenu.vue'
 
 // Props | 属性
 defineProps({

@@ -41,6 +41,7 @@
           <button type="button" class="topbar-button" aria-label="打开 API 设置" @click="$emit('open-settings')">
             <n-icon :size="19"><SettingsOutline /></n-icon>
           </button>
+          <AccountMenu />
         </div>
       </header>
 
@@ -84,6 +85,7 @@ import {
 import { buildWorkspaceNavigation } from '../../utils/workspaceUi'
 import ServiceStatusPill from './ServiceStatusPill.vue'
 import ComputeStatusIndicator from '../ComputeStatusIndicator.vue'
+import AccountMenu from '../AccountMenu.vue'
 
 defineProps({
   activeSection: {

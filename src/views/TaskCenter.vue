@@ -4,6 +4,7 @@
     project-title="任务中心"
     :service-status="serviceStatus"
     @navigate="handleWorkspaceNavigate"
+    @open-status="refreshServiceHealth"
     @open-tasks="loadTasks"
   >
     <template #main>
@@ -40,9 +41,11 @@ import WorkspaceShell from '../components/workspace/WorkspaceShell.vue'
 import TaskRail from '../components/workspace/TaskRail.vue'
 import { listTaskCenterTasks } from '../api/taskCenter.js'
 import { resolveTaskDetailsTarget, withTaskCenterActions } from '../utils/taskCenter.js'
+import { useServiceStatus } from '../stores/serviceHealth.js'
 
 const router = useRouter()
-const serviceStatus = { label: '服务已连接', tone: 'success' }
+// Real `GET /health` probe shared with every other view; never a hardcoded "已连接".
+const { serviceStatus, refreshServiceHealth } = useServiceStatus()
 const tasks = ref([])
 const loading = ref(false)
 const taskLoadError = ref('')
@@ -55,6 +58,7 @@ const taskSourceLabels = {
 
 const loadTasks = async () => {
   if (loading.value) return
+  void refreshServiceHealth()
   loading.value = true
   taskLoadError.value = ''
   try {

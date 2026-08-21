@@ -6,6 +6,7 @@ export const NODE_FOOTPRINTS = Object.freeze({
   image: { width: 280, height: 360 },
   videoConfig: { width: 560, height: 760 },
   video: { width: 400, height: 360 },
+  videoBatch: { width: 520, height: 560 },
   videoGif: { width: 460, height: 520 },
   textOverlay: { width: 520, height: 620 },
   watermarkEditor: { width: 420, height: 420 },
