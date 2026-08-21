@@ -79,6 +79,17 @@ export const buildVideoTaskStatusUrl = (endpoint = '/videos', taskId = '') => {
   return `${normalizedEndpoint}/${encodedTask}`
 }
 
+/**
+ * 取消端点由状态端点派生：后端是 POST /v1/video/task/{id}/cancel。
+ * 复用 buildVideoTaskStatusUrl 是为了让 {taskId} 占位符、尾斜杠和 URL 编码
+ * 只有一处实现，不会两边跑偏。
+ */
+export const buildVideoTaskCancelUrl = (endpoint = '/videos', taskId = '') => {
+  const statusUrl = buildVideoTaskStatusUrl(endpoint, taskId)
+  if (!String(taskId || '').trim()) return statusUrl
+  return `${statusUrl.replace(/\/$/, '')}/cancel`
+}
+
 export const extractVideoUrl = (result = {}, adaptedResult = {}) => {
   const data = result?.data
   const firstDataItem = Array.isArray(data) ? data[0] : null

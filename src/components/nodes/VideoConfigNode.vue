@@ -1289,6 +1289,19 @@ const handleGenerate = async () => {
   const nodeY = currentNode?.position?.y || 0
 
   const outputNodeType = isBatchCapable.value ? 'videoBatch' : 'video'
+  // 这一刻就是「用时」的起点，也是把上一轮的队列/耗时残留清干净的地方。
+  const runStartedAt = Date.now()
+  const runStatusReset = {
+    startedAt: runStartedAt,
+    durationSeconds: null,
+    cancelledAt: null,
+    queuePosition: null,
+    etaSeconds: null,
+    currentSegment: null,
+    totalSegments: null,
+    output_width: outputWidth.value,
+    output_height: outputHeight.value
+  }
   let videoNodeId = findConnectedEmptyOutputNode(outputNodeType)
   if (videoNodeId) {
     updateNode(videoNodeId, {
@@ -1303,6 +1316,7 @@ const handleGenerate = async () => {
       attempt: 0,
       qualityProfile: qualityProfile.value,
       targetResolution: qualityProfile.value.label,
+      ...runStatusReset,
       label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...'
     })
   } else {
@@ -1317,6 +1331,7 @@ const handleGenerate = async () => {
       outputFormats: isBatchCapable.value && localGenerateGif.value ? ['mp4', 'gif'] : ['mp4'],
       qualityProfile: qualityProfile.value,
       targetResolution: qualityProfile.value.label,
+      ...runStatusReset,
       label: isBatchCapable.value ? '批量视频生成中...' : '视频生成中...'
     })
 
@@ -1459,6 +1474,7 @@ const handleGenerate = async () => {
         zipUrl: result?.zip_url || '',
         outputFormats: result?.output_formats || params.output_formats,
         loading: false,
+        durationSeconds: Math.max(0, Math.round((Date.now() - runStartedAt) / 1000)),
         label: isBatchCapable.value ? '批量视频结果' : (verified1080p ? '高质量 1080p 视频' : '视频结果'),
         model: localModel.value,
         ...qualityMetadata,
@@ -1584,6 +1600,22 @@ watch(() => props.data, () => {
     updateNodeInternals(props.id)
   })
 }, { deep: true })
+
+// Watch for retry requests from the output node | 监听输出节点发来的重试请求
+// 失败的视频节点上有「重试」按钮，但参数全在这个配置节点里，所以重试由输出节点
+// 打一个标记回来，这里原样重跑一次 handleGenerate —— 用户不用重填任何参数。
+// 故意不加 immediate：retryRequest 会随画布一起持久化，刷新页面时不能自动重发。
+watch(
+  () => props.data?.retryRequest?.at,
+  (requestedAt) => {
+    if (!requestedAt || isGenerating.value) return
+    // 先清标记，避免同一次请求被重复消费 | Clear first to prevent re-triggering
+    updateNode(props.id, { retryRequest: null })
+    setTimeout(() => {
+      handleGenerate()
+    }, 100)
+  }
+)
 
 // Watch for auto-execute flag | 监听自动执行标志
 watch(

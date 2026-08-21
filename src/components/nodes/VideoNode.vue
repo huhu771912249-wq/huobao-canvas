@@ -2,10 +2,10 @@
   <!-- Video node wrapper | 视频节点包裹层 -->
   <div class="video-node-wrapper relative" @mouseenter="showActions = true; showHandleMenu = true" @mouseleave="showActions = false; showHandleMenu = false">
     <!-- Video node | 视频节点 -->
-    <div 
+    <div
       class="video-node bg-[var(--bg-secondary)] rounded-xl border w-[400px] relative transition-all duration-200"
-      :class="data.selected ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20' : 'border border-[var(--border-color)]'"
-      
+      :class="nodeShellClass"
+
     >
     <!-- Header | 头部 -->
     <div class="px-3 py-2 border-b border-[var(--border-color)]">
@@ -66,20 +66,18 @@
         <div class="relative z-10 w-4/5 text-center text-white">
           <div class="text-sm font-medium">{{ data.taskId ? taskStage : '任务创建中…' }}</div>
           <div v-if="data.status" class="mt-1 text-xs text-white/80">后端状态：{{ data.status }}</div>
-          <div v-if="data.progress !== null && data.progress !== undefined" class="mt-3">
-            <div class="mb-1 flex justify-between text-xs"><span>{{ progressLabel }}</span><span>{{ Math.round(data.progress) }}%</span></div>
-            <div class="h-1.5 overflow-hidden rounded-full bg-white/25"><div class="h-full rounded-full bg-white transition-all" :style="{ width: `${Math.max(0, Math.min(100, data.progress))}%` }"></div></div>
-          </div>
+          <!-- 百分比条统一在下方状态卡里画，这里只交代进度是否可知 -->
+          <div v-if="data.progress !== null && data.progress !== undefined" class="mt-2 text-xs text-white/80">{{ progressLabel }}</div>
           <div v-else class="mt-2 text-xs text-white/75">上游暂未提供百分比，正在持续查询阶段状态</div>
         </div>
       </div>
       <!-- Error state | 错误状态 -->
-      <div 
+      <div
         v-else-if="data.error"
         class="aspect-video rounded-lg bg-red-50 dark:bg-red-900/20 flex flex-col items-center justify-center gap-2 border border-red-200 dark:border-red-800"
       >
         <n-icon :size="32" class="text-red-500"><CloseCircleOutline /></n-icon>
-        <span class="text-sm text-red-500">{{ data.error }}</span>
+        <span class="text-sm text-red-500">生成失败</span>
       </div>
       <!-- Video preview | 视频预览 -->
       <div 
@@ -113,6 +111,69 @@
         />
       </div>
       
+      <!-- Task status card | 任务状态卡片 -->
+      <!-- 排队中 / 生成中 / 失败 / 已取消 / 完成 五态共用一张卡：
+           后端字段缺失时对应的行整行不渲染，不会出现 NaN 或「前面还有 undefined 个」。 -->
+      <div
+        v-if="taskView.state !== 'idle'"
+        data-testid="video-task-status"
+        class="mt-3 space-y-2 rounded-lg border p-2.5"
+        :class="statusCardClass"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <span data-testid="video-task-badge" class="rounded-full px-2 py-0.5 text-[11px] font-medium" :class="badgeClass">
+            {{ taskView.badgeLabel }}
+          </span>
+          <div class="nodrag flex items-center gap-1.5">
+            <button
+              v-if="taskView.canCancel"
+              data-testid="video-task-cancel"
+              type="button"
+              :disabled="cancelling"
+              class="rounded-md border border-[var(--border-color)] px-2 py-1 text-[11px] text-[var(--text-secondary)] transition-colors hover:border-[var(--danger-color)] hover:text-[var(--danger-color)] disabled:cursor-not-allowed disabled:opacity-50"
+              @click="handleCancel"
+            >
+              {{ cancelling ? '取消中…' : '取消任务' }}
+            </button>
+            <button
+              v-if="taskView.canRetry"
+              data-testid="video-task-retry"
+              type="button"
+              class="rounded-md bg-[var(--accent-color)] px-2 py-1 text-[11px] font-medium text-white transition-colors hover:bg-[var(--accent-hover)]"
+              @click="handleRetry"
+            >
+              重试
+            </button>
+          </div>
+        </div>
+
+        <div v-if="taskView.aheadLabel || taskView.segmentLabel" class="flex flex-wrap gap-x-3 text-xs text-[var(--text-primary)]">
+          <span v-if="taskView.aheadLabel" data-testid="video-task-ahead">{{ taskView.aheadLabel }}</span>
+          <span v-if="taskView.segmentLabel" data-testid="video-task-segment">{{ taskView.segmentLabel }}</span>
+        </div>
+
+        <div v-if="taskView.showProgress" class="space-y-1">
+          <div class="h-1.5 overflow-hidden rounded-full bg-[var(--bg-tertiary)]">
+            <div class="h-full rounded-full transition-all" :class="progressBarClass" :style="{ width: `${taskView.progressPercent}%` }"></div>
+          </div>
+          <div class="text-right text-[10px] text-[var(--text-secondary)]">{{ taskView.progressPercent }}%</div>
+        </div>
+
+        <div v-if="taskView.etaLabel" data-testid="video-task-eta" class="text-xs text-[var(--text-secondary)]">
+          {{ taskView.etaLabel }}
+        </div>
+        <div v-if="taskView.durationLabel" data-testid="video-task-duration" class="text-xs text-[var(--text-secondary)]">
+          用时 {{ taskView.durationLabel }}
+        </div>
+        <div v-if="taskView.errorText" data-testid="video-task-error" class="text-xs leading-relaxed text-[var(--danger-color)]">
+          {{ taskView.errorText }}
+        </div>
+        <div v-if="taskView.canRetry" class="text-[11px] text-[var(--text-secondary)]">参数已保留，重试不用重填</div>
+        <div v-if="taskView.paramsSummary" data-testid="video-task-params" class="text-[11px] text-[var(--text-secondary)]">
+          {{ taskView.paramsSummary }}
+        </div>
+      </div>
+
       <!-- Duration info | 时长信息 -->
       <div v-if="data.duration" class="mt-2 text-xs text-[var(--text-secondary)]">
         时长: {{ formatDuration(data.duration) }}
@@ -163,6 +224,7 @@ import { useVideoGeneration } from '../../hooks/useApi'
 import NodeHandleMenu from './NodeHandleMenu.vue'
 import { startAssetDownload } from '../../utils/assetDownload'
 import { extractVideoCompletionMetadata, extractVideoTaskProgress, isVerifiedTargetOutput } from '../../utils/videoTaskStatus'
+import { describeVideoNodeTask } from '../../utils/videoQueueState'
 
 const props = defineProps({
   id: String,
@@ -173,19 +235,60 @@ const props = defineProps({
 const { updateNodeInternals } = useVueFlow()
 
 // Get pollVideoTask from useVideoGeneration | 从 useVideoGeneration 获取轮询函数
-const { pollVideoTask } = useVideoGeneration()
+const { pollVideoTask, cancelVideoTask } = useVideoGeneration()
 
 // Hover state | 悬浮状态
 const showActions = ref(false)
 const showHandleMenu = ref(false)
 
-const isGeneratedOutput = computed(() => {
-  return edges.value.some(edge => {
-    if (edge.target !== props.id) return false
+// 上游的视频配置节点：重试要把参数交还给它，因为参数全在那边。
+const sourceConfigNodeId = computed(() => {
+  for (const edge of edges.value) {
+    if (edge.target !== props.id) continue
     const sourceNode = nodes.value.find(node => node.id === edge.source)
-    return sourceNode?.type === 'videoConfig'
-  })
+    if (sourceNode?.type === 'videoConfig') return sourceNode.id
+  }
+  return null
 })
+
+const isGeneratedOutput = computed(() => Boolean(sourceConfigNodeId.value))
+
+// 画布节点的四态（外加取消）全部由纯函数推导，组件只挑 class。
+const taskView = computed(() => describeVideoNodeTask(props.data || {}))
+
+const nodeShellClass = computed(() => {
+  // 失败卡片用 danger 边框，但选中态仍要看得出来。
+  if (taskView.value.state === 'failed') {
+    return props.data?.selected
+      ? 'border border-[var(--danger-color)] shadow-lg shadow-red-500/20'
+      : 'border border-[var(--danger-color)]'
+  }
+  return props.data?.selected
+    ? 'border-1 border-blue-500 shadow-lg shadow-blue-500/20'
+    : 'border border-[var(--border-color)]'
+})
+
+const statusCardClass = computed(() => ({
+  queued: 'border-amber-400/40 bg-amber-400/5',
+  generating: 'border-[var(--border-color)] bg-[var(--bg-tertiary)]/40',
+  failed: 'border-[var(--danger-color)]/50 bg-red-500/5',
+  cancelled: 'border-[var(--border-color)] bg-[var(--bg-tertiary)]/40',
+  completed: 'border-emerald-400/40 bg-emerald-400/5'
+}[taskView.value.state] || 'border-[var(--border-color)]'))
+
+const badgeClass = computed(() => ({
+  queued: 'bg-amber-400/15 text-amber-500',
+  generating: 'bg-blue-500/15 text-blue-400',
+  failed: 'bg-red-500/15 text-[var(--danger-color)]',
+  cancelled: 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]',
+  completed: 'bg-emerald-400/15 text-emerald-400'
+}[taskView.value.state] || 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'))
+
+const progressBarClass = computed(() => ({
+  queued: 'bg-amber-400',
+  generating: 'bg-[var(--accent-color)]',
+  completed: 'bg-emerald-400'
+}[taskView.value.state] || 'bg-[var(--accent-color)]'))
 
 // Label editing state | Label 编辑状态
 const isEditingLabel = ref(false)
@@ -217,25 +320,42 @@ onMounted(() => {
   }
 })
 
+// 用户点「取消任务」时中止当前轮询，不必再等最多一个轮询间隔。
+let pollAbortController = null
+
+// 生成耗时：以配置节点按下「生成」的时刻为起点。没有起点就返回 null，完成态不显示用时。
+const elapsedSecondsSinceStart = () => {
+  const startedAt = Number(props.data?.startedAt)
+  if (!Number.isFinite(startedAt) || startedAt <= 0) return null
+  return Math.max(0, Math.round((Date.now() - startedAt) / 1000))
+}
+
 // Start polling for video result | 开始轮询获取视频结果
 const startPolling = async (taskId) => {
   if (isPolling.value) return
 
   isPolling.value = true
   updateNode(props.id, { error: null, pollingInterrupted: false })
+  const controller = typeof AbortController === 'function' ? new AbortController() : null
+  pollAbortController = controller
 
   try {
     const result = await pollVideoTask(taskId, (attempt, percentage, progressInfo) => {
-      // 更新进度
+      // 更新进度 | queue_position / eta_seconds 缺失时写回 null，
+      // describeVideoNodeTask 会据此退回「生成中」而不是编一个队列位置。
       updateNode(props.id, {
         progress: percentage,
         attempt,
         status: progressInfo?.status || props.data?.status || 'submitted',
         currentStep: progressInfo?.stage || '',
         progressScope: progressInfo?.progress_scope || '',
-        upscale_status: progressInfo?.upscale_status || props.data?.upscale_status || ''
+        upscale_status: progressInfo?.upscale_status || props.data?.upscale_status || '',
+        queuePosition: progressInfo?.queuePosition ?? null,
+        etaSeconds: progressInfo?.etaSeconds ?? null,
+        currentSegment: progressInfo?.currentSegment ?? null,
+        totalSegments: progressInfo?.totalSegments ?? null
       })
-    })
+    }, { signal: controller?.signal })
     const completion = extractVideoCompletionMetadata(result)
     const verified1080p = isVerifiedTargetOutput(completion, props.data?.qualityProfile || {})
     // 轮询成功，更新视频节点
@@ -247,12 +367,17 @@ const startPolling = async (taskId) => {
       upscale_status: completion.upscale_status,
       actual_width: completion.actual_width,
       actual_height: completion.actual_height,
+      durationSeconds: elapsedSecondsSinceStart(),
+      queuePosition: null,
+      etaSeconds: null,
       label: verified1080p ? '高质量 1080p 视频' : '视频结果',
       taskId: null  // 清除 taskId
     })
     window.$message?.success('视频生成成功')
   } catch (err) {
-    if (err?.videoTaskTerminal) {
+    if (err?.videoTaskCancelled) {
+      // 取消的收尾在 handleCancel 里已经写过了，这里不要再覆盖节点状态。
+    } else if (err?.videoTaskTerminal) {
       updateNode(props.id, {
         loading: false,
         error: err.message || '生成失败',
@@ -274,7 +399,70 @@ const startPolling = async (taskId) => {
     }
   } finally {
     isPolling.value = false
+    if (pollAbortController === controller) pollAbortController = null
   }
+}
+
+// Cancel the running task | 取消正在跑的任务
+const cancelling = ref(false)
+const handleCancel = async () => {
+  const taskId = props.data?.taskId
+  if (!taskId || cancelling.value) return
+  cancelling.value = true
+  try {
+    await cancelVideoTask(taskId)
+    pollAbortController?.abort()
+    updateNode(props.id, {
+      loading: false,
+      taskId: null,
+      error: null,
+      progress: null,
+      currentStep: '',
+      status: 'cancelled',
+      cancelledAt: Date.now(),
+      queuePosition: null,
+      etaSeconds: null,
+      currentSegment: null,
+      totalSegments: null,
+      pollingInterrupted: false,
+      label: '已取消'
+    })
+    window.$message?.success('任务已取消')
+  } catch (err) {
+    // 后端可能已经跑完或已经取消过；这时报错但不要把节点擦成取消态。
+    window.$message?.error(err?.message || '取消失败，任务可能已经开始或已经结束')
+  } finally {
+    cancelling.value = false
+  }
+}
+
+// Retry a failed or cancelled task | 重试失败或已取消的任务
+// 参数全在上游配置节点里，所以重试就是把这个输出节点擦回空闲态再请上游重发一次，
+// 上游的 findConnectedEmptyOutputNode 会复用这个节点而不是另开一个。
+const handleRetry = () => {
+  const configNodeId = sourceConfigNodeId.value
+  if (!configNodeId) {
+    window.$message?.warning('找不到上游的视频生成节点，请在生成节点里重新发起')
+    return
+  }
+  updateNode(props.id, {
+    url: '',
+    taskId: null,
+    error: null,
+    loading: false,
+    progress: null,
+    attempt: 0,
+    status: '',
+    currentStep: '',
+    cancelledAt: null,
+    durationSeconds: null,
+    queuePosition: null,
+    etaSeconds: null,
+    currentSegment: null,
+    totalSegments: null,
+    pollingInterrupted: false
+  })
+  updateNode(configNodeId, { retryRequest: { outputNodeId: props.id, at: Date.now() } })
 }
 
 // Handle menu select | 处理菜单选择
