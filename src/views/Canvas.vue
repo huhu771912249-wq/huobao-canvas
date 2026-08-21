@@ -625,6 +625,7 @@ const tools = [
   { id: 'watermarkEditor', name: '水印与素材编辑', icon: ImageOutline, action: () => addNewNode('watermarkEditor') },
   { id: 'materialExport', name: '素材导出', icon: DownloadOutline, action: () => addNewNode('materialExport') },
   { id: 'videoConfig', name: '视频生成', icon: VideocamOutline, action: () => addNewNode('videoConfig') },
+  { id: 'videoBatch', name: '批量视频结果', icon: VideocamOutline, action: () => addNewNode('videoBatch') },
   { id: 'undo', name: '撤销', icon: ArrowUndoOutline, action: () => undo(), disabled: () => !canUndo() },
   { id: 'redo', name: '重做', icon: ArrowRedoOutline, action: () => redo(), disabled: () => !canRedo() }
 ]
@@ -643,6 +644,7 @@ const nodeTypeOptions = [
   { type: 'watermarkEditor', name: '水印与素材编辑', icon: ImageOutline, color: '#2dd4bf' },
   { type: 'materialExport', name: '素材导出', icon: DownloadOutline, color: '#10b981' },
   { type: 'videoConfig', name: '视频生成配置', icon: VideocamOutline, color: '#f59e0b' },
+  { type: 'videoBatch', name: '批量视频结果', icon: VideocamOutline, color: '#34d399' },
   { type: 'image', name: '图片节点', icon: ImageOutline, color: '#8b5cf6' },
   { type: 'video', name: '视频节点', icon: VideocamOutline, color: '#ef4444' }
 ]

@@ -203,6 +203,23 @@ export const VIDEO_MODELS = [
         defaultParams: { ratio: '16:9', duration: 2 }
     },
     {
+        // 后端 `_start_scail2_generation`：ratio 只接受 9:16 / 16:9，时长 1–5 秒（17/33/49/65/81 帧）
+        label: 'SCAIL-2 动作迁移（云端｜参考图 + 驱动视频）',
+        key: 'scail2-action-transfer',
+        provider: ['local-material'],
+        type: 'i2v',
+        tips: '连接一张参考角色图与中文提示词，再在节点内选择驱动视频；输出为四个广告尺寸的批量结果。',
+        ratios: ['9:16', '16:9'],
+        durs: [
+            { label: '1 秒', key: 1 },
+            { label: '2 秒', key: 2 },
+            { label: '3 秒', key: 3 },
+            { label: '4 秒', key: 4 },
+            { label: '5 秒', key: 5 }
+        ],
+        defaultParams: { ratio: '9:16', duration: 5 }
+    },
+    {
         label: 'FRW 视频',
         key: 'frw-video',
         provider: ['local-material'],

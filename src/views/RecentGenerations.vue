@@ -4,6 +4,7 @@
     project-title="最近生成"
     :service-status="serviceStatus"
     @navigate="handleWorkspaceNavigate"
+    @open-status="refreshServiceHealth"
     @open-tasks="router.push(resolveWorkspaceNavigationTarget('tasks'))"
   >
     <template #main>
@@ -91,8 +92,11 @@ import { listRecentGenerations } from '../api/recentGenerations.js'
 import { createProject, initProjectsStore } from '../stores/projects.js'
 import { buildRecentImageCanvas, formatRecentAssetSize } from '../utils/recentGenerations.js'
 import { resolveWorkspaceNavigationTarget } from '../config/workspaceLaunch.js'
+import { useServiceStatus } from '../stores/serviceHealth.js'
 
 const router = useRouter()
+// Real `GET /health` probe shared with every other view; never a hardcoded "已连接".
+const { serviceStatus, refreshServiceHealth } = useServiceStatus()
 const filters = [
   { label: '全部', value: '' },
   { label: '图片', value: 'image' },
@@ -100,13 +104,13 @@ const filters = [
   { label: 'GIF', value: 'gif' },
   { label: '音频', value: 'audio' }
 ]
-const serviceStatus = { label: '服务已连接', tone: 'success' }
 const assets = ref([])
 const activeType = ref('')
 const loading = ref(false)
 const error = ref('')
 
 const loadAssets = async () => {
+  void refreshServiceHealth()
   loading.value = true
   error.value = ''
   try {
