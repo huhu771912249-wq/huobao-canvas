@@ -86,8 +86,16 @@ await assert.rejects(
 )
 
 // --- wiring | 页面接线 ---
+//
+// The store half of this tail moved to tests/component/serviceHealth.spec.mjs: the
+// "exactly one window.setInterval", "subscribers += 1" and "document.hidden" greps are
+// now asserted against the running store (N subscribers → one probe loop, refcounted
+// teardown, hidden tab does not probe).
+//
+// What is left below is D 类接线 and still waits for batch 5: proving that TaskCenter.vue
+// and RecentGenerations.vue consume the shared probe instead of rolling their own means
+// mounting both views.
 
-const store = readSource('src/stores/serviceHealth.js')
 const taskCenter = readSource('src/views/TaskCenter.vue')
 const recent = readSource('src/views/RecentGenerations.vue')
 
@@ -104,14 +112,5 @@ for (const [name, source] of [['TaskCenter.vue', taskCenter], ['RecentGeneration
     `${name} 不得自建轮询循环，必须复用共享探测`
   )
 }
-
-// One shared, reference-counted loop for the whole app — not a new per-view interval.
-assert.equal(
-  (store.match(/window\.setInterval\(/g) || []).length,
-  1,
-  '服务健康探测只允许存在一个共享定时器'
-)
-assert.match(store, /subscribers \+= 1/)
-assert.match(store, /document\.hidden/, '标签页隐藏时不应继续探测')
 
 console.log('serviceHealth.test.mjs passed')

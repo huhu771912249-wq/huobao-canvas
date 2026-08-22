@@ -14,25 +14,10 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 
 // A hung backend must not be able to freeze navigation for hours.
 // 后端挂起不能让导航冻结数小时。
-const requestSource = read('../src/utils/request.js')
-const defaultTimeout = Number(requestSource.match(/DEFAULT_REQUEST_TIMEOUT_MS\s*=\s*(\d+)/)?.[1])
-assert.ok(Number.isFinite(defaultTimeout), 'request.js must name its default timeout')
-assert.ok(defaultTimeout >= 30000, `默认超时 ${defaultTimeout}ms 过短，会误伤正常请求`)
-assert.ok(defaultTimeout <= 300000, `默认超时 ${defaultTimeout}ms 过长，后端挂起时界面会长时间无响应`)
-assert.match(requestSource, /timeout:\s*DEFAULT_REQUEST_TIMEOUT_MS/)
-assert.doesNotMatch(requestSource, /timeout:\s*30000000/, '默认超时不得回退成 8 小时量级的巨值')
-
-// Calls that legitimately run long must keep their own per-request override.
-// 确实耗时的调用必须保留各自的超时覆盖。
-for (const [path, expected] of [
-  ['../src/api/materialInput.js', /timeout:\s*15 \* 60 \* 1000/],
-  ['../src/api/mediaComposition.js', /timeout:\s*15 \* 60 \* 1000/],
-  ['../src/api/videoTextOverlay.js', /timeout:\s*15 \* 60 \* 1000/],
-  ['../src/api/gifEditor.js', /timeout:\s*15 \* 60 \* 1000/],
-  ['../src/api/studioDocument.js', /timeout:\s*120000/]
-]) {
-  assert.match(read(path), expected, `${path} 必须保留自己的长超时覆盖`)
-}
+//
+// 超时那一段搬到 tests/component/sessionGuard.spec.mjs：默认超时是从真正发出去的请求上量
+// 到的（证明常量确实交给了 axios.create），五个长任务接口的逐请求覆盖也是量出来的，并且
+// 多了一条老断言够不到的 —— 长超时不得泄漏到实例上影响下一个普通请求。
 
 assert.ok(SESSION_PROBE_TIMEOUT_MS > 0 && SESSION_PROBE_TIMEOUT_MS <= 15000)
 assert.ok(SESSION_PROBE_COOLDOWN_MS > 0)
@@ -166,6 +151,8 @@ assert.equal(resolveSessionRoute(SESSION_ANONYMOUS, login), true)
 assert.equal(resolveSessionRoute(SESSION_UNKNOWN, login), true, '登录页必须始终可达，否则用户无法自救')
 
 // 6. The router actually uses the bounded probe. | 路由确实接上了有界探测。
+//    D 类接线，留到 batch 5：真断言要把 src/router/index.js 整个路由（含全部懒加载视图）
+//    驱动起来跑一次导航，成本远超本批。
 const routerSource = read('../src/router/index.js')
 assert.match(routerSource, /createSessionProbe/)
 assert.match(routerSource, /resolveSessionRoute/)

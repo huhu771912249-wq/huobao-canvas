@@ -168,11 +168,14 @@ assert.deepEqual(
 const root = fileURLToPath(new URL('../', import.meta.url))
 const read = (path) => readFileSync(new URL(path, `file://${root}/`), 'utf8')
 
+// 画布 store 的默认值与 api 层的四个端点搬到 tests/component/materialVariation.spec.mjs：
+// 真的 addNode('materialVariation') 拿默认数据（并且证明每个节点拿到的是自己的 sizes 数组，
+// 不是共享引用），真的把四个请求发出去看 URL 和动词，真的量一次轮询间隔。
+//
+// 下面留着的是 D 类：MaterialVariationNode.vue 的文案与交互契约（batch 4，要挂节点组件），
+// 以及 Canvas.vue 的节点类型注册表（batch 5，要挂 Canvas.vue）。
 const nodeSource = read('src/components/nodes/MaterialVariationNode.vue')
 const canvasSource = read('src/views/Canvas.vue')
-const storeSource = read('src/stores/canvas.js')
-const apiIndexSource = read('src/api/index.js')
-const apiSource = read('src/api/materialVariation.js')
 
 for (const label of [
   '素材裂变',
@@ -207,11 +210,5 @@ assert.doesNotMatch(nodeSource, /fileInput\?\.click\(\)/)
 assert.match(canvasSource, /MaterialVariationNode/)
 assert.match(canvasSource, /materialVariation:\s*markRaw\(MaterialVariationNode\)/)
 assert.match(canvasSource, /type:\s*'materialVariation',\s*name:\s*'素材裂变'/)
-assert.match(storeSource, /case\s+'materialVariation'/)
-assert.match(storeSource, /count:\s*DEFAULT_MATERIAL_VARIATION_COUNT/)
-assert.match(storeSource, /sizes:\s*\[\.\.\.DEFAULT_MATERIAL_VARIATION_SIZES\]/)
-assert.match(apiIndexSource, /export \* from '\.\/materialVariation'/)
-assert.match(apiSource, /\/v1\/material\/variations/)
-assert.match(apiSource, /MATERIAL_VARIATION_POLL_INTERVAL/)
 
 console.log('materialVariation.test.mjs passed')

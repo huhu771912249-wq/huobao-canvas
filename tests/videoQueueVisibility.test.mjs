@@ -331,16 +331,14 @@ assert.equal(readCancelOutcome({}).cancelled, false)
 assert.equal(readCancelOutcome(null).cancelled, false)
 
 // ---------- 接线 ----------
-const videoApiSource = read('../src/api/video.js')
-assert.match(videoApiSource, /export const cancelVideoTask/, '取消必须有 API 层入口')
-assert.match(videoApiSource, /buildVideoTaskCancelUrl/)
-assert.match(videoApiSource, /method:\s*'post'/)
-
+//
+// api/video.js 与 useApi.js 的接线断言搬到 tests/component/videoQueueVisibility.spec.mjs：
+// 取消真的 POST 到 <查询端点>/<id>/cancel，队列字段真的随每次轮询回到节点，signal 真的
+// 让轮询立刻收摊（不再空转一个 5 秒间隔）。
+//
+// 下面留着的是 D 类节点接线（batch 4：VideoNode.vue / VideoConfigNode.vue 要挂单个节点
+// 组件 + 打桩 API 才能真断言）以及轮询处数的头计数。
 const useApiSource = read('../src/hooks/useApi.js')
-assert.match(useApiSource, /cancelVideoTask/, 'useVideoGeneration 必须把取消暴露给节点')
-assert.match(useApiSource, /getVideoTaskEndpoint\(\)/)
-assert.match(useApiSource, /readVideoTaskQueueState/, '轮询必须顺路把队列字段带回节点')
-assert.match(useApiSource, /options\?\.signal/, '取消要能立刻中止轮询，而不是再空转一个轮询间隔')
 
 const videoNodeSource = read('../src/components/nodes/VideoNode.vue')
 assert.match(videoNodeSource, /data-testid="video-task-cancel"/, '排队/生成中的节点必须有取消按钮')
@@ -373,14 +371,12 @@ assert.doesNotMatch(
 )
 assert.match(videoConfigSource, /startedAt: runStartedAt/, '完成态要报「用时」，起点必须在提交时落下')
 
+// 顶栏队列徽章的断言搬到 tests/component/videoQueueVisibility.spec.mjs：挂上组件后断言
+// 「队列 3 个等待 · 约 4 分钟」真的渲染出来、只有错的池有数时整块不渲染、「查看队列」真的
+// 走到 /tasks。这里只留一条纯样式约定（jsdom 里 scoped <style> 不参与级联，见
+// docs/testing-migration.md §5）。
 const indicatorSource = read('../src/components/ComputeStatusIndicator.vue')
-assert.match(indicatorSource, /data-testid="compute-queue-badge"/, '顶栏必须能直接看到队列长度')
-assert.match(indicatorSource, /data-testid="compute-queue-link"/)
-assert.match(indicatorSource, /查看队列/)
-assert.match(indicatorSource, /readComputeQueueSnapshot/)
-assert.match(indicatorSource, /compute-monitor__queue-badge/)
 assert.match(indicatorSource, /var\(--warning-color\)/, '队列徽章用警告色调')
-assert.match(indicatorSource, /router\.push\('\/tasks'\)/, '「查看队列」进任务中心')
 
 // 字段名反向锁：源码里不许再出现那两个错字段，否则顶栏会显示另一个池的数字。
 const queueStateSource = read('../src/utils/videoQueueState.js')

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { performSignOut, SIGN_OUT_REDIRECT } from '../src/utils/authSession.js'
 
 const readSource = (relativePath) => readFileSync(new URL(`../${relativePath}`, import.meta.url), 'utf8')
@@ -36,25 +36,14 @@ assert.equal(failed.result.ok, false)
 assert.equal(failed.result.error.message, 'network down')
 
 // --- the entry point must actually exist in the UI | 全站必须真有按钮调用登出 ---
-
-const componentFiles = readdirSync(new URL('../src', import.meta.url), { recursive: true })
-  .map((entry) => String(entry).replaceAll('\\', '/'))
-  .filter((entry) => entry.endsWith('.vue'))
-const componentsCallingLogout = componentFiles.filter(
-  (file) => /\blogout\b/.test(readSource(`src/${file}`))
-)
-assert.ok(
-  componentsCallingLogout.length > 0,
-  'src/api/auth.js 的 logout() 必须至少被一个界面组件调用，否则用户无法登出'
-)
-
-const accountMenu = readSource('src/components/AccountMenu.vue')
-assert.match(accountMenu, /import \{ logout \} from '\.\.\/api\/auth'/)
-assert.match(accountMenu, /performSignOut/)
-assert.match(accountMenu, /markSessionAuthenticated\(null\)/, '登出必须清掉本地会话用户')
-assert.match(accountMenu, /invalidateSessionCache\(\)/, '登出必须让路由守卫的会话缓存失效')
-assert.match(accountMenu, /router\.replace\(target\)/, '登出必须跳到登录页且不留历史记录')
-assert.match(accountMenu, /退出登录/)
+//
+// The AccountMenu half of this tail moved to tests/component/authSignOut.spec.mjs, where
+// the button is really clicked: it calls logout(), empties `currentUser`, invalidates the
+// session cache (proven by the next refreshSession() re-probing), and `replace`s onto
+// Login so Back cannot return. That also subsumes the old "some .vue file mentions
+// logout" scan — a dead button used to satisfy it.
+//
+// What is left below is D 类接线 and still waits for batch 5: mounting both shells.
 
 // Canvas uses AppHeader, Home/Tasks/Recent use WorkspaceShell: both shells need the entry.
 for (const shell of ['src/components/AppHeader.vue', 'src/components/workspace/WorkspaceShell.vue']) {

@@ -1698,12 +1698,23 @@ for (const response of [
   }
 }
 
+// ---------------------------------------------------------------------------
+// 下面这一段是 grep 尾巴。批次 6 只搬走了 src/stores/canvas.js 那一小片
+// （见 tests/component/dspCreativeLibrary.spec.mjs：默认筛选条件、每个节点自己的数组、
+// 以及「候选素材写盘前必须被剥掉」——那条现在是真的存了一次项目再读回来验的）。
+//
+// 剩下的两大块都是 D 类，按 docs/testing-migration.md 的分批留到后面：
+//   · DspCreativeLibraryNode.vue / DspCreativeTaskCenterNode.vue 的文案与内部接线
+//     （batch 4：要挂节点组件 + 打桩 API 才谈得上真断言，这个节点有预览/导入/确认/
+//     自动刷新四条异步路径，转换成本远超本批）
+//   · Canvas.vue 的节点类型注册表（batch 5：要挂 Canvas.vue）
+// 在那之前删掉任何一条都是净损失，所以原样留着。
+// ---------------------------------------------------------------------------
 const root = fileURLToPath(new URL('../', import.meta.url))
 const read = (path) => readFileSync(new URL(path, `file://${root}/`), 'utf8')
 const libraryNodeSource = read('src/components/nodes/DspCreativeLibraryNode.vue')
 const taskCenterSource = read('src/components/nodes/DspCreativeTaskCenterNode.vue')
 const canvasSource = read('src/views/Canvas.vue')
-const storeSource = read('src/stores/canvas.js')
 
 for (const label of [
   '54DSP 优秀素材',
@@ -1941,17 +1952,7 @@ assert.match(canvasSource, /dspCreativeLibrary:\s*markRaw\(DspCreativeLibraryNod
 assert.match(canvasSource, /dspCreativeTaskCenter:\s*markRaw\(DspCreativeTaskCenterNode\)/)
 assert.match(canvasSource, /type:\s*'dspCreativeLibrary',\s*name:\s*'54DSP 优秀素材'/)
 assert.match(canvasSource, /type:\s*'dspCreativeTaskCenter',\s*name:\s*'素材任务中心'/)
-assert.match(storeSource, /case\s+'dspCreativeLibrary'/)
-assert.match(storeSource, /case\s+'dspCreativeTaskCenter'/)
-assert.match(storeSource, /minImpressions:\s*DEFAULT_DSP_THRESHOLDS\.minImpressions/)
-assert.match(storeSource, /mediaTypes:\s*\[\.\.\.DEFAULT_DSP_MEDIA_TYPES\]/)
-assert.match(storeSource, /jobIds:\s*\[\]/)
-assert.match(storeSource, /uiPrefs:/)
-assert.match(storeSource, /sanitizeDspCreativeCanvasNodeData/)
-assert.match(storeSource, /canvasData\.nodes[\s\S]*sanitizeDspCreativeCanvasNodeData/)
-assert.match(storeSource, /updateProjectCanvas[\s\S]*sanitizeDspCreativeCanvasNodeData/)
-const libraryStoreBlock = storeSource.match(/case 'dspCreativeLibrary':[\s\S]*?case 'dspCreativeTaskCenter':/)?.[0] || ''
-assert.doesNotMatch(libraryStoreBlock, /\bcandidates\s*:/)
-assert.doesNotMatch(libraryStoreBlock, /\bjob\s*:/)
+// src/stores/canvas.js 的默认值、每节点独立数组、以及「候选素材 / job 不得进默认值、
+// 更不得写进项目文件」都搬去 tests/component/dspCreativeLibrary.spec.mjs 真跑了。
 
 console.log('dspCreativeLibrary.test.mjs passed')
