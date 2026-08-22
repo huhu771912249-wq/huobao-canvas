@@ -83,6 +83,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import NovelShotCard from './NovelShotCard.vue'
 import SubtitleEditor from './SubtitleEditor.vue'
 import { cancelNovelVideoJob, createNovelVideoJob, finalizeNovelVideoJob, getNovelVideoJob, listNovelVideoJobs, retryNovelVideoShot, updateNovelSubtitles } from '../../api/novelVideo'
+import { isPortraitRatio } from '../../utils/videoAspectRatio'
 import { getVideoQualityProfile } from '../../utils/videoQualityProfile'
 
 const props = defineProps({ storyboard: { type: Object, default: null }, aspectRatio: { type: String, default: '16:9' }, title: { type: String, default: '' }, initialJobId: { type: String, default: '' } })
@@ -98,8 +99,12 @@ watch(() => props.storyboard, value => { if (!job.value) { editableShots.value =
 
 const qualityOptions = [{ mode: 'quality', label: '高质量 1080p', description: '原生生成后使用 SeedVR2 AI 超分，适合正式投放。' }, { mode: 'fast', label: '快速导出', description: '跳过 AI 超分，适合预览分镜和快速校对。' }]
 const profile = computed(() => getVideoQualityProfile(qualityMode.value, props.aspectRatio))
-const nativeResolution = computed(() => props.aspectRatio === '9:16' ? '352 × 608' : '608 × 352')
-const aiUpscaleResolution = computed(() => qualityMode.value === 'fast' ? '不启用（保持原生数值）' : props.aspectRatio === '9:16' ? 'SeedVR2 约 1080 × 1864；交付 1080 × 1920' : 'SeedVR2 约 1864 × 1080；交付 1920 × 1080')
+// 这三行必须和 profile 用同一套比例判定：profile 走 getVideoQualityProfile（会 trim），
+// 而这两行原本裸比 props.aspectRatio === '9:16'，于是 ' 9:16 ' 会让面板显示
+// 「原生 608 × 352 → 交付 1080 × 1920」这种自相矛盾的组合。统一到 isPortraitRatio。
+const portrait = computed(() => isPortraitRatio(props.aspectRatio))
+const nativeResolution = computed(() => portrait.value ? '352 × 608' : '608 × 352')
+const aiUpscaleResolution = computed(() => qualityMode.value === 'fast' ? '不启用（保持原生数值）' : portrait.value ? 'SeedVR2 约 1080 × 1864；交付 1080 × 1920' : 'SeedVR2 约 1864 × 1080；交付 1920 × 1080')
 const finalResolution = computed(() => `${profile.value.width} × ${profile.value.height}`)
 const jobShots = computed(() => job.value?.shots || [])
 const displayShots = computed(() => job.value ? jobShots.value : editableShots.value)

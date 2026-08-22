@@ -1,9 +1,13 @@
+import { findVideoSizeViolation, parseVideoSizeKey } from './videoSizeRules.js'
+
 export const RESIZE_PRESETS = ['720x1280', '1080x1920', '1080x1080', '1280x720', '1920x1080']
 
 export function normalizeResizeTargets(values = []) {
   return [...new Set(values)].map(value => {
-    const [width, height] = String(value).toLowerCase().split('x').map(Number)
-    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 256 || height < 256 || width > 4096 || height > 4096 || width % 2 || height % 2) {
+    const { width, height } = parseVideoSizeKey(value)
+    // 规则本身在 videoSizeRules.js；这里保留 Error + 本工作台的文案，
+    // VideoResizeWorkbench 直接把 message 渲染进错误条。
+    if (findVideoSizeViolation(width, height)) {
       throw new Error('输出尺寸必须是 256–4096 范围内的偶数')
     }
     return { width, height }

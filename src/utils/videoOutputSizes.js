@@ -1,3 +1,5 @@
+import { findVideoSizeViolation } from './videoSizeRules.js'
+
 export const VIDEO_OUTPUT_PRESETS = Object.freeze([
   { key: 'landscape-720p', label: '1280 × 720 横屏', width: 1280, height: 720 },
   { key: 'portrait-720p', label: '720 × 1280 竖屏', width: 720, height: 1280 },
@@ -26,16 +28,9 @@ export function normalizeVideoOutputSize(input = {}) {
   const legacy = LEGACY_RATIO_SIZE[String(input.ratio || '').replace('x', ':')]
   const width = Number(input.output_width ?? input.width ?? legacy?.[0] ?? 1920)
   const height = Number(input.output_height ?? input.height ?? legacy?.[1] ?? 1080)
-  if (
-    !Number.isInteger(width) ||
-    !Number.isInteger(height) ||
-    width < 256 ||
-    height < 256 ||
-    width > 4096 ||
-    height > 4096 ||
-    width % 2 ||
-    height % 2
-  ) {
+  // 规则本身在 videoSizeRules.js；这里保留 TypeError + 单一文案，那是本函数
+  // 对 VideoOutputSizePicker / VideoConfigNode 的既有契约（picker 直接把 message 显示给用户）。
+  if (findVideoSizeViolation(width, height)) {
     throw new TypeError('视频输出宽高必须是 256–4096 范围内的正偶数')
   }
 

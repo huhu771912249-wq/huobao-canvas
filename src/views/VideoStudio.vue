@@ -73,6 +73,7 @@ import { COMMON_VIDEO_SIZES, normalizeVideoSize } from '../config/videoSizes'
 import { detectStudioIntent } from '../utils/studioIntent'
 import { createStudioStoryboard, parseStudioDocument } from '../api/studioDocument'
 import { buildStudioCanvas } from '../config/studioProjectFlow'
+import { getAspectRatioForSize } from '../utils/videoAspectRatio'
 import { getVideoQualityProfile } from '../utils/videoQualityProfile'
 import { createProject } from '../stores/projects'
 import NovelVideoWorkspace from '../components/studio/NovelVideoWorkspace.vue'
@@ -157,10 +158,7 @@ const preparePastedDocument = () => {
 }
 const prepareAndPlan = async mode => { documentError.value = ''; try { if (parsedDocument.value?.text !== novelText.value) preparePastedDocument(); await planStoryboard(mode) } catch (error) { documentError.value = error?.response?.data?.error?.message || error?.message || '小说正文解析失败' } }
 const resolvedSize = computed(() => selectedSize.value === 'custom' ? `${customWidth.value}x${customHeight.value}` : selectedSize.value)
-const selectedAspectRatio = computed(() => {
-  const [width, height] = resolvedSize.value.toLowerCase().split('x').map(Number)
-  return Number.isFinite(width) && Number.isFinite(height) && height > width ? '9:16' : '16:9'
-})
+const selectedAspectRatio = computed(() => getAspectRatioForSize(resolvedSize.value))
 const qualityProfile = computed(() => getVideoQualityProfile(qualityMode.value, selectedAspectRatio.value))
 const startCreate = async () => {
   if (creatingProject.value) return
