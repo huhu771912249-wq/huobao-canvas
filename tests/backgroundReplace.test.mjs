@@ -84,6 +84,12 @@ assert.throws(
   /主体图/
 )
 
+// 批次 6 复核结论：这五条全部是 D 类节点级接线，本批不动，原样保留。
+// 真断言意味着把 ImageConfigNode.vue（1103 行，含上传、模式切换、四条异步提交路径）挂进
+// vue-flow harness 并打桩 API —— 那是 docs/testing-migration.md 里 batch 4 的活。
+// 在那之前删掉任何一条都是净损失：它们锁的是「换背景这条路真的接上了」，
+// 而 buildBackgroundReplacePayload / getBackgroundReplaceReadiness 本身
+// 已经由上面的真断言覆盖，缺的正好就是这段接线。
 const root = fileURLToPath(new URL('../', import.meta.url))
 const read = (path) => readFileSync(new URL(path, `file://${root}/`), 'utf8')
 const imageNodeSource = read('src/components/nodes/ImageNode.vue')

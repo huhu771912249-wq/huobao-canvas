@@ -40,7 +40,6 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const read = (path) => readFileSync(new URL(path, `file://${root}/`), 'utf8')
 
 const appSource = read('src/App.vue')
-const messageBridgeSource = read('src/components/GlobalMessageBridge.vue')
 const canvasSource = read('src/views/Canvas.vue')
 const homeSource = read('src/views/Home.vue')
 const downloadModalSource = read('src/components/DownloadModal.vue')
@@ -57,13 +56,16 @@ const recentGenerationStripUrl = new URL('src/components/home/RecentGenerationSt
 const workflowShelfSource = existsSync(workflowShelfUrl) ? read('src/components/home/WorkflowShelf.vue') : ''
 const recentGenerationStripSource = existsSync(recentGenerationStripUrl) ? read('src/components/home/RecentGenerationStrip.vue') : ''
 const workspaceLaunchSource = read('src/config/workspaceLaunch.js')
-const viteConfigSource = read('vite.config.js')
 
-assert.match(viteConfigSource, /target:\s*'http:\/\/127\.0\.0\.1:8788'/)
-assert.match(viteConfigSource, /'\/public-assets':\s*\{/)
+// vite 代理表与 GlobalMessageBridge 搬到 tests/component/appInteractionBridge.spec.mjs：
+// 代理断言现在打在 import 进来的配置对象上（挪错 key 也会红），message bridge 是真挂起来
+// 看 window.$message 装上没、卸载后收回没。
+//
+// 这个文件剩下的尾巴是 D 类视图级接线（Home / Canvas / CreationLauncher / WorkflowShelf /
+// RecentGenerationStrip / WorkspaceShell / TaskRail / DownloadModal / ImageNode /
+// VideoNode / 两个 DSP 节点），按 docs/testing-migration.md 属于 batch 5，要先做
+// 「Canvas.vue 能不能在 jsdom 里挂起来」的 spike，本批不动。
 assert.match(appSource, /<GlobalMessageBridge\s*\/>/)
-assert.match(messageBridgeSource, /useMessage\(\)/)
-assert.match(messageBridgeSource, /window\.\$message\s*=\s*message/)
 
 assert.match(canvasSource, /@click="refreshSuggestions"/)
 assert.match(homeSource, /@refresh-suggestions="refreshSuggestions"/)
@@ -155,7 +157,6 @@ if (existsSync(installerUrl)) {
 } else {
   console.log('external desktop installer unavailable; installer bridge assertions skipped')
 }
-assert.match(viteConfigSource, /target:\s*'http:\/\/127\.0\.0\.1:8788'/)
 assert.match(imageNodeSource, /defineOptions\(\{\s*inheritAttrs:\s*false\s*\}\)/)
 
 console.log('appInteractionBridge.test.mjs passed')

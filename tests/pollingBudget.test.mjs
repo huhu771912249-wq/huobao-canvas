@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import {
   POLL_MAX_ATTEMPTS,
   POLL_MAX_NOT_READY_ATTEMPTS,
@@ -86,15 +85,11 @@ assert.ok(POLL_MAX_NOT_READY_ATTEMPTS >= 12, '至少要容忍一分钟左右的�
 
 // 6. useApi actually spends the budget on every poll and every 404 retry.
 //    useApi 必须在每次轮询和每次 404 重试上都消耗预算。
-const useApiSource = readFileSync(new URL('../src/hooks/useApi.js', import.meta.url), 'utf8')
-assert.doesNotMatch(useApiSource, /while \(true\)/, '轮询循环不得再无条件继续')
-assert.match(useApiSource, /createPollingBudget\(\{ label: '视频任务' \}\)/)
-assert.match(useApiSource, /const attempt = budget\.nextAttempt\(\)/)
-
-const pollingStart = useApiSource.indexOf('const pollVideoTask = async')
-const pollingSource = useApiSource.slice(pollingStart, useApiSource.indexOf('\n  }', pollingStart))
-const notReadyBranch = pollingSource.slice(pollingSource.indexOf('isTaskNotReadyError'))
-const notReadyBody = notReadyBranch.slice(0, notReadyBranch.indexOf('continue'))
-assert.match(notReadyBody, /budget\.markNotReady\(\)/, '404 分支必须消耗预算，否则任务丢失时会无限 continue')
+//
+// Moved to tests/component/pollingBudget.spec.mjs: `pollVideoTask` is driven for real
+// against a stubbed backend, so "a task that is never found stops being retried", "a
+// transient 404 is forgiven", "an endless 'running' still terminates" and "attempts are
+// numbered from 1" are asserted as outcomes. The old `doesNotMatch(/while (true)/)` was
+// the weakest of the four — the production loop is `for (;;)`, which passed it anyway.
 
 console.log('pollingBudget.test.mjs passed')

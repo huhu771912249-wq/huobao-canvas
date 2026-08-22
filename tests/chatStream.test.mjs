@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import {
   EMPTY_CHAT_RESPONSE_MESSAGE,
   collectChatStream,
@@ -57,26 +56,10 @@ await assert.rejects(
 
 // 6. useChat wires every branch: no silent swallow, no missing else.
 //    useChat 必须接上每个分支：不静默吞错，也不留没有 else 的 if。
-const useApiSource = readFileSync(new URL('../src/hooks/useApi.js', import.meta.url), 'utf8')
-const sendStart = useApiSource.indexOf('const send = async (content, stream = true')
-assert.ok(sendStart > 0, 'useChat 必须仍然导出 send')
-const sendSource = useApiSource.slice(sendStart, useApiSource.indexOf('\n  const stop = ', sendStart))
-
-assert.match(sendSource, /collectChatStream\(/)
-assert.doesNotMatch(
-  sendSource,
-  /if \(err\.name !== 'AbortError'\) \{/,
-  '中止分支不得既不 setError 也不释放 loading'
-)
-assert.doesNotMatch(
-  sendSource,
-  /\n      if \(stream\) \{/,
-  'stream=false 不得掉进没有 else 的分支并返回 undefined'
-)
-assert.match(sendSource, /if \(outcome\.aborted\) \{/)
-assert.match(sendSource, /reset\(\)\s*\n\s*return null/, '中止后必须复位状态并返回显式的 null')
-assert.match(sendSource, /stream \? \{ onProgress/, '两种模式必须共用同一条取数路径')
-assert.match(sendSource, /isChatAbortError\(err\)/)
-assert.match(sendSource, /return outcome\.text/)
+//
+// Moved to tests/component/chatStream.spec.mjs: `send()` is driven for real against a
+// stubbed `streamChatCompletions`, so "abort returns an explicit null and releases
+// loading", "stream = false still returns the answer" and "a real error is recorded and
+// rethrown" are asserted as outcomes instead of as source patterns.
 
 console.log('chatStream.test.mjs passed')
