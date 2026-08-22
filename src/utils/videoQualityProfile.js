@@ -1,14 +1,13 @@
+import { isPortraitRatio } from './videoAspectRatio.js'
+
 const normalizeMode = mode => {
   const normalized = String(mode ?? '').trim().toLowerCase()
   return ['fast', 'auto', 'quality'].includes(normalized) ? normalized : 'quality'
 }
 
-const normalizeAspectRatio = aspectRatio => String(aspectRatio ?? '').trim() === '9:16' ? '9:16' : '16:9'
-
 export const getVideoQualityProfile = (mode = 'quality', aspectRatio = '16:9') => {
   const normalizedMode = normalizeMode(mode)
-  const normalizedAspectRatio = normalizeAspectRatio(aspectRatio)
-  const portrait = normalizedAspectRatio === '9:16'
+  const portrait = isPortraitRatio(aspectRatio)
 
   return {
     mode: normalizedMode,

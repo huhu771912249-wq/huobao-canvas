@@ -341,6 +341,17 @@ import { normalizeVideoOutputSize } from '../../utils/videoOutputSizes'
 // 而 :6524 又要求 image_alignment 的宽高精确等于该 ratio 对应的模型原生输入尺寸，否则 400。
 // 所以：(1) 选比例必须真的改写 output_width/height，否则 UI 上的 9:16 永远到不了后端；
 //      (2) image_alignment 必须由输出尺寸推导，而不是由 localRatio 推导，才能保证两边一致。
+//
+// 【为什么这一份没有被收敛进 utils/videoAspectRatio.js】
+// 这段是「前后端逐字镜像」的契约，不是普通的重复实现：
+//   1. tests/videoRatioOutputSizeContract.test.mjs 用上面那对注释锚点把这段源码抠出来
+//      当模块单独执行（docs/testing-migration.md 里的 A 类）。改成 import 就等于把这道
+//      护栏拆掉，而它守的正是 #43「选 9:16 直接 400」那个 bug —— 该迁移属于测试迁移
+//      批次 3，必须单独一个 PR 做，不能顺手夹带在本次收敛里。
+//   2. 它要跟的是后端那一行，不是跟前端其它推导。哪天后端改了口径，这里必须能独立改。
+// 代价是这段和 utils/videoAspectRatio.js 的 deriveVideoRatioFromSize 是两份代码，
+// 所以 tests/videoRatioSizeParity.test.mjs 里有一条对拍断言把两者钉在一起：
+// 同一组输入必须给出同一个结果，任何一边漂了都会红。
 const VIDEO_PORTRAIT_RATIO = '9:16'
 const VIDEO_LANDSCAPE_RATIO = '16:9'
 

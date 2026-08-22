@@ -1,4 +1,10 @@
+import { getAspectRatioForSize } from '../utils/videoAspectRatio.js'
 import { getVideoQualityProfile } from '../utils/videoQualityProfile.js'
+
+// 本文件曾同时持有 ratioForSize（私有，buildStudioCanvas 用）和 getAspectRatioForSize
+// （导出，buildQualityProfilesBySize 用）两份函数体逐字相同的实现。现在统一到
+// utils/videoAspectRatio.js，这里只做转发以保持模块导出面不变。
+export { getAspectRatioForSize }
 
 const edge = (source, target, extra = {}) => ({
   id: `edge_${source}_${target}`,
@@ -9,11 +15,6 @@ const edge = (source, target, extra = {}) => ({
   ...extra
 })
 
-const ratioForSize = (size) => {
-  const [width, height] = String(size).toLowerCase().split('x').map(Number)
-  return Number.isFinite(width) && Number.isFinite(height) && height > width ? '9:16' : '16:9'
-}
-
 export const getModelNativeVideoSize = (model = 'minimax-h3', ratio = '16:9') => {
   const portrait = ratio === '9:16'
   const landscape = model === 'ltx-2.3'
@@ -22,11 +23,6 @@ export const getModelNativeVideoSize = (model = 'minimax-h3', ratio = '16:9') =>
   return portrait
     ? { width: landscape.height, height: landscape.width }
     : landscape
-}
-
-export const getAspectRatioForSize = (size) => {
-  const [width, height] = String(size).toLowerCase().split('x').map(Number)
-  return Number.isFinite(width) && Number.isFinite(height) && height > width ? '9:16' : '16:9'
 }
 
 export const buildQualityProfilesBySize = (sizes = [], mode = 'quality') => Object.fromEntries(
@@ -81,7 +77,7 @@ export const normalizeVideoImageAlignmentRequest = (alignment) => {
 }
 
 export const buildStudioCanvas = ({ mode, prompt = '', size = '1280x720', imageModel = 'z-image', videoModel = 'minimax-h3', qualityMode = 'quality', samplingMode = 'standard20' }) => {
-  const ratio = ratioForSize(size)
+  const ratio = getAspectRatioForSize(size)
   const qualityProfile = getVideoQualityProfile(qualityMode, ratio)
   const imagePrompt = { id: 'studio_image_prompt', type: 'text', position: { x: 80, y: 140 }, data: { content: prompt, label: '画面提示词' } }
   const imageConfig = { id: 'studio_image_config', type: 'imageConfig', position: { x: 440, y: 140 }, data: { label: '文生图', model: imageModel, size, qualityMode: qualityProfile.mode, qualityProfile } }

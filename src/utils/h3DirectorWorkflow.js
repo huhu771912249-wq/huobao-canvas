@@ -1,4 +1,5 @@
 import { getImageAlignmentSpec } from '../config/studioProjectFlow.js'
+import { normalizeAspectRatio, VIDEO_PORTRAIT_RATIO } from './videoAspectRatio.js'
 import { getVideoQualityProfile } from './videoQualityProfile.js'
 
 const node = (key, type, x, y, data) => ({ key, type, position: { x, y }, data })
@@ -7,7 +8,7 @@ const edge = (sourceKey, targetKey, extra = {}) => ({ sourceKey, targetKey, ...e
 export const buildH3DirectorWorkflow = (plan, position = { x: 100, y: 100 }, autoExecute = false) => {
   const x = Number(position?.x) || 0
   const y = Number(position?.y) || 0
-  const ratio = plan?.aspect_ratio === '9:16' ? '9:16' : '16:9'
+  const ratio = normalizeAspectRatio(plan?.aspect_ratio)
   const duration = [2, 3, 5].includes(Number(plan?.duration_seconds)) ? Number(plan.duration_seconds) : 5
   const qualityMode = plan?.quality_mode === 'fast' ? 'fast' : 'quality'
   const qualityProfile = getVideoQualityProfile(qualityMode, ratio)
@@ -42,7 +43,7 @@ export const buildH3DirectorWorkflow = (plan, position = { x: 100, y: 100 }, aut
     }
   }
 
-  const imageSize = ratio === '9:16' ? '720x1280' : '1280x720'
+  const imageSize = ratio === VIDEO_PORTRAIT_RATIO ? '720x1280' : '1280x720'
   return {
     nodes: [
       node('imagePrompt', 'text', x, y, { content: plan?.image_prompt || '', label: '一致性关键帧提示词' }),
