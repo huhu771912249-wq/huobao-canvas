@@ -14,6 +14,7 @@ import {
   sanitizeWatermarkEditorProject
 } from '../src/utils/watermarkEditorProject.js'
 import { timelineRangeStyle } from '../src/utils/gifAdEditorPrototype.js'
+import { buildH3AdGifWorkflow } from '../src/config/h3AdGifWorkflow.js'
 
 const project = createDefaultWatermarkEditorProject({ title: '品牌角标工程' })
 assert.equal(project.title, '品牌角标工程')
@@ -295,6 +296,64 @@ const sanitizedTextProject = sanitizeWatermarkEditorProject({
 assert.equal(sanitizedTextProject.textTracks.length, 8)
 assert.equal(sanitizedTextProject.textTracks[0].style, '爆款白字')
 assert.equal(Object.hasOwn(sanitizedTextProject.textTracks[0], 'effect'), false)
+
+/* ---------------------------------------------------------------------------
+ * 画布节点上那 4 个快捷控件到底作用在哪一条图片轨道。
+ *
+ * 老 bug：节点默认 `watermarkId: 'image-1'`，而编辑器生成的 id 从 `image-11` 起
+ * （GifAdEditor.vue 的 sequence 从 10 开始），引用永远悬空。后果是「能毁不能改」——
+ * 滑块拨一下什么都没改到，却照样触发 WatermarkEditorNode 的 shouldInvalidate，
+ * 把已经合成好的成品清空。下面两条钉的就是这件事。
+ * -------------------------------------------------------------------------*/
+
+const quickSettingsSource = {
+  clips: [{ url: '/public-assets/source.gif', duration: 3 }],
+  imageTracks: [
+    { id: 'image-11', name: '第一张', url: '/public-assets/logo-a.png', x: 82, y: 12, size: 22, opacity: 92 },
+    { id: 'image-12', name: '第二张', url: '/public-assets/logo-b.png', x: 82, y: 12, size: 22, opacity: 92 }
+  ]
+}
+const restoreWithQuickSettings = quickSettings => restoreWatermarkEditorProject({
+  savedProject: { ...quickSettingsSource, quickSettings: { watermarkId: '', position: 'top-right', size: 22, opacity: 92 } },
+  sourceProject: { clips: quickSettingsSource.clips },
+  nodeData: { editorStatus: 'draft', quickSettings }
+}).project
+
+// 引用指不到任何轨道时（空串 = 还没选，'image-1' = 历史悬空值），
+// 快捷控件必须落到第一条图片轨道上，而不是什么都不做。
+for (const danglingId of ['', 'image-1', 'never-existed']) {
+  const moved = restoreWithQuickSettings({ watermarkId: danglingId, position: 'bottom-left', size: 40, opacity: 55 })
+  assert.deepEqual(
+    { x: moved.imageTracks[0].x, y: moved.imageTracks[0].y, size: moved.imageTracks[0].size, opacity: moved.imageTracks[0].opacity },
+    { x: 18, y: 88, size: 40, opacity: 55 },
+    `watermarkId=${JSON.stringify(danglingId)} 指不到轨道时，节点滑块必须回退作用在第一条图片轨道上`
+  )
+  assert.deepEqual(
+    { x: moved.imageTracks[1].x, y: moved.imageTracks[1].y, size: moved.imageTracks[1].size },
+    { x: 82, y: 12, size: 22 },
+    '回退只许影响第一条，不许把所有轨道一起改掉'
+  )
+}
+
+// 引用有效时不许被回退逻辑劫持：改的还是被指名的那一条。
+const movedSecond = restoreWithQuickSettings({ watermarkId: 'image-12', position: 'center', size: 33, opacity: 44 })
+assert.deepEqual(
+  { x: movedSecond.imageTracks[1].x, y: movedSecond.imageTracks[1].y, size: movedSecond.imageTracks[1].size, opacity: movedSecond.imageTracks[1].opacity },
+  { x: 50, y: 50, size: 33, opacity: 44 }
+)
+assert.deepEqual(
+  { x: movedSecond.imageTracks[0].x, y: movedSecond.imageTracks[0].y, size: movedSecond.imageTracks[0].size },
+  { x: 82, y: 12, size: 22 },
+  '指名了 image-12 就不许顺手改 image-11'
+)
+
+// 工作流模板不许再往节点里塞编辑器根本生成不出来的 id。
+const h3WatermarkNode = buildH3AdGifWorkflow({ x: 0, y: 0 }).nodes.find(node => node.type === 'watermarkEditor')
+assert.equal(
+  h3WatermarkNode.data.quickSettings.watermarkId,
+  '',
+  'H3 广告 GIF 模板不许预填假的 watermarkId —— 编辑器生成的 id 从 image-11 起，填了就是悬空引用'
+)
 
 const canvas = readFileSync(new URL('../src/views/Canvas.vue', import.meta.url), 'utf8')
 const node = readFileSync(new URL('../src/components/nodes/WatermarkEditorNode.vue', import.meta.url), 'utf8')
