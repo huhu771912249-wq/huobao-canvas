@@ -39,7 +39,7 @@ export const buildH3AdGifWorkflow = (startPosition = { x: 0, y: 0 }) => {
     { id: ids.gif, type: 'videoGif', position: { x: x + 2544, y: y + 80 }, data: { label: '07 视频转 GIF', outputWidth: 720, outputHeight: 1280, fitMode: 'blur', fps: 12, colors: 256, gifUrl: '', mime: 'image/gif' } },
     { id: ids.copy, type: 'text', position: { x: x + 2544, y: y + 680 }, data: { label: '08 广告文案', content: '在这里输入 GIF 广告文案' } },
     { id: ids.overlay, type: 'textOverlay', position: { x: x + 3084, y: y + 80 }, data: { label: '09 GIF 可视化加字', outputWidth: 720, outputHeight: 1280, videoFitMode: 'blur', videoOutputFormat: 'both', x: 50, y: 78, fontSize: 48, boxWidth: 76, color: '#ffffff', strokeColor: '#111111', strokeWidth: 4, align: 'center', shadow: true } },
-    { id: ids.watermark, type: 'watermarkEditor', position: { x: x + 3684, y: y + 80 }, data: { label: '10 水印与细节编辑', quickSettings: { watermarkId: 'image-1', position: 'top-right', size: 22, opacity: 92 } } },
+    { id: ids.watermark, type: 'watermarkEditor', position: { x: x + 3684, y: y + 80 }, data: { label: '10 水印与细节编辑', quickSettings: { watermarkId: '', position: 'top-right', size: 22, opacity: 92 } } },
     { id: ids.export, type: 'materialExport', position: { x: x + 4184, y: y + 80 }, data: { label: '11 GIF 导出', url: '', gifUrl: '', mime: 'image/gif' } }
   ]
   const edges = [

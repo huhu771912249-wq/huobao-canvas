@@ -327,7 +327,9 @@ const getDefaultNodeData = (type) => {
         label: '水印与素材编辑',
         editorStatus: 'draft',
         editorProject: null,
-        quickSettings: { watermarkId: 'image-1', position: 'top-right', size: 22, opacity: 92 },
+        // 空串 = 还没选水印。别再填 'image-1' 这种假 id：编辑器生成的 id 从 image-11 起，
+        // 悬空引用会让节点上的滑块「改了等于没改」，却照样把已合成的成品清空。
+        quickSettings: { watermarkId: '', position: 'top-right', size: 22, opacity: 92 },
         sourceUrl: '',
         sourceMime: '',
         sourceLabel: '',
