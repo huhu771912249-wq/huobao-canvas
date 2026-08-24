@@ -54,8 +54,8 @@
             <b>后端错误：</b>{{ job.error }}
           </div>
           <p class="mt-2 text-xs text-slate-500">进度来自后端任务阶段，不用虚假倒计时。每个成品会显示实际尺寸与超分方式。</p>
-          <div v-if="job?.results?.length" class="mt-5 grid gap-4 md:grid-cols-2"><article v-for="item in job.results" :key="item.mp4_url" class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950"><video class="aspect-video w-full bg-black object-contain" :src="item.mp4_url" controls/><div class="space-y-2 p-4 text-sm"><div class="flex justify-between"><b>{{ item.actual_width }} × {{ item.actual_height }}</b><span class="text-emerald-300">{{ item.upscale_method==='seedvr2' ? 'SeedVR2 AI 超分' : '高清转码（无需超分）' }}</span></div><div class="flex gap-2"><a class="nav" :href="item.mp4_url" download>下载 MP4</a><a v-if="item.gif_url" class="nav" :href="item.gif_url" download>下载 GIF</a></div></div></article></div>
-          <div v-if="job" class="mt-5 flex flex-wrap gap-2"><button v-if="!terminal" class="nav" @click="cancel">取消任务</button><button v-if="['failed','cancelled'].includes(job.status)" class="nav" @click="retry">失败重试</button><button v-if="job.status==='completed'" class="nav" @click="save">保存到素材库</button><button v-if="job.status==='completed'" class="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950" @click="handoff">送入无限画布</button></div>
+          <div v-if="job?.results?.length" class="mt-5 grid gap-4 md:grid-cols-2"><article v-for="(item, index) in job.results" :key="resultKey(item, index)" data-testid="resize-result-card" class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950"><video v-if="item.mp4_url" class="aspect-video w-full bg-black object-contain" :src="item.mp4_url" controls/><img v-else-if="item.gif_url" class="aspect-video w-full bg-black object-contain" :src="item.gif_url" :alt="`${item.actual_width}×${item.actual_height} GIF 成品`"><div class="space-y-2 p-4 text-sm"><div class="flex justify-between"><b>{{ item.actual_width }} × {{ item.actual_height }}</b><span class="text-emerald-300">{{ item.upscale_method==='seedvr2' ? 'SeedVR2 AI 超分' : '高清转码（无需超分）' }}</span></div><div class="flex gap-2"><a v-if="item.mp4_url" class="nav" :href="item.mp4_url" download>下载 MP4</a><a v-if="item.gif_url" class="nav" :href="item.gif_url" download>下载 GIF</a></div></div></article></div>
+          <div v-if="job" class="mt-5 flex flex-wrap gap-2"><button v-if="!terminal" class="nav" @click="cancel">取消任务</button><button v-if="['failed','cancelled'].includes(job.status)" class="nav" @click="retry">失败重试</button><button v-if="job.status==='completed'" class="nav" @click="save">保存到素材库</button><button v-if="job.status==='completed'" data-testid="resize-handoff" class="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950" @click="handoff">送入无限画布</button></div>
         </section>
       </div>
     </section>
@@ -93,7 +93,29 @@ const submit = async () => { error.value=''; try { const normalized=normalizeRes
 const cancel=async()=>{job.value=await cancelVideoResizeJob(job.value.job_id)}
 const retry=async()=>{job.value=await retryVideoResizeJob(job.value.job_id);poll()}
 const save=async()=>{const result=await saveVideoResizeJob(job.value.job_id);window.$message?.success(result.saved?'已保存到冠希素材库':'没有可保存的成品')}
-const handoff=async()=>{const result=await handoffVideoResizeJob(job.value.job_id);const nodes=(result.canvas_payload?.results||[]).map((item,index)=>({id:`video-${index}`,type:'video',position:{x:80+index*40,y:80+index*40},data:{url:item.mp4_url,label:`${item.actual_width}×${item.actual_height}`}}));const id=createProject('视频尺寸成品',{canvasData:{nodes,edges:[],viewport:{x:80,y:50,zoom:.8}}});router.push(`/canvas/${id}`)}
+// MP4 和 GIF 是两个独立的输出勾选项，所以一份回执里可能只有其中一个 —— 只勾 GIF 时
+// 没有 mp4_url。卡片和画布节点都按**回执里真实存在的产物**渲染，而不是假定 mp4 一定在：
+// 之前 GIF-only 任务能显示，靠的是后端顺手留下的那个用户没要过的 H.264 中间件。
+// key 也不能用 mp4_url —— GIF-only 时它是 undefined，一整列 key 全撞在一起，Vue 只能
+// 按位置 patch，成品卡和它的数据就不再绑定。requested_* 是每个任务里去重过的输出尺寸
+// （video_resize_jobs.py 建 targets 时按 (w,h) 去重），天然是这一列的身份。
+const resultKey = (item, index) => (
+  item.requested_width && item.requested_height
+    ? `${item.requested_width}x${item.requested_height}`
+    : `result-${index}`
+)
+const resultCanvasNode = (item, index) => {
+  const url = item.mp4_url || item.gif_url
+  if (!url) return null
+  return {
+    // GIF 放不进 video 节点（<video> 解不了 GIF），image 节点的 <img> 才会动。
+    id: `${item.mp4_url ? 'video' : 'image'}-${index}`,
+    type: item.mp4_url ? 'video' : 'image',
+    position: { x: 80 + index * 40, y: 80 + index * 40 },
+    data: { url, label: `${item.actual_width}×${item.actual_height}` }
+  }
+}
+const handoff=async()=>{const result=await handoffVideoResizeJob(job.value.job_id);const nodes=(result.canvas_payload?.results||[]).map(resultCanvasNode).filter(Boolean);const id=createProject('视频尺寸成品',{canvasData:{nodes,edges:[],viewport:{x:80,y:50,zoom:.8}}});router.push(`/canvas/${id}`)}
 onMounted(async () => { const requestedJobId=String(route.query.job||'').trim(); if(!requestedJobId)return; try{job.value=await getVideoResizeJob(requestedJobId);if(!terminal.value)poll()}catch(e){error.value=e?.response?.data?.error?.message||e.message||'任务读取失败'} })
 onBeforeUnmount(()=>window.clearTimeout(pollTimer))
 </script>
