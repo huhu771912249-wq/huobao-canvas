@@ -44,11 +44,14 @@ assert.equal(
   true
 )
 
+// 形状依旧逐键锁死（deepEqual，不是 match）。相比修复前少了 `quality` 和 `n`：
+// 后端 _image_generations 这两个字段一次都没读过，useApi 也从不转发，
+// 留在 payload 里只会让人以为它们是通的。少发两个死字段不改变任何一次请求的结果。
+// 「谁被发出去、谁被故意不发」由 tests/imageAdapterFieldContract.test.mjs 端到端锁住。
 assert.deepEqual(
   buildBackgroundReplacePayload({
     model: 'frw-qianwen',
     size: '1024x1024',
-    quality: 'standard',
     subjectImage: 'data:image/png;base64,SUBJECT',
     backgroundReferenceImage: 'data:image/png;base64,BACKGROUND',
     instruction: '换成四人宿舍，保留人物和桌面物品'
@@ -57,8 +60,6 @@ assert.deepEqual(
     model: 'frw-qianwen',
     prompt: '换成四人宿舍，保留人物和桌面物品',
     size: '1024x1024',
-    quality: 'standard',
-    n: 1,
     edit_mode: 'background_replace',
     subject_image: 'data:image/png;base64,SUBJECT',
     background_reference_image: 'data:image/png;base64,BACKGROUND',

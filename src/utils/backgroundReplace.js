@@ -18,10 +18,16 @@ export const getBackgroundReplaceReadiness = ({
   }
 }
 
+/**
+ * 换背景请求体。
+ *
+ * 这里**不再产出 `quality` 和 `n`**：两个字段后端 `_image_generations` 从不读
+ * （详见 `utils/imageRequestContract.js` 顶部的后端事实），useApi 也不会转发，
+ * 留在 payload 里只会让下一个人以为它们是通的。
+ */
 export const buildBackgroundReplacePayload = ({
   model,
   size,
-  quality,
   subjectImage,
   backgroundReferenceImage,
   instruction
@@ -41,8 +47,6 @@ export const buildBackgroundReplacePayload = ({
     model,
     prompt: normalizedInstruction,
     size,
-    quality,
-    n: 1,
     edit_mode: 'background_replace',
     subject_image: normalizeImage(subjectImage),
     background_reference_image: normalizeImage(backgroundReferenceImage),
