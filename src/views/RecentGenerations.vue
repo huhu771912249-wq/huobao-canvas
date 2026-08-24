@@ -13,7 +13,7 @@
           <div>
             <div class="recent-eyebrow">CREATIVE LIBRARY</div>
             <h1>最近生成</h1>
-            <p>直接查看生成结果，不需要先打开原项目。图片可以一键送入画布继续处理。</p>
+            <p>直接查看生成结果，不需要先打开原项目。图片可以一键送入画布，GIF 可以直接回到编辑器改字改水印。</p>
           </div>
           <button type="button" class="refresh-button" :disabled="loading" @click="loadAssets">
             {{ loading ? '刷新中…' : '刷新' }}
@@ -66,10 +66,11 @@
               <p>{{ formatDate(asset.created_at) }} · {{ formatRecentAssetSize(asset.size_bytes) }}</p>
               <div class="asset-actions">
                 <button
-                  v-if="asset.media_type === 'image'"
+                  v-if="handoffFor(asset.media_type)"
                   type="button"
                   class="primary-action"
-                  @click="openImageInCanvas(asset)"
+                  data-testid="recent-asset-handoff"
+                  @click="handoffFor(asset.media_type)(asset)"
                 >
                   去处理
                 </button>
@@ -153,6 +154,49 @@ const openImageInCanvas = async asset => {
   })
   router.push(`/canvas/${id}`)
 }
+
+/**
+ * Hand a finished GIF back to `/gif-editor`.
+ *
+ * The editor has exactly one entry protocol (`GifAdEditor.vue` onMounted): `?project=…&node=…`,
+ * and it rebuilds its clip from that node's `data.sourceUrl`. So the handoff is the same shape
+ * as `openImageInCanvas` — mint a project holding a single `watermarkEditor` node — rather than
+ * a new url-carrying query parameter that only this page would ever send.
+ */
+const openGifInEditor = async asset => {
+  await initProjectsStore()
+  const nodeId = `recent-gif-${Date.now()}`
+  const title = `GIF 编辑 · ${asset.name}`
+  const id = createProject(title, {
+    name: title,
+    thumbnail: asset.url,
+    canvasData: {
+      nodes: [
+        {
+          id: nodeId,
+          type: 'watermarkEditor',
+          position: { x: 160, y: 120 },
+          data: {
+            label: title,
+            editorStatus: 'draft',
+            sourceUrl: asset.url,
+            sourceMime: asset.mime_type || 'image/gif',
+            sourceLabel: asset.name,
+            sourceAssetId: String(asset.id || asset.name || '')
+          }
+        }
+      ],
+      edges: [],
+      viewport: { x: 100, y: 60, zoom: 0.8 }
+    }
+  })
+  router.push({ path: '/gif-editor', query: { project: id, node: nodeId, from: 'recent' } })
+}
+
+// Only media types that actually have an editor get a 「去处理」 button. Video and audio have
+// none, so they keep 下载 / 查看原文件 rather than a button that leads nowhere.
+const handoffTargets = { image: openImageInCanvas, gif: openGifInEditor }
+const handoffFor = mediaType => handoffTargets[mediaType] || null
 
 const handleWorkspaceNavigate = item => {
   if (item.id === 'recent') return
