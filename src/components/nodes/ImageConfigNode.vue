@@ -283,6 +283,12 @@ import {
   normalizeGeneratedImageResult
 } from '../../utils/generatedImageHandoff'
 import { getMaterialApiBase } from '../../utils/apiBase'
+import {
+  buildImageRequestParams,
+  describeUnsupportedImageFields,
+  getUnsupportedImageFields
+} from '../../utils/imageRequestContract'
+import { getProviderConfig } from '../../config/providers'
 
 // --- image reference contract ---
 // 后端只读「单张、绝对地址」的参考图：
@@ -873,6 +879,48 @@ const handleGenerate = async (mode = 'auto') => {
     window.$message?.warning(`后端图生图只支持 1 张参考图，已使用第 1 张，忽略其余 ${referenceInput.ignored} 张`)
   }
 
+  // Build request params | 构建请求参数
+  //
+  // 注意这里**没有 quality**：画质下拉框是纯前端的尺寸档位开关（选 4K 会把 size 换成
+  // 4096x4096，真正生效的是 size），后端从不读 quality。理由写在
+  // utils/imageRequestContract.js 的 IMAGE_UI_LOCAL_FIELDS 里，并由契约测试锁住。
+  const params = isBackgroundReplaceMode.value
+    ? buildBackgroundReplacePayload({
+        model: localModel.value,
+        size: localSize.value,
+        subjectImage: localSubjectImage.value,
+        backgroundReferenceImage: localBackgroundReferenceImage.value,
+        instruction: backgroundInstruction.value
+      })
+    : buildImageRequestParams({
+        model: localModel.value,
+        prompt: prompt,
+        size: localSize.value,
+        image: referenceInput.image,
+        nativeParams: nativeImageSettings.value
+          ? {
+              negative_prompt: currentModelConfig.value?.supportsNegativePrompt ? imageNegativePrompt.value : '',
+              steps: imageSteps.value,
+              cfg: imageCfg.value,
+              sampler_name: imageSampler.value,
+              scheduler: imageScheduler.value,
+              seed: imageSeed.value
+            }
+          : null
+      })
+
+  // 换背景 / ComfyUI 原生参数只有本地渠道接得住。用户把模型切到 chatfire 上再点生成，
+  // 适配器会把这些字段整批丢掉，后端收到的就是一个纯文生图请求 —— 和 #46 一模一样的静默降级。
+  // 宁可在这里当场报错，也不要发出去。
+  const unsupportedFields = getUnsupportedImageFields(modelStore.currentProvider, params)
+  if (unsupportedFields.length > 0) {
+    window.$message?.error(describeUnsupportedImageFields(
+      unsupportedFields,
+      getProviderConfig(modelStore.currentProvider)?.label || '当前渠道'
+    ))
+    return
+  }
+
   let imageNodeId = null
   
   if (mode === 'replace') {
@@ -929,33 +977,6 @@ const handleGenerate = async (mode = 'auto') => {
   }, 50)
 
   try {
-    // Build request params | 构建请求参数
-    const params = isBackgroundReplaceMode.value
-      ? buildBackgroundReplacePayload({
-          model: localModel.value,
-          size: localSize.value,
-          quality: localQuality.value,
-          subjectImage: localSubjectImage.value,
-          backgroundReferenceImage: localBackgroundReferenceImage.value,
-          instruction: backgroundInstruction.value
-        })
-      : {
-          model: localModel.value,
-          prompt: prompt,
-          size: localSize.value,
-          quality: localQuality.value,
-          n: 1,
-          ...(nativeImageSettings.value ? {
-            negative_prompt: currentModelConfig.value?.supportsNegativePrompt ? imageNegativePrompt.value : '',
-            steps: imageSteps.value,
-            cfg: imageCfg.value,
-            sampler_name: imageSampler.value,
-            scheduler: imageScheduler.value,
-            seed: imageSeed.value
-          } : {}),
-          ...(referenceInput.image ? { image: referenceInput.image } : {})
-        }
-
     const result = await generate(params)
 
     // 空结果不能再当成功处理：节点会永远停在 loading，还会弹一个骗人的成功提示。

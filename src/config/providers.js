@@ -1,5 +1,14 @@
 import { getMaterialApiBase } from '../utils/apiBase.js'
 import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from './studioProjectFlow.js'
+import { IMAGE_UNSUPPORTED_BY_PROVIDER, pickImageRequestFields } from '../utils/imageRequestContract.js'
+
+// 图片适配器全部由 `utils/imageRequestContract` 的字段表推导，不再手抄。
+// 以前每个渠道各写一串 `if (params.x) adapted.x = params.x`，于是出现了两种烂账：
+//   1. useApi 根本没发的字段，适配器里却有个「准备接」的死分支（quality / style / n），
+//      看起来像支持，实际上永远走不到 —— 本次 bug 报告就是被这个死分支误导的；
+//   2. useApi 发了、适配器忘了抄，字段被静默丢掉（#43 的 video 白名单）。
+const adaptImageRequest = (providerKey, params = {}) =>
+  pickImageRequestFields(params, { drop: IMAGE_UNSUPPORTED_BY_PROVIDER[providerKey] })
 
 const withVideoQualityContract = (params, adapted) => {
   const qualityProfile = normalizeVideoQualityRequestProfile(params?.quality_profile)
@@ -45,27 +54,10 @@ export const PROVIDERS = {
         if (params.stream !== undefined) adapted.stream = params.stream
         return adapted
       },
-      image: (params) => {
-        const adapted = {
-          model: params.model || 'frw-qianwen',
-          prompt: params.prompt
-        }
-        if (params.size) adapted.size = params.size
-        if (params.n) adapted.n = params.n
-        if (params.image) adapted.image = params.image
-        if (params.edit_mode) adapted.edit_mode = params.edit_mode
-        if (params.subject_image) adapted.subject_image = params.subject_image
-        if (params.background_reference_image) {
-          adapted.background_reference_image = params.background_reference_image
-        }
-        if (params.background_instruction) {
-          adapted.background_instruction = params.background_instruction
-        }
-        for (const key of ['negative_prompt', 'steps', 'cfg', 'sampler_name', 'scheduler', 'seed']) {
-          if (params[key] !== undefined) adapted[key] = params[key]
-        }
-        return adapted
-      },
+      image: (params) => adaptImageRequest('local-material', {
+        ...params,
+        model: params.model || 'frw-qianwen'
+      }),
       video: adaptLocalVideoRequest
     },
     responseAdapter: {
@@ -110,18 +102,7 @@ export const PROVIDERS = {
         if (params.stream !== undefined) adapted.stream = params.stream
         return adapted
       },
-      image: (params) => {
-        const adapted = {
-          model: params.model,
-          prompt: params.prompt
-        }
-        if (params.size) adapted.size = params.size
-        if (params.n) adapted.n = params.n
-        if (params.quality) adapted.quality = params.quality
-        if (params.style) adapted.style = params.style
-        if (params.image) adapted.image = params.image
-        return adapted
-      },
+      image: (params) => adaptImageRequest('chatfire', params),
       video: (params) => {
         const model = params.model || ''
 
@@ -274,18 +255,7 @@ export const PROVIDERS = {
         if (params.stream !== undefined) adapted.stream = params.stream
         return adapted
       },
-      image: (params) => {
-        const adapted = {
-          model: params.model,
-          prompt: params.prompt
-        }
-        if (params.size) adapted.size = params.size
-        if (params.n) adapted.n = params.n
-        if (params.quality) adapted.quality = params.quality
-        if (params.style) adapted.style = params.style
-        if (params.image) adapted.image = params.image
-        return adapted
-      },
+      image: (params) => adaptImageRequest('openai', params),
       video: (params) => {
         const adapted = {
           model: params.model,

@@ -19,6 +19,7 @@ import { readVideoTaskQueueState } from '@/utils/videoQueueState'
 import { normalizeVideoImageAlignmentRequest, normalizeVideoQualityRequestProfile } from '@/config/studioProjectFlow'
 import { collectChatStream, isChatAbortError } from '@/utils/chatStream'
 import { createPollingBudget } from '@/utils/pollingBudget'
+import { pickImageRequestFields } from '@/utils/imageRequestContract'
 
 /**
  * Base API state hook | 基础 API 状态 Hook
@@ -180,7 +181,8 @@ export const useImageGeneration = () => {
 
   /**
    * Generate image with fixed params | 固定参数生成图片
-   * @param {Object} params - { model, prompt, size, n, image (optional ref image) }
+   * @param {Object} params - 见 `@/utils/imageRequestContract` 的 IMAGE_REQUEST_FIELDS。
+   *   清单外的键（quality / style / n）会被丢弃——后端一个都不读，详见该文件的后端事实注释。
    */
   const generate = async (params) => {
     setLoading(true)
@@ -191,28 +193,15 @@ export const useImageGeneration = () => {
       const modelConfig = getModelByName(params.model)
 
       // Build request data | 构建请求数据
-      const requestData = {
-        model: params.model,
-        prompt: params.prompt,
-        size: params.size || modelConfig?.defaultParams?.size || '2048x2048',
-        // n: params.n || 1
-      }
-
-      // Add reference image if provided | 添加参考图
-      if (params.image) {
-        requestData.image = params.image
-      }
-      if (params.edit_mode) requestData.edit_mode = params.edit_mode
-      if (params.subject_image) requestData.subject_image = params.subject_image
-      if (params.background_reference_image) {
-        requestData.background_reference_image = params.background_reference_image
-      }
-      if (params.background_instruction) {
-        requestData.background_instruction = params.background_instruction
-      }
-      for (const key of ['negative_prompt', 'steps', 'cfg', 'sampler_name', 'scheduler', 'seed']) {
-        if (params[key] !== undefined) requestData[key] = params[key]
-      }
+      //
+      // 字段清单来自 `@/utils/imageRequestContract`，和 providers.js 的图片适配器共用同一份。
+      // 这里曾经是手抄的 if 链，抄漏了 `quality`（UI 上的画质下拉框发了、适配器也准备接了，
+      // 中间这一层却没抄）——和 #43 的 video 白名单、#46 的 image 形状是同一类 bug。
+      // 现在加字段只改 IMAGE_REQUEST_FIELDS 一处，改不动就三处一起不动。
+      const requestData = pickImageRequestFields({
+        ...params,
+        size: params.size || modelConfig?.defaultParams?.size || '2048x2048'
+      })
 
       // 适配请求参数
       const adaptedParams = adaptRequest('image', requestData)
