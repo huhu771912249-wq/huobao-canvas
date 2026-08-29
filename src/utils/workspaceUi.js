@@ -1,12 +1,11 @@
+// 侧栏只放「地点」—— 你的东西在哪。动作（做什么）一律归首页目录，
+// 否则同一个能力会同时出现在导航栏和目录里。改造前 AI 作图 / 视频生成 /
+// 素材裂变 / 54DSP 就是这样各自出现了 3–4 次。
 const NAV_ITEMS = [
   ['home', '创作首页', '/'],
-  ['image', 'AI 作图', '/?launch=image'],
-  ['video', '视频生成', '/?launch=video'],
-  ['variation', '素材裂变', '/?launch=variation'],
-  ['dsp', '54DSP 素材', '/?launch=dsp'],
-  ['recent', '最近生成', '/recent-generations'],
-  ['tasks', '任务中心', '/tasks'],
-  ['projects', '我的项目', '/?section=projects']
+  ['projects', '我的项目', '/?section=projects'],
+  ['recent', '素材库', '/recent-generations'],
+  ['tasks', '任务中心', '/tasks']
 ]
 
 const TASK_TONES = {

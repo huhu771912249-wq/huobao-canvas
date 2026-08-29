@@ -84,26 +84,7 @@
       </button>
     </section>
 
-    <div class="creation-grid">
-      <button
-        v-for="entry in entries"
-        :key="entry.id"
-        type="button"
-        :aria-busy="busy && pendingEntry === entry.id"
-        class="creation-card workspace-panel"
-        :class="`creation-card--${entry.accent}`"
-        @click="$emit('launch', entry.id)"
-      >
-        <span class="creation-card__icon">
-          <n-icon :size="22"><component :is="entry.icon" /></n-icon>
-        </span>
-        <span class="creation-card__copy">
-          <strong>{{ entry.title }}</strong>
-          <small>{{ entry.description }}</small>
-        </span>
-        <n-icon :size="20" class="creation-card__arrow"><ArrowForwardOutline /></n-icon>
-      </button>
-    </div>
+
 
     <div class="suggestion-row">
       <span>试试这些</span>
@@ -220,14 +201,7 @@ const useSuggestion = suggestion => {
   prompt.value = suggestion
   notifyDraftChange()
 }
-const entries = [
-  { id: 'image', title: 'AI 作图', description: '中文提示词生成投放底图', accent: 'blue', icon: ImagesOutline },
-  { id: 'video', title: '视频生成', description: '文生视频与图生视频', accent: 'violet', icon: VideocamOutline },
-  { id: 'batch', title: '批量广告尺寸', description: '在画布中输出 GIF / MP4 多尺寸', accent: 'blue', icon: GridOutline },
-  { id: 'background', title: '背景替换', description: '在画布中保留主体并替换环境', accent: 'violet', icon: ImagesOutline },
-  { id: 'variation', title: '素材裂变', description: '逆向提示词与多尺寸 A-E 测试', accent: 'orange', icon: SparklesOutline },
-  { id: 'dsp', title: '54DSP 优秀素材', description: '抓取高点击素材并进入裂变', accent: 'green', icon: GridOutline }
-]
+
 </script>
 
 <style scoped>

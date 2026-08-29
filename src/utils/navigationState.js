@@ -38,7 +38,7 @@ export const createGuardedUrlLaunchAction = ({ replace, launch }) => async ({ is
   return commit(launch)
 }
 
-const STUDIO_TABS = new Set(['quick', 'novel', 'assets'])
+const STUDIO_TABS = new Set(['quick', 'novel'])
 
 export const normalizeStudioTab = value => {
   const normalized = String(Array.isArray(value) ? value[0] : value || 'quick')

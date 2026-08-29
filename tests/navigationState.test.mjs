@@ -228,7 +228,9 @@ assert.deepEqual(urlLaunchPendingUpdates, [
 ], 'stale URL launch must not clear the latest shortcut loading state')
 
 assert.equal(normalizeStudioTab('novel'), 'novel')
-assert.equal(normalizeStudioTab('assets'), 'assets')
+// 'assets' tab 已移除（无渲染分支）。存量书签带着 ?tab=assets 进来时必须
+// 回落到快速创作，而不是白屏 —— 这比原来断言它是合法值更有价值。
+assert.equal(normalizeStudioTab('assets'), 'quick', '已移除的 tab 必须优雅回落')
 assert.equal(normalizeStudioTab('unknown'), 'quick')
 assert.equal(normalizeStudioTab(['novel']), 'novel')
 
@@ -258,10 +260,20 @@ assert.match(home, /navigationPending/)
 assert.match(home, /createProject\(cleanPrompt \|\| entry\.title, \{/)
 assert.match(home, /runNavigation\(`url-launch:\$\{launch\}`, createGuardedUrlLaunchAction\(\{[\s\S]*?replace:\s*\(\) => router\.replace\(\{ path: '\/' \}\),[\s\S]*?launch:\s*\(\) => launchFlow\(launch\)/, 'URL launch must register one guarded token before replace')
 assert.doesNotMatch(home, /await router\.replace\(\{ path: '\/' \}\)\s*handleLaunch\(launch\)/, 'URL launch must not create a second token after replace')
-const creationCardMarkup = launcher.match(/<div class="creation-grid">[\s\S]*?<\/div>\s*<div class="suggestion-row">/)?.[0] || ''
-assert.ok(creationCardMarkup, 'launcher must expose creation shortcuts')
-assert.doesNotMatch(creationCardMarkup, /:disabled="busy"/, 'pending navigation must not disable switching to another shortcut')
-assert.match(creationCardMarkup, /:aria-busy="busy && pendingEntry === entry\.id"/, 'shortcut loading must identify the latest intent')
+// 能力入口从 CreationLauncher 的固定卡片搬到了首页目录（同一个能力原先最多
+// 出现在四个地方）。下面两条行为契约跟着搬 —— 它们来自 #34「keep the latest
+// home navigation intent」，锁的是「点了一个入口不许锁死其他」和「转圈必须
+// 指向最新那次意图」，跟入口长在哪没关系。
+const entryCatalogMarkup = home.match(/<div v-for="group in entryGroups"[\s\S]*?<\/button>/)?.[0] || ''
+assert.ok(entryCatalogMarkup, '首页必须有能力目录，否则用户没有任何入口')
+assert.doesNotMatch(entryCatalogMarkup, /:disabled="navigationPending"/, '有导航在途时不许禁用其他入口，否则点错一个就卡死')
+assert.match(
+  entryCatalogMarkup,
+  /:aria-busy="navigationPending && navigationIntent === /,
+  '转圈必须绑定到最新那次导航意图，不能所有入口一起转'
+)
+// CreationLauncher 不许再挂固定能力卡片 —— 那正是重复的来源之一。
+assert.doesNotMatch(launcher, /<div class="creation-grid">/, 'CreationLauncher 是「说需求」的入口，不是能力目录')
 assert.doesNotMatch(home, /v-for="entry in studioEntries"[^>]*:disabled="navigationPending"/, 'studio shortcuts must remain selectable while another navigation is pending')
 
 console.log('navigationState.test.mjs passed')
