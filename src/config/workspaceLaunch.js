@@ -120,5 +120,5 @@ export const resolveLegacyCanvasRoute = ({ id, flow, panel } = {}) => {
 }
 
 export const normalizeStudioTab = (value) => (
-  ['quick', 'novel', 'assets'].includes(String(value || '')) ? String(value) : 'quick'
+  ['quick', 'novel'].includes(String(value || '')) ? String(value) : 'quick'
 )

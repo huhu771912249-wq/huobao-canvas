@@ -54,7 +54,11 @@ assert.match(workspace, /AI 超分[\s\S]*(1920|1080)/)
 assert.doesNotMatch(workspace, /progress\s*\+=|setInterval/)
 assert.match(studio, /NovelVideoWorkspace/)
 assert.match(studio, /activeTab === 'quick'/)
-assert.match(studio, /key: 'assets', label: '素材再创作'/)
+// 「素材再创作」tab 已移除：它在模板里没有渲染分支（只有 quick 和 novel），
+// 点进去是一片空白。素材浏览走侧栏「素材库」。这里改成反向锁 —— 不许它回来，
+// 除非同时补上渲染分支。
+assert.doesNotMatch(studio, /label: '素材再创作'/, '没有渲染分支的 tab 不许出现在标签栏')
+assert.match(studio, /activeTab === 'novel'/, '小说成片分支必须还在')
 assert.match(studio, /原 DSP 素材库继续保留独立入口/)
 assert.match(studio, /buildStudioCanvas/)
 

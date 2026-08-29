@@ -95,7 +95,10 @@ assert.match(workspaceShellSource, /<aside/)
 assert.match(workspaceShellSource, /<slot\s+name="main"/)
 assert.match(taskRailSource, /任务中心/)
 assert.match(taskRailSource, /buildTaskSummary/)
-assert.match(creationLauncherSource, /54DSP 优秀素材/)
+// 原来锁的是 CreationLauncher 里必须列出「54DSP 优秀素材」—— 那是重复来源。
+// 能力本身没消失，它现在只在首页目录里出现一次。
+assert.match(read('src/config/studioEntries.js'), /DSP 素材库/, 'DSP 素材入口必须留在能力目录里')
+assert.doesNotMatch(creationLauncherSource, /54DSP/, 'CreationLauncher 不许再重复列能力')
 assert.match(creationLauncherSource, /accept="image\/png,image\/jpeg,image\/webp,image\/gif,video\/mp4,video\/quicktime,video\/webm"/)
 assert.match(creationLauncherSource, /@drop\.prevent="handleAttachmentDrop"/)
 assert.match(creationLauncherSource, /识别需求/)
@@ -119,11 +122,17 @@ assert.match(recentProjectsSource, /打开项目/)
 assert.match(homeSource, /<WorkspaceShell/)
 assert.match(homeSource, /<CreationLauncher/)
 assert.match(homeSource, /<RecentProjects/)
-const homeSectionOrder = ['creation-entry', 'quick-actions', 'common-workflows', 'recent-generations', 'projects']
+// 'common-workflows' 区已删除 —— 它渲染的就是画布模板，和 quick-actions 里的
+// 「画板工作流」分组是同一批东西，8 条已并进那个分组。
+const homeSectionOrder = ['creation-entry', 'quick-actions', 'recent-generations', 'projects']
   .map(id => homeSource.indexOf(`id="${id}"`))
-assert.equal(homeSectionOrder.every(index => index >= 0), true, 'home must expose stable ids for all five sections')
+assert.equal(homeSectionOrder.every(index => index >= 0), true, 'home must expose stable ids for all four sections')
 assert.deepEqual(homeSectionOrder, [...homeSectionOrder].sort((a, b) => a - b), 'home sections must follow the user journey order')
-assert.match(homeSource, /<WorkflowShelf[\s\S]*?@launch="handleLaunch"/)
+// WorkflowShelf 已删除：它渲染的 8 条画布模板和首页目录的「画板工作流」分组
+// 是同一批东西。接线契约跟着搬到目录按钮上 —— 点一个模板必须真的能发起。
+assert.match(homeSource, /<div v-for="group in entryGroups"[\s\S]*?@click="openStudioEntry\(entry\)"/)
+assert.match(homeSource, /if \(entry\.flow\) return handleLaunch\(entry\.flow\)/)
+assert.doesNotMatch(homeSource, /<WorkflowShelf/, '常用工作流区不许回来，它是重复的来源')
 assert.match(homeSource, /<RecentGenerationStrip[\s\S]*?:loading="recentGenerationsLoading"[\s\S]*?:error="recentGenerationsError"/)
 assert.match(homeSource, /listRecentGenerations\(\{ limit: 6 \}\)/)
 assert.match(homeSource, /buildRecentImageCanvas\(asset/)

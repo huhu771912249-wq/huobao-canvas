@@ -84,7 +84,9 @@ import { H3_SAMPLING_OPTIONS } from '../utils/h3GenerationOptions'
 import { normalizeStudioTab } from '../utils/navigationState'
 
 const route = useRoute(); const router = useRouter()
-const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }, { key: 'assets', label: '素材再创作' }]
+// 'assets'（素材再创作）已移除：模板里只有 quick 和 novel 两个渲染分支，
+// 点它会切到一片空白。素材浏览走侧栏「素材库」→ /recent-generations。
+const tabs = [{ key: 'quick', label: '快速创作' }, { key: 'novel', label: '小说成片' }]
 const modes = [{ key: 'text-to-image', title: '文生图', description: '提示词生成图片变体' }, { key: 'image-to-video', title: '文生图＋视频', description: '先确认首帧，再生成动态镜头' }, { key: 'asset', title: '上传素材', description: '自动识别图片、视频和文档' }]
 const activeTab = computed(() => normalizeStudioTab(route.query.tab)); const selectedMode = ref('text-to-image'); const prompt = ref(''); const fileName = ref(''); const selectedSize = ref('1024x1024'); const sizes = COMMON_VIDEO_SIZES
 const activeNovelJobId = computed(() => String(route.query.job || ''))
